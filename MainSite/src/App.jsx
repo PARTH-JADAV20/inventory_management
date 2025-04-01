@@ -1,10 +1,23 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from "react";
+import reactLogo from "./assets/react.svg";
+import viteLogo from "/vite.svg";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const allowedReferrer = "http://localhost:5173/";
+    const referrer = document.referrer;
+    const params = new URLSearchParams(window.location.search);
+
+    if (!referrer.includes(allowedReferrer) || !params.get("auth")) {
+      document.body.innerHTML = "<h1>Access Denied</h1>";
+      setTimeout(() => {
+        window.location.href = "http://localhost:5173/";
+      }, 3000); 
+    }
+  }, []);
 
   return (
     <>
@@ -21,15 +34,11 @@ function App() {
         <button onClick={() => setCount((count) => count + 1)}>
           count is {count}
         </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
+        <p>Edit <code>src/App.jsx</code> and save to test HMR</p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <p className="read-the-docs">Click on the Vite and React logos to learn more</p>
     </>
-  )
+  );
 }
 
-export default App
+export default App;

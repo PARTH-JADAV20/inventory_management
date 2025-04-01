@@ -1,33 +1,50 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import "./styles.scss";
+import Board from './Components/Board'
+import { useState } from 'react';
 
 function App() {
-  const [count, setCount] = useState(0)
+
+  const handleVoiceAuth = () => {
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+      alert("Your browser does not support voice recognition.");
+      return;
+    }
+
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = "en-US";
+    recognition.start();
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.toLowerCase();
+      console.log("Heard:", transcript);
+
+      const secretPhrase = "open the portal";
+
+      if (transcript.includes(secretPhrase)) {
+        window.location.href = "http://localhost:5174?auth=true";
+      } else {
+        alert("Incorrect phrase. Try again!");
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event);
+      alert("Speech recognition error. Try again.");
+    };
+  };
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
+      <div className='container'>
+        <h1>2048</h1>
+        <Board />
+        <p className="game-description">
+          Join the numbers and get to the <strong>2048 tile!</strong>
+          Use <strong>arrow keys</strong> to move the tiles. When two tiles with the same number touch,they <strong>merge into <span onClick={handleVoiceAuth}>one!</span></strong>
         </p>
+        <p>Created with React | How to play: Combine  tiles to reach 2048!</p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </>
   )
 }
