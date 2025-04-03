@@ -4,6 +4,17 @@ import Board from './Components/Board'
 import { useState } from 'react';
 
 function App() {
+  const [clickCount, setClickCount] = useState(0);
+
+  const handleClick = () => {
+    setClickCount(prevCount => {
+      if (prevCount + 1 === 3) {
+        handleVoiceAuth(); 
+        return 0; // Reset count after 3 clicks
+      }
+      return prevCount + 1;
+    });
+  };
 
   const handleVoiceAuth = () => {
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
@@ -41,12 +52,12 @@ function App() {
         <Board />
         <p className="game-description">
           Join the numbers and get to the <strong>2048 tile!</strong>
-          Use <strong>arrow keys</strong> to move the tiles. When two tiles with the same number touch,they <strong>merge into <span onClick={handleVoiceAuth}>one!</span></strong>
+          Use <strong>arrow keys</strong> to move the tiles. When two tiles with the same number touch, they <strong>merge into <span onClick={handleClick}>one!</span></strong>
         </p>
-        <p>Created with React | How to play: Combine  tiles to reach 2048!</p>
+        <p>Created with React | How to play: Combine tiles to reach 2048!</p>
       </div>
     </>
-  )
+  );
 }
 
-export default App
+export default App;
