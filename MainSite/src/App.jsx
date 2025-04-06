@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Four04 from "./Components/Four04";
 import Sidebar from './Components/Sidebar';
 import Navbar from './Components/Navbar';
+
 import Dashboard from "../src/Components/Dashboard/Dashboard"; 
+
 import StockManage from "./Components/StockManage/StockManage";
 import AdvancePayments from './Components/AdvancePayments/AdvancePayments';
 
@@ -20,27 +22,31 @@ function App() {
     '/': 'Stock Management',
   };
 
+
   // Remove the placeholder Dashboard component
   // const Dashboard = () => <div className="main-content"><h1>Dashboard</h1></div>;
+
   const SalesEntry = () => <div className="main-content"><h1>Sales Entry</h1></div>;
   const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
   const Reports = () => <div className="main-content"><h1>Reports</h1></div>;
 
-  // useEffect(() => {
-  //   const allowedReferrer = "http://localhost:5173/";
-  //   const referrer = document.referrer;
-  //   const params = new URLSearchParams(window.location.search);
 
-  //   if (!referrer.includes(allowedReferrer) || !params.get("auth")) {
-  //     setAllowedAccess(false);
-  //   } else {
-  //     setAllowedAccess(true);
-  //   }
-  // }, []);
+  useEffect(() => {
+    const allowedReferrer = "http://localhost:5173/";
+    const referrer = document.referrer;
+    const params = new URLSearchParams(window.location.search);
 
-  // if (!allowedAccess) {
-  //   return <Four04 />; 
-  // }
+    if (!referrer.includes(allowedReferrer) || !params.get("auth")) {
+      setAllowedAccess(false);
+    } else {
+      setAllowedAccess(true);
+    }
+  }, []);
+
+  if (!allowedAccess) {
+    return <Four04 />; 
+  }
+
 
   return (
     <>
@@ -64,5 +70,6 @@ function App() {
     </>
   );
 }
+
 
 export default App;
