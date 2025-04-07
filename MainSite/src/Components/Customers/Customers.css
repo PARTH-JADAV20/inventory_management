@@ -1,0 +1,104 @@
+.customers-header-p2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.summary-stats-p2 {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+    color: var(--dark-bg);
+    font-weight: bolder;
+}
+
+.summary-stats-p2 p {
+    background-color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+.search-container-p2 {
+    margin-bottom: 10px;
+}
+
+.search-input-p2 {
+    padding: 8px;
+    width: 300px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);;
+    color: #ffffff;
+    border-radius: 4px;
+    outline: none;
+}
+
+.customers-table-container-p2 {
+    overflow-y: auto;
+    max-height: calc(100vh - 200px);
+    /* Adjust based on header/footer height */
+}
+
+.customers-table-p2 {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.customers-table-p2 th,
+.customers-table-p2 td {
+    border: 1px solid var(--border-color);;
+    padding: 10px;
+    text-align: left;
+}
+
+.customers-table-p2 th {
+    background-color: var(--card-bg);
+    color: #a1a5b7;
+}
+
+.customers-table-p2 td {
+    background-color: var(--card-bg);
+    color: #ffffff;
+}
+
+.inline-edit-input-p2 {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);;
+    color: #ffffff;
+    padding: 5px;
+    width: 100%;
+}
+
+.show-bills-btn-p2,
+.save-btn-p2 {
+    background-color: rgba(255, 107, 44, 0.5);
+    border: none;
+    padding: 5px 10px;
+    color: #ffffff;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 5px;
+}
+
+.edit-btn-p2{
+    border: none;
+    background: none;
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 4px;
+    color: #3699FF;
+}
+
+.show-bills-btn-p2:disabled,
+.edit-btn-p2:disabled,
+.save-btn-p2:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.save-btn-p2 {
+    background-color: #28a745;
+}
+

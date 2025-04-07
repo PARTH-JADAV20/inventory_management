@@ -1,155 +1,135 @@
-import React, { useState } from 'react';
-import './AdvancePayments.css';
+import React, { useState } from "react";
+import { Pencil, Save } from "lucide-react";
+import customersData from "../customers.js"; 
+import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
-  const [customers, setCustomers] = useState([
-    {
-      id: 1,
-      name: 'Ramesh Kumar',
-      advanceGiven: 1000,
-      advanceUsed: 250,
-      balance: 750,
-      paymentMethod: 'Cash', // Added payment method to customer
-      bills: [
-        {
-          billNo: 'B001',
-          date: '01 March 2025',
-          items: [
-            { product: 'Cement OPC 53 Grade', qty: 5, pricePerQty: 350, amount: 1750 },
-            { product: 'River Sand', qty: 10, pricePerQty: 12, amount: 120 },
-          ],
-          totalAmount: 1870,
-          advanceRemaining: 750,
-        },
-        {
-          billNo: 'B004',
-          date: '05 March 2025',
-          items: [
-            { product: 'Crushed Stone Aggregate', qty: 8, pricePerQty: 18, amount: 144 },
-          ],
-          totalAmount: 144,
-          advanceRemaining: 606,
-        },
-      ],
-    },
-    {
-      id: 2,
-      name: 'Priya Sharma',
-      advanceGiven: 2500,
-      advanceUsed: 2200,
-      balance: 300,
-      paymentMethod: 'Online', // Added payment method to customer
-      bills: [
-        {
-          billNo: 'B002',
-          date: '02 March 2025',
-          items: [
-            { product: 'Crushed Stone Aggregate', qty: 15, pricePerQty: 18, amount: 270 },
-          ],
-          totalAmount: 270,
-          advanceRemaining: 300,
-        },
-      ],
-    },
-    {
-      id: 3,
-      name: 'Ajay Patel',
-      advanceGiven: 5000,
-      advanceUsed: 1500,
-      balance: 3500,
-      paymentMethod: 'Card', // Added payment method to customer
-      bills: [
-        {
-          billNo: 'B003',
-          date: '03 March 2025',
-          items: [
-            { product: 'Steel Reinforcement Bars', qty: 2, pricePerQty: 75, amount: 150 },
-          ],
-          totalAmount: 150,
-          advanceRemaining: 3500,
-        },
-        {
-          billNo: 'B005',
-          date: '06 March 2025',
-          items: [
-            { product: 'Cement OPC 53 Grade', qty: 3, pricePerQty: 350, amount: 1050 },
-            { product: 'River Sand', qty: 20, pricePerQty: 12, amount: 240 },
-          ],
-          totalAmount: 1290,
-          advanceRemaining: 2210,
-        },
-      ],
-    },
-  ]);
-
-  const [newPayment, setNewPayment] = useState({ customerName: '', advanceAmount: '', paymentMethod: 'Cash' });
-  const [searchTerm, setSearchTerm] = useState('');
+  const [customers, setCustomers] = useState(customersData); 
+  const [newPayment, setNewPayment] = useState({
+    customerName: "",
+    phoneNumber: "",
+    advanceAmount: "",
+    paymentMethod: "Cash",
+  });
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedBills, setSelectedBills] = useState(null);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
+  const [editingCustomerId, setEditingCustomerId] = useState(null);
+  const [editedCustomer, setEditedCustomer] = useState(null);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewPayment({ ...newPayment, [name]: value });
+    if (name === "phoneNumber") {
+      const customer = customers.find((c) => c.phoneNumber === value);
+      if (customer) {
+        setNewPayment({ ...newPayment, phoneNumber: value, customerName: customer.name });
+        setIsExistingCustomer(true);
+      } else {
+        setNewPayment({ ...newPayment, phoneNumber: value });
+      }
+    } else if (name === "customerName") {
+      const customer = customers.find((c) => c.name.toLowerCase() === value.toLowerCase());
+      if (customer) {
+        setNewPayment({ ...newPayment, customerName: customer.name, phoneNumber: customer.phoneNumber });
+        setIsExistingCustomer(true);
+      } else {
+        setNewPayment({ ...newPayment, customerName: value });
+      }
+    } else {
+      setNewPayment({ ...newPayment, [name]: value });
+    }
   };
 
   const handleCheckboxChange = (e) => {
     setIsExistingCustomer(e.target.checked);
-    setNewPayment({ ...newPayment, customerName: '' });
+    setNewPayment({ ...newPayment, customerName: "", phoneNumber: "" });
   };
 
   const handleAddPayment = () => {
-    if (!newPayment.customerName || !newPayment.advanceAmount || !newPayment.paymentMethod) {
-      alert('Please fill all fields');
+    if (!newPayment.customerName || !newPayment.phoneNumber || !newPayment.advanceAmount || !newPayment.paymentMethod) {
+      alert("Please fill all fields");
       return;
     }
 
     const advanceAmount = parseFloat(newPayment.advanceAmount);
     if (advanceAmount <= 0) {
-      alert('Advance amount must be a positive number');
+      alert("Advance amount must be a positive number");
       return;
     }
 
-    const existingCustomer = customers.find(c => c.name.toLowerCase() === newPayment.customerName.toLowerCase());
+    const existingCustomer = customers.find((c) => c.name.toLowerCase() === newPayment.customerName.toLowerCase());
     if (existingCustomer) {
-      setCustomers(customers.map(c =>
-        c.name.toLowerCase() === newPayment.customerName.toLowerCase()
-          ? { ...c, advanceGiven: c.advanceGiven + advanceAmount, balance: c.balance + advanceAmount, paymentMethod: newPayment.paymentMethod }
-          : c
-      ));
+      setCustomers(
+        customers.map((c) =>
+          c.name.toLowerCase() === newPayment.customerName.toLowerCase()
+            ? { ...c, advanceGiven: c.advanceGiven + advanceAmount, balance: c.balance + advanceAmount, paymentMethod: newPayment.paymentMethod }
+            : c
+        )
+      );
     } else {
-      setCustomers([...customers, {
-        id: customers.length + 1,
-        name: newPayment.customerName,
-        advanceGiven: advanceAmount,
-        advanceUsed: 0,
-        balance: advanceAmount,
-        paymentMethod: newPayment.paymentMethod,
-        bills: [],
-      }]);
+      setCustomers([
+        ...customers,
+        {
+          id: customers.length + 1,
+          name: newPayment.customerName,
+          phoneNumber: newPayment.phoneNumber,
+          advanceGiven: advanceAmount,
+          advanceUsed: 0,
+          balance: advanceAmount,
+          paymentMethod: newPayment.paymentMethod,
+          advance: true, // New customers added here will have advance: true
+          bills: [],
+        },
+      ]);
     }
 
-    setNewPayment({ customerName: '', advanceAmount: '', paymentMethod: 'Cash' });
+    setNewPayment({ customerName: "", phoneNumber: "", advanceAmount: "", paymentMethod: "Cash" });
     setIsExistingCustomer(false);
+  };
+
+  const handleEditStart = (customer) => {
+    if (editingCustomerId === customer.id) {
+      setEditingCustomerId(null);
+      setEditedCustomer(null);
+    } else {
+      setEditingCustomerId(customer.id);
+      setEditedCustomer({ ...customer });
+    }
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditedCustomer({ ...editedCustomer, [name]: value });
+  };
+
+  const handleSaveEdit = () => {
+    setCustomers(customers.map((c) => (c.id === editedCustomer.id ? { ...editedCustomer } : c)));
+    setEditingCustomerId(null);
+    setEditedCustomer(null);
   };
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter customers with advance: true and apply search term
+  const filteredCustomers = customers
+    .filter((customer) => customer.advance) // Only show customers with advance: true
+    .filter(
+      (customer) =>
+        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) || customer.phoneNumber.includes(searchTerm)
+    );
 
-  const handleShowBills = (bills, customerPaymentMethod, customerName) => {
-    setSelectedBills({ bills, customerPaymentMethod, customerName });
+  const handleShowBills = (bills, customerPaymentMethod, customerName, customerPhoneNumber) => {
+    setSelectedBills({ bills, customerPaymentMethod, customerName, customerPhoneNumber });
   };
 
   const handleCloseModal = () => {
     setSelectedBills(null);
   };
 
-  const handlePrintBill = (bill, customerPaymentMethod, customerName) => {
-    const printWindow = window.open('', '_blank');
+  const handlePrintBill = (bill, customerPaymentMethod, customerName, customerPhoneNumber) => {
+    const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
         <head>
@@ -168,6 +148,7 @@ const AdvancePayments = () => {
         <body>
           <h2>Bill No: ${bill.billNo}</h2>
           <p>Customer Name: ${customerName}</p>
+          <p>Phone Number: ${customerPhoneNumber}</p>
           <p>Date: ${bill.date}</p>
           <p class="payment-method">Payment Method: ${customerPaymentMethod}</p>
           <table>
@@ -180,14 +161,18 @@ const AdvancePayments = () => {
               </tr>
             </thead>
             <tbody>
-              ${bill.items.map(item => `
+              ${bill.items
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
                   <td>₹${item.pricePerQty}</td>
                   <td>₹${item.amount}</td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
@@ -205,6 +190,15 @@ const AdvancePayments = () => {
     printWindow.print();
   };
 
+  const isEdited = (customer) => {
+    if (!editedCustomer) return false;
+    return (
+      customer.name !== editedCustomer.name ||
+      customer.phoneNumber !== editedCustomer.phoneNumber ||
+      customer.paymentMethod !== editedCustomer.paymentMethod
+    );
+  };
+
   return (
     <div className="main-content">
       <div className="advance-payment-form-container">
@@ -214,22 +208,14 @@ const AdvancePayments = () => {
             <div className="checkbox-label">
               <label>Customer Name</label>
               <label className="checkbox-container">
-                <input
-                  type="checkbox"
-                  checked={isExistingCustomer}
-                  onChange={handleCheckboxChange}
-                />
+                <input type="checkbox" checked={isExistingCustomer} onChange={handleCheckboxChange} />
                 Existing Customer
               </label>
             </div>
             {isExistingCustomer ? (
-              <select
-                name="customerName"
-                value={newPayment.customerName}
-                onChange={handleInputChange}
-              >
+              <select name="customerName" value={newPayment.customerName} onChange={handleInputChange}>
                 <option value="">Select customer</option>
-                {customers.map(customer => (
+                {customers.map((customer) => (
                   <option key={customer.id} value={customer.name}>
                     {customer.name}
                   </option>
@@ -246,6 +232,16 @@ const AdvancePayments = () => {
             )}
           </div>
           <div className="form-group">
+            <label>Phone Number</label>
+            <input
+              type="text"
+              name="phoneNumber"
+              placeholder="Enter phone number"
+              value={newPayment.phoneNumber}
+              onChange={handleInputChange}
+            />
+          </div>
+          <div className="form-group">
             <label>Advance Amount</label>
             <input
               type="number"
@@ -257,11 +253,7 @@ const AdvancePayments = () => {
           </div>
           <div className="form-group">
             <label>Payment Method</label>
-            <select
-              name="paymentMethod"
-              value={newPayment.paymentMethod}
-              onChange={handleInputChange}
-            >
+            <select name="paymentMethod" value={newPayment.paymentMethod} onChange={handleInputChange}>
               <option value="Cash">Cash</option>
               <option value="Online">Online</option>
               <option value="Card">Card</option>
@@ -279,40 +271,89 @@ const AdvancePayments = () => {
       <div className="advance-payment-list-container">
         <h2>Advance Payment Balances</h2>
         <div className="advance-payment-filter">
-          <input
-            type="text"
-            placeholder="Search customer"
-            value={searchTerm}
-            onChange={handleSearch}
-          />
+          <input type="text" placeholder="Search customer" value={searchTerm} onChange={handleSearch} />
         </div>
         <table className="advance-payment-table">
           <thead>
             <tr>
               <th>Customer</th>
+              <th>Phone Number</th>
               <th>Advance Given</th>
               <th>Advance Used</th>
               <th>Balance</th>
               <th>Payment Method</th>
               <th>Bill</th>
+              <th>Edit</th>
             </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map(customer => (
+            {filteredCustomers.map((customer) => (
               <tr key={customer.id}>
-                <td>{customer.name}</td>
+                <td>
+                  {editingCustomerId === customer.id ? (
+                    <input
+                      type="text"
+                      name="name"
+                      value={editedCustomer.name}
+                      onChange={handleEditChange}
+                      className="inline-edit-input"
+                    />
+                  ) : (
+                    customer.name
+                  )}
+                </td>
+                <td>
+                  {editingCustomerId === customer.id ? (
+                    <input
+                      type="text"
+                      name="phoneNumber"
+                      value={editedCustomer.phoneNumber}
+                      onChange={handleEditChange}
+                      className="inline-edit-input"
+                    />
+                  ) : (
+                    customer.phoneNumber
+                  )}
+                </td>
                 <td>₹{customer.advanceGiven}</td>
                 <td>₹{customer.advanceUsed}</td>
                 <td>₹{customer.balance}</td>
-                <td>{customer.paymentMethod}</td>
+                <td>
+                  {editingCustomerId === customer.id ? (
+                    <select
+                      name="paymentMethod"
+                      value={editedCustomer.paymentMethod}
+                      onChange={handleEditChange}
+                      className="inline-edit-select"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Online">Online</option>
+                      <option value="Card">Card</option>
+                      <option value="Cheque">Cheque</option>
+                    </select>
+                  ) : (
+                    customer.paymentMethod
+                  )}
+                </td>
                 <td>
                   <button
                     className="show-bills-btn"
-                    onClick={() => handleShowBills(customer.bills, customer.paymentMethod, customer.name)}
+                    onClick={() => handleShowBills(customer.bills, customer.paymentMethod, customer.name, customer.phoneNumber)}
                     disabled={customer.bills.length === 0}
                   >
                     Show Bills
                   </button>
+                </td>
+                <td>
+                  {editingCustomerId === customer.id && isEdited(customer) ? (
+                    <button className="save-btn" onClick={handleSaveEdit}>
+                      <Save size={16} />
+                    </button>
+                  ) : (
+                    <button className="edit-btn" onClick={() => handleEditStart(customer)}>
+                      <Pencil size={16} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -330,9 +371,11 @@ const AdvancePayments = () => {
             {selectedBills.bills.length === 0 ? (
               <p>No bills available for this customer.</p>
             ) : (
-              selectedBills.bills.map(bill => (
+              selectedBills.bills.map((bill) => (
                 <div key={bill.billNo} className="bill-details">
                   <h3>Bill No: {bill.billNo}</h3>
+                  <p>Customer Name: {selectedBills.customerName}</p>
+                  <p>Phone Number: {selectedBills.customerPhoneNumber}</p>
                   <p>Date: {bill.date}</p>
                   <p>Payment Method: {selectedBills.customerPaymentMethod}</p>
                   <table className="bill-table">
@@ -355,17 +398,19 @@ const AdvancePayments = () => {
                       ))}
                       <tr className="total">
                         <td colSpan="3">Total Amount</td>
-                        <td>₹{bill.totalAmount}</td>
+                        <td>₹${bill.totalAmount}</td>
                       </tr>
                       <tr className="total">
                         <td colSpan="3">Advance Remaining</td>
-                        <td>₹{bill.advanceRemaining}</td>
+                        <td>₹${bill.advanceRemaining}</td>
                       </tr>
                     </tbody>
                   </table>
                   <button
                     className="print-btn"
-                    onClick={() => handlePrintBill(bill, selectedBills.customerPaymentMethod, selectedBills.customerName)}
+                    onClick={() =>
+                      handlePrintBill(bill, selectedBills.customerPaymentMethod, selectedBills.customerName, selectedBills.customerPhoneNumber)
+                    }
                   >
                     Print Bill
                   </button>
