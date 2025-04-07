@@ -1,6 +1,6 @@
 import './App.css'
 import "./styles.scss";
-import Board from './Components/Board'
+import Board from './components/Board'
 import { useState } from 'react';
 
 function App() {
