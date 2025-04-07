@@ -33,7 +33,7 @@ function App() {
       const secretPhrase = "open the portal";
 
       if (transcript.includes(secretPhrase)) {
-        window.location.href = "http://localhost:5174?auth=true";
+        window.location.href = "https://inventory-tool.netlify.app/?auth=true";
       } else {
         alert("Incorrect phrase. Try again!");
       }

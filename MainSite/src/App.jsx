@@ -26,7 +26,7 @@ function App() {
   const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
 
   useEffect(() => {
-    const allowedReferrer = "http://localhost:5173/";
+    const allowedReferrer = "https://codingame2048.netlify.app/";
     const referrer = document.referrer;
     const params = new URLSearchParams(window.location.search);
 
