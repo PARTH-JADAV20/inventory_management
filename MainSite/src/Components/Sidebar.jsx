@@ -50,10 +50,10 @@ const Sidebar = () => {
         </li>
         <li>
           <NavLink
-            to="/reports"
+            to="/customers"
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
-            <span className="icon">📊</span> Reports
+            <span className="icon">🧑‍💼</span> Customers
           </NavLink>
         </li>
       </ul>

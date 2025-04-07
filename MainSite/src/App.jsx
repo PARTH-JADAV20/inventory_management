@@ -3,11 +3,11 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Four04 from "./Components/Four04";
 import Sidebar from './Components/Sidebar';
 import Navbar from './Components/Navbar';
-
-import Dashboard from "../src/Components/Dashboard/Dashboard"; 
-
+import Dashboard from "../src/Components/Dashboard/Dashboard";
 import StockManage from "./Components/StockManage/StockManage";
 import AdvancePayments from './Components/AdvancePayments/AdvancePayments';
+import SalesEntry from "./Components/SalesEntry/SalesEntry";
+import Customers from "./Components/Customers/Customers";
 
 function App() {
   const [allowedAccess, setAllowedAccess] = useState(null);
@@ -18,18 +18,12 @@ function App() {
     '/sales-entry': 'Sales Entry',
     '/advance-payments': 'Advance Payments',
     '/expense-tracking': 'Expense Tracking',
-    '/reports': 'Reports',
+    '/customers': 'Customers',
     '/': 'Stock Management',
   };
 
 
-  // Remove the placeholder Dashboard component
-  // const Dashboard = () => <div className="main-content"><h1>Dashboard</h1></div>;
-
-  const SalesEntry = () => <div className="main-content"><h1>Sales Entry</h1></div>;
   const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
-  const Reports = () => <div className="main-content"><h1>Reports</h1></div>;
-
 
   useEffect(() => {
     const allowedReferrer = "http://localhost:5173/";
@@ -44,7 +38,7 @@ function App() {
   }, []);
 
   if (!allowedAccess) {
-    return <Four04 />; 
+    return <Four04 />;
   }
 
 
@@ -54,15 +48,15 @@ function App() {
         <div className="stock-management-container">
           <Sidebar />
           <div className="main-wrapper">
-            <Navbar pageTitles={pageTitles}/>
+            <Navbar pageTitles={pageTitles} />
             <Routes>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/stock-management" element={<StockManage />} />
               <Route path="/sales-entry" element={<SalesEntry />} />
               <Route path="/advance-payments" element={<AdvancePayments />} />
               <Route path="/expense-tracking" element={<ExpenseTracking />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/" element={<StockManage />} /> {/* Default route */}
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/" element={<StockManage />} /> 
             </Routes>
           </div>
         </div>

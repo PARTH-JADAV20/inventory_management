@@ -88,9 +88,7 @@
     flex: 1;
     padding: 20px;
     margin-top: 80px;
-    /* Offset by header height (adjust as needed) */
     overflow-y: auto;
-    /* Enable vertical scrolling */
     height: calc(100vh - 80px);
 }
 

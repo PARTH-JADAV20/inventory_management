@@ -222,6 +222,7 @@
     position: sticky;
     top: 0;
     z-index: 10;
+    margin-bottom: -50px;
 }
 
 .close-btn:hover {
@@ -236,8 +237,43 @@
 
     .advance-payment-table th:nth-child(3),
     .advance-payment-table td:nth-child(3),
-    .advance-payment-table th:nth-child(5), /* Hide Payment Method on small screens */
+    .advance-payment-table th:nth-child(5),
+    /* Hide Payment Method on small screens */
     .advance-payment-table td:nth-child(5) {
         display: none;
     }
+}
+
+
+/* Inline editing input */
+.inline-edit-input {
+    width: 100%;
+    padding: 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    color: var(--dark-bg);
+}
+
+/* Inline editing select */
+.inline-edit-select {
+    width: 100%;
+    padding: 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    color: var(--dark-bg);
+}
+
+/* Save button */
+.save-btn {
+    padding: 5px;
+    border-radius: 5px;
+    background: none;
+    border: none;
+    color: #2ecc71;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
