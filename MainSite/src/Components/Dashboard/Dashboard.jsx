@@ -5,7 +5,7 @@ import TimeFilter from '../Dashboard/TimeFilter/TimeFilter';
 import RecentActivity from '../Dashboard//All/RecentActivity';
 import ProfitAnalysis from '../Dashboard/All/ProfitAnalysis';
 import SalesFlow from '../Dashboard/All/SalesFlow';
-import ItemProfitability from '../Dashboard/All/ItemProfitability';
+import ItemProfitability from './All/SalesPerformance';
 import ExpenseDetails from '../Dashboard/Cards/ExpenseDetails';
 import RevenueDetails from '../Dashboard/Cards/RevenueDetails';
 import PendingPayments from '../Dashboard/Cards/PendingPayments';
@@ -57,14 +57,14 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="dashboard-grid">
+      {/* <div className="dashboard-grid">
         <div className="dashboard-grid-item">
           <ExpenseDetails filterData={filterData} />
         </div>
         <div className="dashboard-grid-item">
           <RevenueDetails filterData={filterData} />
         </div>
-      </div>
+      </div> */}
 
       <div className="dashboard-grid">
         <div className="dashboard-grid-item">

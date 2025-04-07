@@ -18,26 +18,25 @@ const SummaryCards = ({ filterData }) => {
               { name: 'Advance', value: '₹9,000' }
             ]
           },
-          expenses: { 
-            amount: '₹35,000', 
-            change: '+6.2%',
+          activeUsers: {
+            amount: '45',
+            change: '+5',
             categories: [
-              { name: 'Inventory', value: '₹22,000' },
-              { name: 'Utilities', value: '₹5,500' },
-              { name: 'Rent', value: '₹4,000' },
-              { name: 'Salaries', value: '₹3,500' }
+              { name: 'New Users', value: '12' },
+              { name: 'Returning', value: '33' }
             ]
           },
-          earnings: { 
-            amount: '₹89,500', 
-            change: '+4.5%',
+          topUsers: {
+            amount: '15',
+            change: '+2',
             categories: [
-              { name: 'Retail', value: '₹48,500' },
-              { name: 'Services', value: '₹26,000' },
-              { name: 'Wholesale', value: '₹15,000' }
+              { name: 'User #105 (25 orders)', value: '₹45,000' },
+              { name: 'User #087 (22 orders)', value: '₹38,500' },
+              { name: 'User #132 (20 orders)', value: '₹35,000' },
+              { name: 'User #212 (18 orders)', value: '₹32,000' }
             ]
           },
-          pending: { 
+          pendingAdvance: { 
             amount: '₹12,000', 
             count: '4',
             categories: [
@@ -60,26 +59,25 @@ const SummaryCards = ({ filterData }) => {
               { name: 'Advance', value: '₹49,000' }
             ]
           },
-          expenses: { 
-            amount: '₹235,000', 
-            change: '+8.4%',
+          activeUsers: {
+            amount: '185',
+            change: '+15',
             categories: [
-              { name: 'Inventory', value: '₹142,000' },
-              { name: 'Utilities', value: '₹35,500' },
-              { name: 'Rent', value: '₹34,000' },
-              { name: 'Salaries', value: '₹23,500' }
+              { name: 'New Users', value: '45' },
+              { name: 'Returning', value: '140' }
             ]
           },
-          earnings: { 
-            amount: '₹589,500', 
-            change: '+11.2%',
+          topUsers: {
+            amount: '25',
+            change: '+5',
             categories: [
-              { name: 'Retail', value: '₹298,500' },
-              { name: 'Services', value: '₹186,000' },
-              { name: 'Wholesale', value: '₹105,000' }
+              { name: 'User #105 (82 orders)', value: '₹185,000' },
+              { name: 'User #087 (75 orders)', value: '₹162,500' },
+              { name: 'User #132 (68 orders)', value: '₹145,000' },
+              { name: 'User #212 (65 orders)', value: '₹138,000' }
             ]
           },
-          pending: { 
+          pendingAdvance: { 
             amount: '₹52,000', 
             count: '12',
             categories: [
@@ -102,26 +100,25 @@ const SummaryCards = ({ filterData }) => {
               { name: 'Advance', value: '₹249,000' }
             ]
           },
-          expenses: { 
-            amount: '₹935,000', 
-            change: '+9.8%',
+          activeUsers: {
+            amount: '750',
+            change: '+45',
             categories: [
-              { name: 'Inventory', value: '₹542,000' },
-              { name: 'Utilities', value: '₹185,500' },
-              { name: 'Rent', value: '₹134,000' },
-              { name: 'Salaries', value: '₹73,500' }
+              { name: 'New Users', value: '180' },
+              { name: 'Returning', value: '570' }
             ]
           },
-          earnings: { 
-            amount: '₹2,189,500', 
-            change: '+14.3%',
+          topUsers: {
+            amount: '50',
+            change: '+8',
             categories: [
-              { name: 'Retail', value: '₹998,500' },
-              { name: 'Services', value: '₹786,000' },
-              { name: 'Wholesale', value: '₹405,000' }
+              { name: 'User #105 (320 orders)', value: '₹585,000' },
+              { name: 'User #087 (295 orders)', value: '₹522,500' },
+              { name: 'User #132 (282 orders)', value: '₹485,000' },
+              { name: 'User #212 (275 orders)', value: '₹458,000' }
             ]
           },
-          pending: { 
+          pendingAdvance: { 
             amount: '₹152,000', 
             count: '25',
             categories: [
@@ -149,28 +146,28 @@ const SummaryCards = ({ filterData }) => {
       categories: timeData.sales.categories
     },
     {
-      title: 'Total Expenses',
-      amount: timeData.expenses.amount,
-      change: timeData.expenses.change,
-      positive: false,
-      comparedTo: `vs previous ${filterData?.timeFrame?.toLowerCase() || 'period'}`,
-      categories: timeData.expenses.categories
+      title: 'Active Users',
+      amount: timeData.activeUsers.amount,
+      change: timeData.activeUsers.change,
+      positive: true,
+      comparedTo: `total users this ${filterData?.timeFrame?.toLowerCase() || 'period'}`,
+      categories: timeData.activeUsers.categories
     },
     {
-      title: 'Net Earnings',
-      amount: timeData.earnings.amount,
-      change: timeData.earnings.change,
+      title: 'Top Active Users',
+      amount: timeData.topUsers.amount,
+      change: timeData.topUsers.change,
       positive: true,
-      comparedTo: `vs previous ${filterData?.timeFrame?.toLowerCase() || 'period'}`,
-      categories: timeData.earnings.categories
+      comparedTo: 'most orders',
+      categories: timeData.topUsers.categories
     },
     {
       title: 'Pending Advances',
-      amount: timeData.pending.amount,
-      change: timeData.pending.count,
+      amount: timeData.pendingAdvance.amount,
+      change: timeData.pendingAdvance.count,
       positive: false,
       comparedTo: 'pending payments',
-      categories: timeData.pending.categories
+      categories: timeData.pendingAdvance.categories
     }
   ];
 
