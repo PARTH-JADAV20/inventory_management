@@ -6,8 +6,8 @@ import RecentActivity from '../Dashboard//All/RecentActivity';
 import ProfitAnalysis from '../Dashboard/All/ProfitAnalysis';
 import SalesFlow from '../Dashboard/All/SalesFlow';
 import ItemProfitability from './All/SalesPerformance';
-import ExpenseDetails from '../Dashboard/Cards/ExpenseDetails';
-import RevenueDetails from '../Dashboard/Cards/RevenueDetails';
+// import ExpenseDetails from '../Dashboard/Cards/ExpenseDetails';
+// import RevenueDetails from '../Dashboard/Cards/RevenueDetails';
 import PendingPayments from '../Dashboard/Cards/PendingPayments';
 
 const Dashboard = () => {
