@@ -1,0 +1,129 @@
+.customers-grid {
+    background: linear-gradient(145deg, #ffffff, #f8fafc);
+    border-radius: 16px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.grid-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    padding: 1.2rem 2rem;
+    background: rgba(241, 245, 249, 0.9);
+    font-weight: 600;
+    color: #1e293b;
+    border-bottom: 1px solid #d1d5db;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+}
+
+.customer-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid #e5e7eb;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.customer-row:hover {
+    background: rgba(241, 245, 249, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.customer-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.customer-icon {
+    padding: 0.6rem;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    color: #ffffff;
+    border-radius: 50%;
+    font-size: 1.2rem;
+}
+
+.customer-info h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.customer-info span {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.credit-amount,
+.last-transaction {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #1e293b;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.status-pending {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #f59e0b;
+}
+
+.status-cleared {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #22c55e;
+}
+
+.btn-view {
+    padding: 0.6rem 1.5rem;
+    background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+    border: none;
+    border-radius: 8px;
+    color: #1e293b;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-view:hover {
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+@media (max-width: 768px) {
+    .grid-header,
+    .customer-row {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .btn-view {
+        width: 100%;
+        text-align: center;
+        padding: 0.8rem;
+    }
+
+    .customer-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

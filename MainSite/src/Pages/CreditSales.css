@@ -1,0 +1,21 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+.credit-sales-container {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 2.5rem;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    min-height: 100vh;
+    transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .credit-sales-container {
+        padding: 1.5rem;
+    }
+}
