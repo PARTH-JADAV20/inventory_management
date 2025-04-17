@@ -13,7 +13,7 @@ function App() {
   const [allowedAccess, setAllowedAccess] = useState(null);
 
   const pageTitles = {
-    '/dashboard': 'Dashboard',
+    '/': 'Dashboard',
     '/stock-management': 'Stock Management',
     '/sales-entry': 'Sales Entry',
     '/advance-payments': 'Advance Payments',
@@ -22,25 +22,46 @@ function App() {
     '/': 'Stock Management',
   };
 
-
   const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
-
+  
   useEffect(() => {
-    const allowedReferrer = "https://codingame2048.netlify.app/";
+    const allowedReferrer = "http://localhost:5173/"; // your 2048 site
     const referrer = document.referrer;
     const params = new URLSearchParams(window.location.search);
-
-    if (!referrer.includes(allowedReferrer) || !params.get("auth")) {
-      setAllowedAccess(false);
-    } else {
+  
+    const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
+    const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
+  
+    if (fromDummySite) {
+      // ✅ Success path — allow and store session
+      sessionStorage.setItem("authorized-entry", "true");
       setAllowedAccess(true);
+  
+      // Remove ?auth=true from URL after validation
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (alreadyAuthorized === "true") {
+      // ✅ Still in same session/tab
+      setAllowedAccess(true);
+    } else {
+      // ❌ Access denied
+      setAllowedAccess(false);
     }
+  }, []);
+ 
+
+  useEffect(() => {
+    const handleUnload = () => {
+      sessionStorage.removeItem("authorized-entry");
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
   }, []);
 
   if (!allowedAccess) {
     return <Four04 />;
   }
-
 
   return (
     <>
@@ -50,7 +71,7 @@ function App() {
           <div className="main-wrapper">
             <Navbar pageTitles={pageTitles} />
             <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/" element={<Dashboard />} />
               <Route path="/stock-management" element={<StockManage />} />
               <Route path="/sales-entry" element={<SalesEntry />} />
               <Route path="/advance-payments" element={<AdvancePayments />} />
@@ -64,6 +85,5 @@ function App() {
     </>
   );
 }
-
 
 export default App;
