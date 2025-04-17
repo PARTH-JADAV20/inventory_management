@@ -10,7 +10,7 @@ const Sidebar = () => {
       <ul className="nav-links">
         <li>
           <NavLink
-            to="/dashboard"
+            to="/"
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
             <span className="icon">📊</span> Dashboard
@@ -58,10 +58,10 @@ const Sidebar = () => {
         </li>
         <li>
           <NavLink
-            to="/reports"
+            to="/customers"
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
-            <span className="icon">📊</span> Reports
+            <span className="icon">🧑‍💼</span> Customers
           </NavLink>
         </li>
       </ul>

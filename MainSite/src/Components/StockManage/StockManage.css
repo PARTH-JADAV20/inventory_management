@@ -15,7 +15,6 @@
     --border-color: #3a3a5a;
     --input-bg: #fff;
     --hover-bg: rgba(255, 107, 44, 0.5);
-    ;
 }
 
 .stock-management-container {
@@ -33,7 +32,6 @@
     padding: 20px 0;
     border-right: 1px solid var(--border-color);
     position: fixed;
-    /* Fix sidebar position */
     top: 0;
     bottom: 0;
     left: 0;
@@ -58,8 +56,6 @@
 .nav-links li {
     transition: background-color 0.3s ease;
 }
-
-
 
 .nav-links li .active {
     background-color: var(--hover-bg);
@@ -88,9 +84,7 @@
     flex: 1;
     padding: 20px;
     margin-top: 80px;
-    /* Offset by header height (adjust as needed) */
     overflow-y: auto;
-    /* Enable vertical scrolling */
     height: calc(100vh - 80px);
 }
 
@@ -220,6 +214,19 @@
     border-left: none;
 }
 
+.category-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.custom-category-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
 .form-buttons {
     grid-column: 1 / -1;
     display: flex;
@@ -257,6 +264,7 @@
     margin-bottom: 20px;
     display: flex;
     align-items: center;
+    gap: 15px;
 }
 
 .stock-filter label {
@@ -269,6 +277,15 @@
     border: 1px solid var(--border-color);
     background-color: var(--input-bg);
     color: #000;
+}
+
+.search-input {
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    color: #000;
+    width: 200px;
 }
 
 .stock-table {
@@ -323,13 +340,11 @@
     .stock-management-container {
         flex-direction: column;
         overflow: hidden;
-        /* Still prevent container scrolling */
     }
 
     .sidebar {
         width: 100%;
         position: static;
-        /* Unfix sidebar on mobile */
         border-right: none;
         border-bottom: 1px solid var(--border-color);
         padding-bottom: 10px;
@@ -337,21 +352,17 @@
 
     .main-wrapper {
         margin-left: 0;
-        /* Remove offset on mobile */
     }
 
     .header {
         position: static;
-        /* Unfix header on mobile */
         left: 0;
         padding: 20px;
     }
 
     .main-content {
         margin-top: 0;
-        /* Remove offset on mobile */
         height: auto;
-        /* Allow natural height */
     }
 
     .nav-links {
@@ -376,8 +387,16 @@
     .stock-table td:nth-child(3) {
         display: none;
     }
-}
 
+    .stock-filter {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .search-input {
+        width: 100%;
+    }
+}
 
 .main-wrapper {
     flex: 1;

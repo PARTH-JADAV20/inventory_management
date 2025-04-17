@@ -1,0 +1,235 @@
+.customers-header-p2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.summary-stats-p2 {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+  color: var(--dark-bg);
+  font-weight: bolder;
+}
+
+.summary-stats-p2 p {
+  background-color: var(--text-primary);
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+
+.search-container-p2 {
+  margin-bottom: 10px;
+}
+
+.search-input-p2 {
+  padding: 8px;
+  width: 300px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: #ffffff;
+  border-radius: 4px;
+  outline: none;
+}
+
+.customers-table-container-p2 {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.customers-table-p2 {
+  width: 100%;
+  min-width: 900px; /* Adjusted for fewer columns */
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.customers-table-p2 th,
+.customers-table-p2 td {
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.customers-table-p2 th {
+  background-color: var(--card-bg);
+  color: #a1a5b7;
+  font-size: 14px;
+}
+
+.customers-table-p2 td {
+  background-color: var(--card-bg);
+  color: #ffffff;
+  font-size: 13px;
+}
+
+/* Column widths for 7 columns */
+.customers-table-p2 th:nth-child(1),
+.customers-table-p2 td:nth-child(1) {
+  width: 18%; /* Contractor */
+}
+.customers-table-p2 th:nth-child(2),
+.customers-table-p2 td:nth-child(2) {
+  width: 15%; /* Phone */
+}
+.customers-table-p2 th:nth-child(3),
+.customers-table-p2 td:nth-child(3) {
+  width: 18%; /* Profile */
+}
+.customers-table-p2 th:nth-child(4),
+.customers-table-p2 td:nth-child(4) {
+  width: 12%; /* Total Purchased */
+}
+.customers-table-p2 th:nth-child(5),
+.customers-table-p2 td:nth-child(5) {
+  width: 12%; /* Payment Method */
+}
+.customers-table-p2 th:nth-child(6),
+.customers-table-p2 td:nth-child(6) {
+  width: 15%; /* Advance Details */
+}
+.customers-table-p2 th:nth-child(7),
+.customers-table-p2 td:nth-child(7) {
+  width: 10%; /* Actions */
+}
+
+.inline-edit-input-p2 {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: #ffffff;
+  padding: 4px;
+  width: 100%;
+  font-size: 13px;
+}
+
+.show-bills-btn-p2,
+.save-btn-p2,
+.advance-details-btn-p2 {
+  background-color: rgba(255, 107, 44, 0.5);
+  border: none;
+  padding: 4px 8px;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 4px;
+  font-size: 12px;
+}
+
+.edit-btn-p2 {
+  border: none;
+  background: none;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #3699ff;
+}
+
+.show-bills-btn-p2:disabled,
+.edit-btn-p2:disabled,
+.save-btn-p2:disabled,
+.advance-details-btn-p2:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.save-btn-p2 {
+  background-color: #28a745;
+}
+
+.contractor-row td {
+  background-color: var(--card-bg);
+  padding: 5px;
+}
+
+.contractor-toggle {
+  background: none;
+  border: none;
+  color: #a1a5b7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  width: 100%;
+  text-align: left;
+  font-weight: bold;
+}
+
+.contractor-toggle:hover {
+  color: #ffffff;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #1e1e2d;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  color: #ffffff;
+}
+
+.advance-modal-content-p2 {
+  max-width: 400px; /* Smaller for advance details */
+  padding: 15px;
+}
+
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #ff6b35;
+  border: none;
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.advance-details-content-p2 {
+  margin: 20px 0;
+}
+
+.advance-details-content-p2 p {
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.advance-details-content-p2 strong {
+  color: #a1a5b7;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .customers-table-p2 {
+    min-width: 100%;
+  }
+  .customers-table-p2 th,
+  .customers-table-p2 td {
+    padding: 6px;
+    font-size: 12px;
+  }
+}

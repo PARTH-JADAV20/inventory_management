@@ -37,6 +37,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 10px;
 }
 
 .checkbox-container {
@@ -102,6 +103,27 @@
     font-weight: 500;
 }
 
+.contractor-row {
+    background-color: var(--dark-bg);
+}
+
+.contractor-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px;
+    width: 100%;
+    text-align: left;
+}
+
+.contractor-toggle:hover {
+    color: var(--accent-color);
+}
+
 .show-bills-btn {
     padding: 5px 10px;
     border-radius: 5px;
@@ -131,7 +153,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .modal-content {
@@ -143,10 +165,13 @@
     max-height: 80vh;
     overflow-y: auto;
     position: relative;
+    box-sizing: border-box;
 }
 
 .modal-content h2 {
     text-align: center;
+    color: var(--accent-color);
+    margin-bottom: 20px;
 }
 
 .bill-details {
@@ -167,10 +192,6 @@
 .bill-details p {
     color: var(--text-secondary);
     margin-bottom: 10px;
-}
-
-.bill-details p.payment-method {
-    font-style: italic;
 }
 
 .bill-table {
@@ -228,6 +249,52 @@
     background-color: #c0392b;
 }
 
+/* Inline editing input */
+.inline-edit-input {
+    width: 100%;
+    padding: 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    color: var(--dark-bg);
+}
+
+/* Inline editing select */
+.inline-edit-select {
+    width: 100%;
+    padding: 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    color: var(--dark-bg);
+}
+
+/* Save button */
+.save-btn {
+    padding: 5px;
+    border-radius: 5px;
+    background: none;
+    border: none;
+    color: #2ecc71;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Edit button */
+.edit-btn {
+    padding: 5px;
+    border-radius: 5px;
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* Responsive Styles */
 @media (max-width: 768px) {
     .advance-payment-form {
@@ -236,8 +303,8 @@
 
     .advance-payment-table th:nth-child(3),
     .advance-payment-table td:nth-child(3),
-    .advance-payment-table th:nth-child(5), /* Hide Payment Method on small screens */
-    .advance-payment-table td:nth-child(5) {
+    .advance-payment-table th:nth-child(4),
+    .advance-payment-table td:nth-child(4) {
         display: none;
     }
 }
