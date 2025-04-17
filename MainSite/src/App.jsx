@@ -24,27 +24,42 @@ function App() {
     '/credit-sales': 'Credit Sales',
   };
 
-  const ExpenseTracking = () => (
-    <div className="main-content"><h1>Expense Tracking</h1></div>
-  );
-
+  const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
+  
   useEffect(() => {
-    const allowedReferrer = "http://localhost:5173/";
+    const allowedReferrer = "https://codingame2048.netlify.app/"; 
+    // const allowedReferrer = "http://localhost:5173/"; 
     const referrer = document.referrer;
     const params = new URLSearchParams(window.location.search);
-
+  
     const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
     const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
-
+  
     if (fromDummySite) {
+      // ✅ Success path — allow and store session
       sessionStorage.setItem("authorized-entry", "true");
       setAllowedAccess(true);
+  
+      // Remove ?auth=true from URL after validation
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (alreadyAuthorized === "true") {
+      // ✅ Still in same session/tab
       setAllowedAccess(true);
     } else {
+      // ❌ Access denied
       setAllowedAccess(false);
     }
+  }, []);
+ 
+
+  useEffect(() => {
+    const handleUnload = () => {
+      sessionStorage.removeItem("authorized-entry");
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
   }, []);
 
   useEffect(() => {
