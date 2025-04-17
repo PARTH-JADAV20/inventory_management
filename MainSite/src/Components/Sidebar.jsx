@@ -10,7 +10,7 @@ const Sidebar = () => {
       <ul className="nav-links">
         <li>
           <NavLink
-            to="/dashboard"
+            to="/"
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
             <span className="icon">📊</span> Dashboard

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Pencil, Trash2, Plus } from "lucide-react";
-import stockItems from "../stockItems.js"; 
+import stockItems from "../stockItems.js";
 import "./StockManage.css";
 
 const StockManage = () => {
-  const [items, setItems] = useState(stockItems); 
+  const [items, setItems] = useState(stockItems);
   const [categories] = useState([
     "Cement",
     "Sand",
@@ -17,6 +17,8 @@ const StockManage = () => {
     "Wood",
   ]);
   const [filterCategory, setFilterCategory] = useState("All");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [newItem, setNewItem] = useState({
     name: "",
@@ -30,12 +32,22 @@ const StockManage = () => {
   const [filteredItems, setFilteredItems] = useState([]);
 
   useEffect(() => {
-    if (filterCategory === "All") {
-      setFilteredItems(items);
-    } else {
-      setFilteredItems(items.filter((item) => item.category === filterCategory));
+    let filtered = items;
+
+    // Apply category filter
+    if (filterCategory !== "All") {
+      filtered = filtered.filter((item) => item.category === filterCategory);
     }
-  }, [items, filterCategory]);
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter((item) =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    setFilteredItems(filtered);
+  }, [items, filterCategory, searchTerm]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -46,8 +58,12 @@ const StockManage = () => {
     });
   };
 
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
   const handleAddItem = () => {
-    if (!newItem.name || !newItem.quantity || !newItem.price) {
+    if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.category) {
       alert("Please fill all fields");
       return;
     }
@@ -69,6 +85,7 @@ const StockManage = () => {
       category: "Cement",
       price: "",
     });
+    setIsCustomCategory(false);
   };
 
   const handleEdit = (item) => {
@@ -80,6 +97,7 @@ const StockManage = () => {
       category: item.category,
       price: item.price,
     });
+    setIsCustomCategory(!categories.includes(item.category));
   };
 
   const handleDelete = (id) => {
@@ -95,6 +113,7 @@ const StockManage = () => {
       category: "Cement",
       price: "",
     });
+    setIsCustomCategory(false);
   };
 
   return (
@@ -127,23 +146,46 @@ const StockManage = () => {
                 <option value="KG">KG</option>
                 <option value="Bag">Bag</option>
                 <option value="Pieces">Pieces</option>
+                <option value="Liter">Liter</option>
               </select>
             </div>
           </div>
 
           <div className="form-group">
-            <label>Category</label>
-            <select name="category" value={newItem.category} onChange={handleInputChange}>
-              {categories.map((category, index) => (
-                <option key={index} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+            <div className="category-group">
+              <label className="checkbox-label">
+                <div>Category</div>
+                <div className="custom-category-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isCustomCategory}
+                    onChange={(e) => setIsCustomCategory(e.target.checked)}
+                  />
+                  Custom Category
+                </div>
+              </label>
+              {isCustomCategory ? (
+                <input
+                  type="text"
+                  name="category"
+                  placeholder="Enter custom category"
+                  value={newItem.category}
+                  onChange={handleInputChange}
+                />
+              ) : (
+                <select name="category" value={newItem.category} onChange={handleInputChange}>
+                  {categories.map((category, index) => (
+                    <option key={index} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
           <div className="form-group">
-            <label>Selling Price (₹)</label>
+            <label>Purchase Price (₹)</label>
             <input
               type="number"
               name="price"
@@ -177,6 +219,13 @@ const StockManage = () => {
               </option>
             ))}
           </select>
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search by item name..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+          />
         </div>
 
         <table className="stock-table">
@@ -185,7 +234,7 @@ const StockManage = () => {
               <th>Item Name</th>
               <th>Quantity</th>
               <th>Category</th>
-              <th>Selling Price</th>
+              <th>Purchase Price</th>
               <th>Actions</th>
             </tr>
           </thead>
