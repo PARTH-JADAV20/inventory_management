@@ -42,6 +42,14 @@ const Sidebar = () => {
         </li>
         <li>
           <NavLink
+            to="/credit-sales"
+            className={({ isActive }) => (isActive ? 'active' : '')}
+          >
+            <span className="icon">🧾</span> Credit Sales
+          </NavLink>
+        </li>
+        <li>
+          <NavLink
             to="/expense-tracking"
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
