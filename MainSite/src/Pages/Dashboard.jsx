@@ -1,14 +1,14 @@
 import React from 'react';
 import './Dashboard.css';
-import SummaryCards from '../Dashboard/SummaryCards/SummaryCards';
-import TimeFilter from '../Dashboard/TimeFilter/TimeFilter';
-import RecentActivity from '../Dashboard//All/RecentActivity';
-import ProfitAnalysis from '../Dashboard/All/ProfitAnalysis';
-import SalesFlow from '../Dashboard/All/SalesFlow';
-import ItemProfitability from './All/SalesPerformance';
+import SummaryCards from '../Components/Dashboard/SummaryCards/SummaryCards';
+import TimeFilter from '../Components/Dashboard/TimeFilter/TimeFilter';
+import RecentActivity from '../Components/Dashboard/All/RecentActivity';
+import ProfitAnalysis from '../Components/Dashboard/All/ProfitAnalysis';
+import SalesFlow from '../Components/Dashboard/All/SalesFlow';
+import ItemProfitability from '../Components/Dashboard/All/SalesPerformance';
 // import ExpenseDetails from '../Dashboard/Cards/ExpenseDetails';
 // import RevenueDetails from '../Dashboard/Cards/RevenueDetails';
-import PendingPayments from '../Dashboard/Cards/PendingPayments';
+import PendingPayments from '../Components/Dashboard/Cards/PendingPayments';
 
 const Dashboard = () => {
   const [activeFilter, setActiveFilter] = React.useState('Today');
