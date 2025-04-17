@@ -1,6 +1,6 @@
 import './App.css'
 import "./styles.scss";
-import Board from './Components/Board'
+import Board from './components/Board'
 import { useState } from 'react';
 
 function App() {
@@ -33,7 +33,8 @@ function App() {
       const secretPhrase = "open the portal";
 
       if (transcript.includes(secretPhrase)) {
-        window.location.href = "http://localhost:5174?auth=true";
+        // window.location.href = "https://inventory-tool-1.netlify.app/?auth=true";
+        window.location.href = "http://localhost:5174/?auth=true";
       } else {
         alert("Incorrect phrase. Try again!");
       }
