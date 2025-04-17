@@ -10,7 +10,7 @@ function App() {
     setClickCount(prevCount => {
       if (prevCount + 1 === 3) {
         handleVoiceAuth(); 
-        return 0; // Reset count after 3 clicks
+        return 0; 
       }
       return prevCount + 1;
     });
@@ -33,7 +33,7 @@ function App() {
       const secretPhrase = "open the portal";
 
       if (transcript.includes(secretPhrase)) {
-        window.location.href = "https://inventory-tool-1.nelify.app/?auth=true";
+        window.location.href = "https://inventory-tool-1.netlify.app/?auth=true";
         // window.location.href = "http://localhost:5174/?auth=true";
       } else {
         alert("Incorrect phrase. Try again!");
