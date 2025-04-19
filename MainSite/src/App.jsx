@@ -76,6 +76,7 @@ function App() {
     return <Four04 />;
   }
 
+
   return (
     <Router>
       <div className="stock-management-container">
