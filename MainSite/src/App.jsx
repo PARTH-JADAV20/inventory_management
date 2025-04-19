@@ -24,18 +24,17 @@ function App() {
     '/credit-sales': 'Credit Sales',
   };
 
-  const ExpenseTracking = () => (
-    <div className="main-content"><h1>Expense Tracking</h1></div>
-  );
-
+  const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
+  
   useEffect(() => {
-    const allowedReferrer = "http://localhost:5173/";
+    const allowedReferrer = "https://codingame2048.netlify.app/"; 
+    // const allowedReferrer = "http://localhost:5173/"; 
     const referrer = document.referrer;
     const params = new URLSearchParams(window.location.search);
-
+  
     const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
     const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
-
+  
     if (fromDummySite) {
       sessionStorage.setItem("authorized-entry", "true");
       setAllowedAccess(true);
@@ -45,6 +44,17 @@ function App() {
     } else {
       setAllowedAccess(false);
     }
+  }, []);
+ 
+
+  useEffect(() => {
+    const handleUnload = () => {
+      sessionStorage.removeItem("authorized-entry");
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+    };
   }, []);
 
   useEffect(() => {
@@ -60,6 +70,7 @@ function App() {
   if (!allowedAccess) {
     return <Four04 />;
   }
+
 
   return (
     <Router>

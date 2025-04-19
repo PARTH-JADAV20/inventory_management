@@ -3,7 +3,6 @@ import { CustomerList } from '../Components/Credit/CustomerList';
 import { CustomerDetailModal } from '../Components/Credit/CustomerDetailModal';
 import { NewCreditModal } from '../Components/Credit/NewCreditModal';
 import { CreditHeader } from '../Components/Credit/CreditHeader';
-import './CreditSales.css';
 
 function CreditSales() {
     const [search, setSearch] = useState('');
@@ -34,7 +33,9 @@ function CreditSales() {
             date: '2025-04-10',
             item: 'Laptop',
             amount: 1000,
-            status: 'Pending'
+            status: 'Pending',
+            originalAmount: 1000,
+            payments: []
         },
         {
             id: 2,
@@ -42,7 +43,11 @@ function CreditSales() {
             date: '2025-04-05',
             item: 'Mouse',
             amount: 500,
-            status: 'Cleared'
+            status: 'Cleared',
+            originalAmount: 500,
+            payments: [
+                { amount: 500, mode: 'Cash', date: '2025-04-05' }
+            ]
         },
         {
             id: 3,
@@ -50,19 +55,24 @@ function CreditSales() {
             date: '2025-04-15',
             item: 'Keyboard',
             amount: 2500,
-            status: 'Cleared'
+            status: 'Cleared',
+            originalAmount: 2500,
+            payments: [
+                { amount: 2500, mode: 'Online', date: '2025-04-15' }
+            ]
         }
     ]);
 
     const handleNewCredit = (creditData) => {
         const newCustomer = !creditData.existingCustomerId;
+        const amount = parseFloat(creditData.amount);
         if (newCustomer) {
             const newCustomerId = customers.length + 1;
             setCustomers([...customers, {
                 id: newCustomerId,
                 name: creditData.customerName,
                 phone: creditData.phone,
-                totalCredit: parseFloat(creditData.amount),
+                totalCredit: amount,
                 lastTransaction: creditData.date,
                 status: 'Pending'
             }]);
@@ -71,8 +81,10 @@ function CreditSales() {
                 customerId: newCustomerId,
                 date: creditData.date,
                 item: creditData.item,
-                amount: parseFloat(creditData.amount),
-                status: 'Pending'
+                amount: amount,
+                status: 'Pending',
+                originalAmount: amount,
+                payments: []
             }]);
         } else {
             const customerId = parseInt(creditData.existingCustomerId);
@@ -80,7 +92,7 @@ function CreditSales() {
                 c.id === customerId
                     ? {
                         ...c,
-                        totalCredit: c.totalCredit + parseFloat(creditData.amount),
+                        totalCredit: c.totalCredit + amount,
                         lastTransaction: creditData.date,
                         status: 'Pending'
                     }
@@ -91,37 +103,57 @@ function CreditSales() {
                 customerId: customerId,
                 date: creditData.date,
                 item: creditData.item,
-                amount: parseFloat(creditData.amount),
-                status: 'Pending'
+                amount: amount,
+                status: 'Pending',
+                originalAmount: amount,
+                payments: []
             }]);
         }
         setShowNewCreditModal(false);
     };
 
-    const handlePaymentUpdate = (transactionId, paymentMode) => {
+    const handlePaymentUpdate = (transactionId, paymentMode, paymentAmount) => {
+        const transaction = transactions.find(t => t.id === transactionId);
+        const customerId = transaction.customerId;
+        const payment = {
+            amount: parseFloat(paymentAmount),
+            mode: paymentMode,
+            date: new Date().toISOString().split('T')[0]
+        };
+
         setTransactions(transactions.map(t =>
             t.id === transactionId
-                ? { ...t, status: 'Cleared' }
+                ? {
+                    ...t,
+                    amount: t.amount - payment.amount,
+                    payments: [...t.payments, payment],
+                    status: (t.amount - payment.amount) <= 0 ? 'Cleared' : 'Pending'
+                }
                 : t
         ));
-        const customerId = transactions.find(t => t.id === transactionId).customerId;
-        const pendingTransactions = transactions.filter(t => t.customerId === customerId && t.status === 'Pending');
+
+        const customerTransactions = transactions.filter(t => t.customerId === customerId);
+        const pendingTransactions = customerTransactions.filter(t => t.status === 'Pending' && t.id !== transactionId);
+        const updatedTransaction = customerTransactions.find(t => t.id === transactionId);
+        if (updatedTransaction && updatedTransaction.amount > payment.amount) {
+            pendingTransactions.push(updatedTransaction);
+        }
+
         setCustomers(customers.map(c =>
             c.id === customerId
                 ? {
                     ...c,
-                    status: pendingTransactions.length === 1 ? 'Cleared' : 'Pending',
-                    totalCredit: pendingTransactions.length === 1
-                        ? 0
-                        : pendingTransactions.reduce((sum, t) => sum + t.amount, 0)
+                    status: pendingTransactions.length === 0 ? 'Cleared' : 'Pending',
+                    totalCredit: pendingTransactions.reduce((sum, t) => sum + (t.id === transactionId ? (t.amount - payment.amount) : t.amount), 0)
                 }
                 : c
         ));
-        console.log(`Payment cleared for transaction ${transactionId} via ${paymentMode}`);
+
+        console.log(`Payment of ₹${paymentAmount} cleared for transaction ${transactionId} via ${paymentMode}`);
     };
 
     return (
-        <div className="credit-sales-container">
+        <div className="max-w-[1920px] mx-auto mt-20 p-12 bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen transition-all duration-500 xl:p-8 md:p-6">
             <CreditHeader
                 search={search}
                 setSearch={setSearch}

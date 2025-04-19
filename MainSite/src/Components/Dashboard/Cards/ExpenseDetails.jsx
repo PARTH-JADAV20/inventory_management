@@ -1,5 +1,4 @@
 import React from 'react';
-import './ExpenseDetails.css';
 import SectionHeader from '../UI/SectionHeader';
 
 const ExpenseDetails = () => {
@@ -30,22 +29,27 @@ const ExpenseDetails = () => {
   ];
 
   return (
-    <div className="expense-details">
+    <div className="bg-slate-800 rounded-lg p-5 h-full xl:p-4 md:p-3">
       <SectionHeader title="Expense Breakdown" link="View All" />
       
-      <div className="expense-categories">
+      <div className="mt-5">
         {expenses.map((category, index) => (
-          <div key={index} className="expense-category">
-            <h4 className="category-title">{category.category}</h4>
+          <div key={index} className="mb-5 last:mb-0">
+            <h4 className="text-base font-medium text-orange-500 mb-2.5 pb-2 border-b border-slate-700 xl:text-sm md:text-sm">
+              {category.category}
+            </h4>
             
-            <div className="expense-items">
+            <div className="flex flex-col gap-2.5">
               {category.items.map((item, idx) => (
-                <div key={idx} className="expense-item">
+                <div
+                  key={idx}
+                  className="flex justify-between items-center py-2 border-b border-slate-700 last:border-b-0 xl:py-1.5 md:py-1"
+                >
                   <div className="expense-item-info">
-                    <div className="expense-item-name">{item.name}</div>
-                    <div className="expense-item-date">{item.date}</div>
+                    <div className="text-sm mb-0.5 xl:text-xs md:text-xs">{item.name}</div>
+                    <div className="text-xs text-slate-400 xl:text-[11px] md:text-[11px]">{item.date}</div>
                   </div>
-                  <div className="expense-item-amount">{item.amount}</div>
+                  <div className="text-[15px] font-medium text-red-500 xl:text-sm md:text-sm">{item.amount}</div>
                 </div>
               ))}
             </div>
