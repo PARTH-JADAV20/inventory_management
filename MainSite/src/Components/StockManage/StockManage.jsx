@@ -18,6 +18,7 @@ const StockManage = () => {
   ]);
   const [filterCategory, setFilterCategory] = useState("All");
   const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [isCustomUnit, setIsCustomUnit] = useState(false); // New state for custom unit
   const [searchTerm, setSearchTerm] = useState("");
 
   const [newItem, setNewItem] = useState({
@@ -63,7 +64,7 @@ const StockManage = () => {
   };
 
   const handleAddItem = () => {
-    if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.category) {
+    if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.category || !newItem.unit) {
       alert("Please fill all fields");
       return;
     }
@@ -86,6 +87,7 @@ const StockManage = () => {
       price: "",
     });
     setIsCustomCategory(false);
+    setIsCustomUnit(false); // Reset custom unit
   };
 
   const handleEdit = (item) => {
@@ -98,6 +100,7 @@ const StockManage = () => {
       price: item.price,
     });
     setIsCustomCategory(!categories.includes(item.category));
+    setIsCustomUnit(!["KG", "Bag", "Pieces", "Liter"].includes(item.unit)); // Check if unit is custom
   };
 
   const handleDelete = (id) => {
@@ -114,6 +117,7 @@ const StockManage = () => {
       price: "",
     });
     setIsCustomCategory(false);
+    setIsCustomUnit(false); // Reset custom unit
   };
 
   return (
@@ -133,7 +137,17 @@ const StockManage = () => {
           </div>
 
           <div className="form-group">
-            <label>Quantity</label>
+            <label className="checkbox-label">
+              <div>Quantity</div>
+              <div className="custom-category-checkbox">
+                <input
+                  type="checkbox"
+                  checked={isCustomUnit}
+                  onChange={(e) => setIsCustomUnit(e.target.checked)}
+                />
+                Custom Unit
+              </div>
+            </label>
             <div className="quantity-group">
               <input
                 type="number"
@@ -142,12 +156,22 @@ const StockManage = () => {
                 value={newItem.quantity}
                 onChange={handleInputChange}
               />
-              <select name="unit" value={newItem.unit} onChange={handleInputChange}>
-                <option value="KG">KG</option>
-                <option value="Bag">Bag</option>
-                <option value="Pieces">Pieces</option>
-                <option value="Liter">Liter</option>
-              </select>
+              {isCustomUnit ? (
+                <input
+                  type="text"
+                  name="unit"
+                  placeholder="Enter custom unit"
+                  value={newItem.unit}
+                  onChange={handleInputChange}
+                />
+              ) : (
+                <select name="unit" value={newItem.unit} onChange={handleInputChange}>
+                  <option value="KG">KG</option>
+                  <option value="Bag">Bag</option>
+                  <option value="Pieces">Pieces</option>
+                  <option value="Liter">Liter</option>
+                </select>
+              )}
             </div>
           </div>
 

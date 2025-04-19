@@ -35,8 +35,6 @@
 }
 
 .customers-table-container-p2 {
-  overflow-x: auto;
-  overflow-y: auto;
   max-height: calc(100vh - 200px);
 }
 
@@ -100,9 +98,8 @@
 }
 
 .inline-edit-input-p2 {
-  background-color: var(--card-bg);
   border: 1px solid var(--border-color);
-  color: #ffffff;
+  color: #000;
   padding: 4px;
   width: 100%;
   font-size: 13px;
@@ -139,30 +136,13 @@
 }
 
 .save-btn-p2 {
-  background-color: #28a745;
+  color: #28a745;
+  background : none;
 }
 
 .contractor-row td {
   background-color: var(--card-bg);
   padding: 5px;
-}
-
-.contractor-toggle {
-  background: none;
-  border: none;
-  color: #a1a5b7;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 14px;
-  width: 100%;
-  text-align: left;
-  font-weight: bold;
-}
-
-.contractor-toggle:hover {
-  color: #ffffff;
 }
 
 /* Modal styles */

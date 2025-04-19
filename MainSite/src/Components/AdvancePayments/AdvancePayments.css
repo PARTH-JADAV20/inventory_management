@@ -107,22 +107,10 @@
     background-color: var(--dark-bg);
 }
 
-.contractor-toggle {
-    background: none;
-    border: none;
-    color: var(--text-primary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 10px;
-    width: 100%;
-    text-align: left;
-}
-
-.contractor-toggle:hover {
-    color: var(--accent-color);
-}
+.contractor-heading {
+    color: #ff6b35; 
+    font-size: 18px;
+  }
 
 .show-bills-btn {
     padding: 5px 10px;
@@ -227,7 +215,7 @@
     background-color: var(--accent-color);
     color: white;
     cursor: pointer;
-    margin-top: 15px;
+
 }
 
 .close-btn {

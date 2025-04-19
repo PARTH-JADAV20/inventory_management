@@ -34,6 +34,20 @@
   color: #000;
 }
 
+.checkbox-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.custom-unit-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
 .item-row-p {
   grid-column: 1 / -1;
   display: flex;
@@ -229,5 +243,39 @@
   .generate-sale-btn-p,
   .generate-btn-p {
     width: 100%;
+  }
+}
+
+.sales-filter-row-p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.sales-filter-row-p label {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-right: 5px;
+}
+
+.sales-filter-row-p input {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+  background-color: var(--input-bg);
+  color: #000;
+  flex: 1;
+  max-width: 150px; /* Wider than small-input-p's 80px */
+}
+
+@media (max-width: 768px) {
+  .sales-filter-row-p {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sales-filter-row-p input {
+    max-width: 100%;
   }
 }

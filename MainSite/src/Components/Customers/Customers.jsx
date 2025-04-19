@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { Pencil, Save } from "lucide-react";
 import customersData from "../customers";
 import "./Customers.css";
 
@@ -9,8 +9,6 @@ const Customers = () => {
   const [editedProfile, setEditedProfile] = useState(null);
   const [selectedBills, setSelectedBills] = useState(null);
   const [selectedAdvanceDetails, setSelectedAdvanceDetails] = useState(null);
-  const [expandedContractors, setExpandedContractors] = useState({});
-
   // Derive common name from profiles
   const getCommonName = (profiles) => {
     const names = profiles.map((p) => p.name.replace(/ \[.*\]$/, ""));
@@ -20,14 +18,6 @@ const Customers = () => {
   // Calculate total purchased (sum of bill totalAmounts)
   const calculateTotalPurchased = (bills) => {
     return bills.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
-  };
-
-  // Toggle contractor profile visibility
-  const toggleContractor = (phoneNumber) => {
-    setExpandedContractors((prev) => ({
-      ...prev,
-      [phoneNumber]: !prev[phoneNumber],
-    }));
   };
 
   // Sort customers by last updated (using the latest bill date or profileId timestamp)
@@ -59,8 +49,8 @@ const Customers = () => {
   const advanceCustomers = customers.filter((c) => c.profiles.some((p) => p.advance)).length;
 
   // Handle edit
-  const handleEdit = (profile, phoneNumber) => {
-    setEditedProfile({ ...profile, phoneNumber });
+  const handleEdit = (profile, phoneNumber, commonName) => {
+    setEditedProfile({ ...profile, phoneNumber, commonName });
   };
 
   const handleSaveEdit = () => {
@@ -68,13 +58,27 @@ const Customers = () => {
       customers.map((c) =>
         c.phoneNumber === editedProfile.phoneNumber
           ? {
-              ...c,
-              profiles: c.profiles.map((p) =>
+            ...c,
+            phoneNumber: editedProfile.phoneNumber,
+            profiles: c.profiles.map((p) => ({
+              ...p,
+              name:
                 p.profileId === editedProfile.profileId
-                  ? { ...editedProfile, lastUpdated: new Date(), phoneNumber: c.phoneNumber }
-                  : p
-              ),
-            }
+                  ? editedProfile.name
+                  : p.name.replace(
+                    /^.*?(?=\s*\[|$)/,
+                    editedProfile.commonName
+                  ),
+              paymentMethod:
+                p.profileId === editedProfile.profileId
+                  ? editedProfile.paymentMethod
+                  : p.paymentMethod,
+              lastUpdated:
+                p.profileId === editedProfile.profileId
+                  ? new Date()
+                  : p.lastUpdated,
+            })),
+          }
           : c
       )
     );
@@ -85,6 +89,7 @@ const Customers = () => {
     const { name, value } = e.target;
     setEditedProfile({ ...editedProfile, [name]: value });
   };
+
 
   // Handle show bills
   const handleShowBills = (bills, paymentMethod, profileName, phoneNumber) => {
@@ -140,8 +145,8 @@ const Customers = () => {
             </thead>
             <tbody>
               ${bill.items
-                .map(
-                  (item) => `
+        .map(
+          (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -149,8 +154,8 @@ const Customers = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-                )
-                .join("")}
+        )
+        .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
@@ -201,118 +206,123 @@ const Customers = () => {
       </div>
 
       <div className="customers-table-container-p2">
-        <table className="customers-table-p2">
-          <thead>
-            <tr>
-              <th>Contractor</th>
-              <th>Phone</th>
-              <th>Profile</th>
-              <th>Total Purchased (₹)</th>
-              <th>Payment Method</th>
-              <th>Advance Details</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCustomers.map((customer) => (
+        <tbody className="customers-table-p2">
+          {filteredCustomers.map((customer) => {
+            const commonName = getCommonName(customer.profiles);
+            return (
               <React.Fragment key={customer.phoneNumber}>
-                <tr className="contractor-row">
+                <tr>
                   <td colSpan={7}>
-                    <button
-                      className="contractor-toggle"
-                      onClick={() => toggleContractor(customer.phoneNumber)}
-                    >
-                      {expandedContractors[customer.phoneNumber] ? (
-                        <ChevronUp size={16} />
-                      ) : (
-                        <ChevronDown size={16} />
-                      )}
-                      {getCommonName(customer.profiles)} ({customer.profiles.length} profiles)
-                    </button>
+                    <h5 className="contractor-heading">
+                      {commonName} ({customer.profiles.length} profiles)
+                    </h5>
                   </td>
                 </tr>
-                {expandedContractors[customer.phoneNumber] &&
-                  customer.profiles.map((profile) => (
-                    <tr key={profile.profileId}>
-                      <td>{getCommonName(customer.profiles)}</td>
-                      <td>{customer.phoneNumber}</td>
-                      <td>
-                        {editedProfile && editedProfile.profileId === profile.profileId ? (
-                          <input
-                            type="text"
-                            name="name"
-                            value={editedProfile.name}
-                            onChange={handleInputChange}
-                            className="inline-edit-input-p2"
-                          />
-                        ) : (
-                          profile.name
-                        )}
-                      </td>
-                      <td>₹{calculateTotalPurchased(profile.bills)}</td>
-                      <td>
-                        {editedProfile && editedProfile.profileId === profile.profileId ? (
-                          <select
-                            name="paymentMethod"
-                            value={editedProfile.paymentMethod}
-                            onChange={handleInputChange}
-                            className="inline-edit-input-p2"
-                          >
-                            <option value="Cash">Cash</option>
-                            <option value="Online">Online</option>
-                            <option value="Card">Card</option>
-                            <option value="Cheque">Cheque</option>
-                          </select>
-                        ) : (
-                          profile.paymentMethod || "N/A"
-                        )}
-                      </td>
-                      <td>
-                        {profile.advance ? (
-                          <button
-                            className="advance-details-btn-p2"
-                            onClick={() => handleShowAdvanceDetails(profile, customer.phoneNumber)}
-                          >
-                            Advance Details
-                          </button>
-                        ) : (
-                          "N/A"
-                        )}
-                      </td>
-                      <td>
-                        <button
-                          className="show-bills-btn-p2"
-                          onClick={() =>
-                            handleShowBills(
-                              profile.bills,
-                              profile.paymentMethod,
-                              profile.name,
-                              customer.phoneNumber
-                            )
-                          }
-                          disabled={profile.bills.length === 0}
+                {customer.profiles.map((profile) => (
+                  <tr key={profile.profileId}>
+                    <td>
+                      {editedProfile && editedProfile.profileId === profile.profileId ? (
+                        <input
+                          type="text"
+                          name="commonName"
+                          value={editedProfile.commonName}
+                          onChange={handleInputChange}
+                          className="inline-edit-input-p2"
+                        />
+                      ) : (
+                        commonName
+                      )}
+                    </td>
+                    <td>
+                      {editedProfile && editedProfile.profileId === profile.profileId ? (
+                        <input
+                          type="text"
+                          name="phoneNumber"
+                          value={editedProfile.phoneNumber}
+                          onChange={handleInputChange}
+                          className="inline-edit-input-p2"
+                        />
+                      ) : (
+                        customer.phoneNumber
+                      )}
+                    </td>
+                    <td>
+                      {editedProfile && editedProfile.profileId === profile.profileId ? (
+                        <input
+                          type="text"
+                          name="name"
+                          value={editedProfile.name}
+                          onChange={handleInputChange}
+                          className="inline-edit-input-p2"
+                        />
+                      ) : (
+                        profile.name
+                      )}
+                    </td>
+                    <td>₹{calculateTotalPurchased(profile.bills)}</td>
+                    <td>
+                      {editedProfile && editedProfile.profileId === profile.profileId ? (
+                        <select
+                          name="paymentMethod"
+                          value={editedProfile.paymentMethod}
+                          onChange={handleInputChange}
+                          className="inline-edit-input-p2"
                         >
-                          Show Bills
+                          <option value="Cash">Cash</option>
+                          <option value="Online">Online</option>
+                          <option value="Card">Card</option>
+                          <option value="Cheque">Cheque</option>
+                        </select>
+                      ) : (
+                        profile.paymentMethod || "N/A"
+                      )}
+                    </td>
+                    <td>
+                      {profile.advance ? (
+                        <button
+                          className="advance-details-btn-p2"
+                          onClick={() => handleShowAdvanceDetails(profile, customer.phoneNumber)}
+                        >
+                          Advance Details
                         </button>
-                        {editedProfile && editedProfile.profileId === profile.profileId ? (
-                          <button className="save-btn-p2" onClick={handleSaveEdit}>
-                            Save
-                          </button>
-                        ) : (
-                          <button
-                            className="edit-btn-p2"
-                            onClick={() => handleEdit(profile, customer.phoneNumber)}
-                          >
-                            <Pencil size={16} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                      ) : (
+                        "N/A"
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        className="show-bills-btn-p2"
+                        onClick={() =>
+                          handleShowBills(
+                            profile.bills,
+                            profile.paymentMethod,
+                            profile.name,
+                            customer.phoneNumber
+                          )
+                        }
+                        disabled={profile.bills.length === 0}
+                      >
+                        Show Bills
+                      </button>
+                      {editedProfile && editedProfile.profileId === profile.profileId ? (
+                        <button className="save-btn-p2" onClick={handleSaveEdit}>
+                          <Save size={16} />
+                        </button>
+                      ) : (
+                        <button
+                          className="edit-btn-p2"
+                          onClick={() => handleEdit(profile, customer.phoneNumber, commonName)}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </React.Fragment>
-            ))}
-          </tbody>
-        </table>
+            );
+          })}
+        </tbody>
       </div>
 
       {/* Advance Details Modal */}

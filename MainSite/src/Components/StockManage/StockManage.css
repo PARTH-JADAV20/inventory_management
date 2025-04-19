@@ -172,7 +172,7 @@
 
 .stock-form {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 20px;
     margin-top: 20px;
 }
@@ -207,7 +207,8 @@
     border-bottom-right-radius: 0;
 }
 
-.quantity-group select {
+.quantity-group select,
+.quantity-group input[type="text"] {
     width: 80px;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
