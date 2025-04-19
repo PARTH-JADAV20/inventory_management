@@ -252,7 +252,7 @@ const Customers = () => {
             placeholder="Search by name or phone number"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input-p2"
+            className="search-input-p3"
           />
         </div>
       </div>
