@@ -34,8 +34,8 @@
   outline: none;
 }
 
-.customers-table-container-p2 {
-  max-height: calc(100vh - 200px);
+.search-container-p3 input{
+  width: 200px;
 }
 
 .customers-table-p2 {
@@ -98,8 +98,9 @@
 }
 
 .inline-edit-input-p2 {
+  background-color: var(--card-bg);
   border: 1px solid var(--border-color);
-  color: #000;
+  color: #ffffff;
   padding: 4px;
   width: 100%;
   font-size: 13px;
@@ -136,13 +137,30 @@
 }
 
 .save-btn-p2 {
-  color: #28a745;
-  background : none;
+  background-color: #28a745;
 }
 
 .contractor-row td {
   background-color: var(--card-bg);
   padding: 5px;
+}
+
+.contractor-toggle {
+  background: none;
+  border: none;
+  color: #a1a5b7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  width: 100%;
+  text-align: left;
+  font-weight: bold;
+}
+
+.contractor-toggle:hover {
+  color: #ffffff;
 }
 
 /* Modal styles */
@@ -212,4 +230,29 @@
     padding: 6px;
     font-size: 12px;
   }
+}
+
+.shop-selector-p2 {
+  margin-bottom: 20px;
+}
+.shop-selector-p2 select {
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color, #3a3a5a);
+  background-color: var(--input-bg, #fff);
+  color: #000;
+  width: 200px;
+}
+.shop-selector-p2 label {
+  color: var(--text-secondary, #a1a5b7);
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.delete-btn-p2 {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
 }

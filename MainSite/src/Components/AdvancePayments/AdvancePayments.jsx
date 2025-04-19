@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { Pencil, Save } from "lucide-react";
-import customersData from "../customers.js";
+import { customersData, customersData2 } from "../customers.js";
 import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
-  const [customers, setCustomers] = useState(customersData);
+  const [customers, setCustomers] = useState(customersData); // Shop 1 customers
+  const [customers2, setCustomers2] = useState(customersData2); // Shop 2 customers
+  const [shop, setShop] = useState("Shop 1"); // Active shop
   const [newPayment, setNewPayment] = useState({
     customerName: "",
     phoneNumber: "",
@@ -28,6 +30,7 @@ const AdvancePayments = () => {
   // Handle input changes for the advance payment form
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
     if (name === "customerName") {
       if (isExistingCustomer) {
         // Check if value matches datalist format: "Common Name (PhoneNumber)"
@@ -61,7 +64,7 @@ const AdvancePayments = () => {
       }
     } else if (name === "phoneNumber") {
       if (isExistingCustomer) {
-        const customer = customers.find((c) => c.phoneNumber === value);
+        const customer = activeCustomers.find((c) => c.phoneNumber === value);
         if (customer) {
           setNewPayment({
             ...newPayment,
@@ -129,7 +132,9 @@ const AdvancePayments = () => {
       return;
     }
 
-    const existingCustomer = customers.find((c) => c.phoneNumber === newPayment.phoneNumber);
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
+    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
+    const existingCustomer = activeCustomers.find((c) => c.phoneNumber === newPayment.phoneNumber);
     if (!isExistingCustomer && existingCustomer) {
       alert("Phone number already exists. Please select Existing Customer.");
       return;
@@ -148,45 +153,45 @@ const AdvancePayments = () => {
 
     if (existingCustomer) {
       // Update existing customer's profile or add new profile
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newPayment.phoneNumber
             ? {
-              ...c,
-              profiles:
-                newPayment.profileId.startsWith("new-profile")
-                  ? [
-                    ...c.profiles,
-                    {
-                      profileId: `profile-${Date.now()}`,
-                      name: newPayment.newProfileName,
-                      advanceGiven: advanceAmount,
-                      advanceUsed: 0,
-                      balance: advanceAmount,
-                      paymentMethod: newPayment.paymentMethod,
-                      advance: true,
-                      bills: [],
-                    },
-                  ]
-                  : c.profiles.map((p) =>
-                    p.profileId === newPayment.profileId
-                      ? {
-                        ...p,
-                        advanceGiven: p.advanceGiven + advanceAmount,
-                        balance: p.balance + advanceAmount,
-                        paymentMethod: newPayment.paymentMethod,
-                      }
-                      : p
-                  ),
-            }
+                ...c,
+                profiles:
+                  newPayment.profileId.startsWith("new-profile")
+                    ? [
+                        ...c.profiles,
+                        {
+                          profileId: `profile-${Date.now()}`,
+                          name: newPayment.newProfileName,
+                          advanceGiven: advanceAmount,
+                          advanceUsed: 0,
+                          balance: advanceAmount,
+                          paymentMethod: newPayment.paymentMethod,
+                          advance: true,
+                          bills: [],
+                        },
+                      ]
+                    : c.profiles.map((p) =>
+                        p.profileId === newPayment.profileId
+                          ? {
+                              ...p,
+                              advanceGiven: p.advanceGiven + advanceAmount,
+                              balance: p.balance + advanceAmount,
+                              paymentMethod: newPayment.paymentMethod,
+                            }
+                          : p
+                      ),
+              }
             : c
         )
       );
     } else {
       // Add new customer with a single profile
       const profileId = `profile-${Date.now()}`;
-      setCustomers([
-        ...customers,
+      setActiveCustomers([
+        ...activeCustomers,
         {
           phoneNumber: newPayment.phoneNumber,
           profiles: [
@@ -218,12 +223,12 @@ const AdvancePayments = () => {
   };
 
   // Start editing a profile
-  const handleEditStart = (profile, phoneNumber) => {
+  const handleEditStart = (profile, phoneNumber, shop) => {
     if (editingProfile?.profileId === profile.profileId) {
       setEditingProfile(null);
       setEditedProfile(null);
     } else {
-      setEditingProfile({ profileId: profile.profileId, phoneNumber });
+      setEditingProfile({ profileId: profile.profileId, phoneNumber, shop });
       setEditedProfile({ ...profile });
     }
   };
@@ -236,15 +241,17 @@ const AdvancePayments = () => {
 
   // Save edited profile
   const handleSaveEdit = () => {
-    setCustomers(
-      customers.map((c) =>
+    const setActiveCustomers = editingProfile.shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeCustomers = editingProfile.shop === "Shop 1" ? customers : customers2;
+    setActiveCustomers(
+      activeCustomers.map((c) =>
         c.phoneNumber === editingProfile.phoneNumber
           ? {
-            ...c,
-            profiles: c.profiles.map((p) =>
-              p.profileId === editedProfile.profileId ? { ...editedProfile } : p
-            ),
-          }
+              ...c,
+              profiles: c.profiles.map((p) =>
+                p.profileId === editedProfile.profileId ? { ...editedProfile } : p
+              ),
+            }
           : c
       )
     );
@@ -258,7 +265,7 @@ const AdvancePayments = () => {
   };
 
   // Filter customers based on search term (name or phone number)
-  const filteredCustomers = customers.filter(
+  const filteredCustomers = (shop === "Shop 1" ? customers : customers2).filter(
     (customer) =>
       (getCommonName(customer.profiles).toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.phoneNumber.includes(searchTerm)) &&
@@ -310,8 +317,8 @@ const AdvancePayments = () => {
             </thead>
             <tbody>
               ${bill.items
-        .map(
-          (item) => `
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -319,8 +326,8 @@ const AdvancePayments = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-        )
-        .join("")}
+                )
+                .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
@@ -339,7 +346,7 @@ const AdvancePayments = () => {
   };
 
   // Filter customers for datalist based on customerName input
-  const filteredCustomerOptions = customers.filter(
+  const filteredCustomerOptions = (shop === "Shop 1" ? customers : customers2).filter(
     (customer) =>
       getCommonName(customer.profiles).toLowerCase().includes(newPayment.customerName.toLowerCase()) &&
       customer.profiles.some((p) => p.advance)
@@ -349,7 +356,29 @@ const AdvancePayments = () => {
     <div className="main-content">
       {/* Advance Payment Form */}
       <div className="advance-payment-form-container">
-        <h2>Add New Advance Payment</h2>
+        <div className="form-group shop-selector">
+          <label>Shop</label>
+          <select value={shop} onChange={(e) => {
+            setShop(e.target.value);
+            setNewPayment({
+              customerName: "",
+              phoneNumber: "",
+              profileId: "",
+              advanceAmount: "",
+              paymentMethod: "Cash",
+              newProfileName: "",
+            });
+            setSearchTerm("");
+            setSelectedBills(null);
+            setIsExistingCustomer(false);
+            setEditingProfile(null);
+            setEditedProfile(null);
+          }}>
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
+          </select>
+        </div>
+        <h2>Add New Advance Payment - {shop}</h2>
         <div className="advance-payment-form">
           <div className="form-group">
             <label className="checkbox-label">
@@ -405,7 +434,7 @@ const AdvancePayments = () => {
                 New Profile
               </option>
               {newPayment.phoneNumber &&
-                customers
+                (shop === "Shop 1" ? customers : customers2)
                   .find((c) => c.phoneNumber === newPayment.phoneNumber)
                   ?.profiles.filter((p) => p.advance)
                   .map((p) => (
@@ -460,7 +489,7 @@ const AdvancePayments = () => {
 
       {/* Advance Balances Table */}
       <div className="advance-payment-list-container">
-        <h2>Advance Payment Balances</h2>
+        <h2>Advance Payment Balances - {shop}</h2>
         <div className="advance-payment-filter">
           <input
             type="text"
@@ -558,7 +587,7 @@ const AdvancePayments = () => {
                           <button
                             className="edit-btn"
                             onClick={() =>
-                              handleEditStart(profile, customer.phoneNumber)
+                              handleEditStart(profile, customer.phoneNumber, shop)
                             }
                           >
                             <Pencil size={16} />
@@ -605,16 +634,16 @@ const AdvancePayments = () => {
                           <td>{item.product}</td>
                           <td>{item.qty}</td>
                           <td>₹{item.pricePerQty}</td>
-                          <td>₹{item.amount}</td>
+                          <td>₹${item.amount}</td>
                         </tr>
                       ))}
                       <tr className="total">
                         <td colSpan="3">Total Amount</td>
-                        <td>₹{bill.totalAmount}</td>
+                        <td>₹${bill.totalAmount}</td>
                       </tr>
                       <tr className="total">
                         <td colSpan="3">Advance Remaining</td>
-                        <td>₹{bill.advanceRemaining}</td>
+                        <td>₹${bill.advanceRemaining}</td>
                       </tr>
                     </tbody>
                   </table>

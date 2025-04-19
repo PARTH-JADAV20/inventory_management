@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import customersData from "../customers";
-import stockItems from "../stockItems";
+import { customersData, customersData2 } from "../customers";
+import { stockItems, stockItems2 } from "../stockItems";
 import "./SalesEntry.css";
 
 const SalesEntry = () => {
-  const [customers, setCustomers] = useState(customersData);
-  const [stock, setStock] = useState(stockItems);
+  const [customers, setCustomers] = useState(customersData); // Shop 1 customers
+  const [customers2, setCustomers2] = useState(customersData2); // Shop 2 customers
+  const [stock, setStock] = useState(stockItems); // Shop 1 stock
+  const [stock2, setStock2] = useState(stockItems2); // Shop 2 stock
+  const [shop, setShop] = useState("Shop 1"); // Active shop
   const [newSale, setNewSale] = useState({
     billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
     date: new Date().toLocaleDateString("en-GB", {
@@ -118,7 +121,8 @@ const SalesEntry = () => {
     const pricePerQty = parseFloat(currentItem.pricePerQty);
     const amount = qty * pricePerQty;
 
-    const stockItem = stock.find((item) => item.name === currentItem.product);
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const stockItem = activeStock.find((item) => item.name === currentItem.product);
     if (!stockItem || stockItem.quantity < qty) {
       alert("Insufficient stock or invalid product");
       return;
@@ -150,7 +154,8 @@ const SalesEntry = () => {
 
   // Calculate average price for a product
   const getAveragePrice = (product) => {
-    const stockItem = stock.find((item) => item.name === product);
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const stockItem = activeStock.find((item) => item.name === product);
     return stockItem ? stockItem.price : 0;
   };
 
@@ -161,11 +166,13 @@ const SalesEntry = () => {
     }
 
     // Restore stock quantities
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const setActiveStock = shop === "Shop 1" ? setStock : setStock2;
     items.forEach((item) => {
-      const stockItem = stock.find((s) => s.name === item.product);
+      const stockItem = activeStock.find((s) => s.name === item.product);
       if (stockItem) {
-        setStock(
-          stock.map((s) =>
+        setActiveStock(
+          activeStock.map((s) =>
             s.id === stockItem.id ? { ...s, quantity: s.quantity + item.qty } : s
           )
         );
@@ -173,8 +180,10 @@ const SalesEntry = () => {
     });
 
     // Remove sale from customer's profile
-    setCustomers(
-      customers.map((c) =>
+    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
+    setActiveCustomers(
+      activeCustomers.map((c) =>
         c.phoneNumber === phoneNumber
           ? {
             ...c,
@@ -212,7 +221,12 @@ const SalesEntry = () => {
       return false;
     }
 
-    let customer = customers.find((c) => c.phoneNumber === newSale.phoneNumber);
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
+    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const setActiveStock = shop === "Shop 1" ? setStock : setStock2;
+
+    let customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
     let profile = customer?.profiles.find((p) => p.name === newSale.profileName);
 
     if (newSale.paymentType === "Advance" && !profile?.advance) {
@@ -238,8 +252,8 @@ const SalesEntry = () => {
           setWarning("Advance balance insufficient");
           return false;
         }
-        setCustomers(
-          customers.map((c) =>
+        setActiveCustomers(
+          activeCustomers.map((c) =>
             c.phoneNumber === newSale.phoneNumber
               ? {
                 ...c,
@@ -259,8 +273,8 @@ const SalesEntry = () => {
           )
         );
       } else {
-        setCustomers(
-          customers.map((c) =>
+        setActiveCustomers(
+          activeCustomers.map((c) =>
             c.phoneNumber === newSale.phoneNumber
               ? {
                 ...c,
@@ -296,7 +310,7 @@ const SalesEntry = () => {
           },
         ],
       };
-      setCustomers([...customers, newCustomer]);
+      setActiveCustomers([...activeCustomers, newCustomer]);
     } else if (!profile) {
       const newProfile = {
         profileId: `profile-${Date.now()}`,
@@ -309,16 +323,16 @@ const SalesEntry = () => {
         advance: false,
         bills: newSale.paymentType === "Credit" ? [{ ...newBill, creditAmount: totalAmount }] : [newBill],
       };
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newSale.phoneNumber
             ? { ...c, profiles: [...c.profiles, newProfile] }
             : c
         )
       );
     } else if (newSale.paymentType === "Credit") {
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newSale.phoneNumber
             ? {
               ...c,
@@ -336,8 +350,8 @@ const SalesEntry = () => {
         )
       );
     } else {
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newSale.phoneNumber
             ? {
               ...c,
@@ -354,10 +368,10 @@ const SalesEntry = () => {
 
     // Update stock
     newSale.items.forEach((item) => {
-      const stockItem = stock.find((s) => s.name === item.product);
+      const stockItem = activeStock.find((s) => s.name === item.product);
       if (stockItem) {
-        setStock(
-          stock.map((s) =>
+        setActiveStock(
+          activeStock.map((s) =>
             s.id === stockItem.id ? { ...s, quantity: s.quantity - item.qty } : s
           )
         );
@@ -398,7 +412,8 @@ const SalesEntry = () => {
         totalAmount,
         advanceRemaining: null,
       };
-      const customer = customers.find((c) => c.phoneNumber === newSale.phoneNumber);
+      const activeCustomers = shop === "Shop 1" ? customers : customers2;
+      const customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
       const profile = customer?.profiles.find((p) => p.name === newSale.profileName);
       if (profile?.advance) {
         bill.advanceRemaining = profile.balance - totalAmount;
@@ -418,7 +433,8 @@ const SalesEntry = () => {
         totalAmount,
         advanceRemaining: null,
       };
-      const customer = customers.find((c) => c.phoneNumber === newSale.phoneNumber);
+      const activeCustomers = shop === "Shop 1" ? customers : customers2;
+      const customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
       const profile = customer?.profiles.find((p) => p.name === newSale.profileName);
       if (profile?.advance) {
         bill.advanceRemaining = profile.balance - totalAmount;
@@ -531,7 +547,7 @@ const SalesEntry = () => {
   };
 
   // Get all sales, grouped by date
-  const allSales = customers
+  const allSales = (shop === "Shop 1" ? customers : customers2)
     .flatMap((c) =>
       c.profiles.flatMap((p) =>
         p.bills.map((bill) => ({
@@ -572,14 +588,44 @@ const SalesEntry = () => {
   const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
 
   // Filter advance profiles for datalist
-  const advanceProfiles = customers
+  const advanceProfiles = (shop === "Shop 1" ? customers : customers2)
     .flatMap((c) => c.profiles.map((p) => ({ ...p, phoneNumber: c.phoneNumber })))
     .filter((p) => p.advance);
 
   return (
     <div className="main-content">
       <div className="sales-form-container-p">
-        <h2>New Sale Entry</h2>
+        <div className="form-group-p shop-selector-p">
+          <label>Shop</label>
+          <select value={shop} onChange={(e) => {
+            setShop(e.target.value);
+            setNewSale({
+              billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
+              date: new Date().toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              }),
+              profileName: "",
+              phoneNumber: "",
+              paymentType: "Cash",
+              items: [],
+            });
+            setCurrentItem({ product: "", qty: "", unit: "", pricePerQty: "" });
+            setAdvanceSearchTerm("");
+            setSearchTerm("");
+            setFilterDate("");
+            setIsCustomUnit(false);
+            setIsBillNoEditable(false);
+            setIsDateEditable(false);
+            setIsItemSearchManual(false);
+            setWarning("");
+          }}>
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
+          </select>
+        </div>
+        <h2>New Sale Entry - {shop}</h2>
         <div className="sales-form-p">
           <div className="form-group-p">
             <label>
@@ -700,7 +746,7 @@ const SalesEntry = () => {
                     list="stock-items"
                   />
                   <datalist id="stock-items">
-                    {stock.map((item) => (
+                    {(shop === "Shop 1" ? stock : stock2).map((item) => (
                       <option key={item.id} value={item.name}>
                         {item.name} (Qty: {item.quantity} {item.unit})
                       </option>
@@ -714,7 +760,7 @@ const SalesEntry = () => {
                   onChange={handleItemChange}
                 >
                   <option value="">Select item</option>
-                  {stock.map((item) => (
+                  {(shop === "Shop 1" ? stock : stock2).map((item) => (
                     <option key={item.id} value={item.name}>
                       {item.name} (Qty: {item.quantity} {item.unit})
                     </option>

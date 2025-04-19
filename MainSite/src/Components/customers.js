@@ -255,4 +255,155 @@ const customersData = [
     },
 ];
 
-export default customersData;
+const customersData2 = [
+    {
+        phoneNumber: "9988776655",
+        profiles: [
+            {
+                profileId: "s1k9mj",
+                name: "Vikram Singh [A]",
+                advanceGiven: 1200,
+                advanceUsed: 500,
+                balance: 700,
+                paymentMethod: "Cash",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S201",
+                        date: "10 March 2025",
+                        items: [
+                            { product: "Ready Mix Concrete", qty: 3, unit: "bags", pricePerQty: 450, amount: 1350 },
+                        ],
+                        totalAmount: 1350,
+                        advanceRemaining: 700,
+                    },
+                    {
+                        billNo: "S202",
+                        date: "11 March 2025",
+                        items: [{ product: "Fly Ash Bricks", qty: 80, unit: "pieces", pricePerQty: 7, amount: 560 }],
+                        totalAmount: 560,
+                        advanceRemaining: 600,
+                    },
+                ],
+            },
+            {
+                profileId: "l8z2fk",
+                name: "Vikram Singh [B]",
+                advanceGiven: 1800,
+                advanceUsed: 1500,
+                balance: 300,
+                paymentMethod: "Online",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S203",
+                        date: "12 March 2025",
+                        items: [{ product: "Construction Chemicals", qty: 2, unit: "liters", pricePerQty: 400, amount: 800 }],
+                        totalAmount: 800,
+                        advanceRemaining: 1000,
+                    },
+                    {
+                        billNo: "S204",
+                        date: "13 March 2025",
+                        items: [{ product: "Wall Putty", qty: 5, unit: "kg", pricePerQty: 100, amount: 500 }],
+                        totalAmount: 500,
+                        advanceRemaining: 500,
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        phoneNumber: "8899776655",
+        profiles: [
+            {
+                profileId: "m3b1tv",
+                name: "Anita Desai [A]",
+                advanceGiven: 2500,
+                advanceUsed: 1000,
+                balance: 1500,
+                paymentMethod: "Card",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S205",
+                        date: "11 March 2025",
+                        items: [{ product: "Concrete Blocks", qty: 40, unit: "pieces", pricePerQty: 25, amount: 1000 }],
+                        totalAmount: 1000,
+                        advanceRemaining: 1500,
+                    },
+                ],
+            },
+            {
+                profileId: "j7w3rh",
+                name: "Anita Desai [B]",
+                advanceGiven: 1000,
+                advanceUsed: 800,
+                balance: 200,
+                paymentMethod: "Cash",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S206",
+                        date: "14 March 2025",
+                        items: [{ product: "PVC Pipes", qty: 10, unit: "meters", pricePerQty: 50, amount: 500 }],
+                        totalAmount: 500,
+                        advanceRemaining: 300,
+                    },
+                    {
+                        billNo: "S207",
+                        date: "15 March 2025",
+                        items: [{ product: "Binding Wire", qty: 5, unit: "kg", pricePerQty: 60, amount: 300 }],
+                        totalAmount: 300,
+                        advanceRemaining: 200,
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        phoneNumber: "7788665544",
+        profiles: [
+            {
+                profileId: "v9k6wl",
+                name: "Rahul Joshi",
+                advance: false,
+                paymentMethod: "Online",
+                bills: [
+                    {
+                        billNo: "S208",
+                        date: "10 March 2025",
+                        items: [
+                            { product: "Plaster of Paris", qty: 6, unit: "kg", pricePerQty: 90, amount: 540 },
+                        ],
+                        totalAmount: 540,
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        phoneNumber: "6677554433",
+        profiles: [
+            {
+                profileId: "n4p9xq",
+                name: "Deepa Verma",
+                advance: false,
+                paymentMethod: "Card",
+                bills: [
+                    {
+                        billNo: "S209",
+                        date: "13 March 2025",
+                        items: [
+                            { product: "Cement OPC 43 Grade", qty: 3, unit: "bags", pricePerQty: 330, amount: 990 },
+                            { product: "Sand", qty: 20, unit: "kg", pricePerQty: 10, amount: 200 },
+                        ],
+                        totalAmount: 1190,
+                    },
+                ],
+            },
+        ],
+    },
+];
+
+export {customersData, customersData2};
