@@ -7,6 +7,7 @@ import ProfitAnalysis from '../Components/Dashboard/All/ProfitAnalysis';
 import SalesFlow from '../Components/Dashboard/All/SalesFlow';
 import ItemProfitability from '../Components/Dashboard/All/SalesPerformance';
 import PendingPayments from '../Components/Dashboard/Cards/PendingPayments';
+import '../App.css';
 
 const Dashboard = () => {
   const [activeFilter, setActiveFilter] = React.useState('Today');
@@ -56,7 +57,7 @@ const Dashboard = () => {
           
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             {/* Heading */}
-            <h2 className="text-2xl font-bold text-[#ff6b35] tracking-tight">
+            <h2 className=" h2-base text-2xl font-bold text-[#ff6b35] tracking-tight">
               Dashboard Overview
             </h2>
 

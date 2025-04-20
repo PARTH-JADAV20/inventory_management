@@ -15,8 +15,8 @@ const customersData = [
                         billNo: "B001",
                         date: "01 March 2025",
                         items: [
-                            { product: "Cement OPC 53 Grade", qty: 5, pricePerQty: 350, amount: 1750 },
-                            { product: "River Sand", qty: 10, pricePerQty: 12, amount: 120 },
+                            { product: "Cement OPC 53 Grade", qty: 5, unit: "bags", pricePerQty: 350, amount: 1750 },
+                            { product: "River Sand", qty: 10, unit: "kg", pricePerQty: 12, amount: 120 },
                         ],
                         totalAmount: 1870,
                         advanceRemaining: 750,
@@ -24,14 +24,14 @@ const customersData = [
                     {
                         billNo: "B002",
                         date: "02 March 2025",
-                        items: [{ product: "Bricks", qty: 100, pricePerQty: 6, amount: 600 }],
+                        items: [{ product: "Bricks", qty: 100, unit: "pieces", pricePerQty: 6, amount: 600 }],
                         totalAmount: 600,
                         advanceRemaining: 650,
                     },
                     {
                         billNo: "B003",
                         date: "03 March 2025",
-                        items: [{ product: "TMT Bars", qty: 2, pricePerQty: 500, amount: 1000 }],
+                        items: [{ product: "TMT Bars", qty: 2, unit: "kg", pricePerQty: 500, amount: 1000 }],
                         totalAmount: 1000,
                         advanceRemaining: 500,
                     },
@@ -49,21 +49,21 @@ const customersData = [
                     {
                         billNo: "B004",
                         date: "05 March 2025",
-                        items: [{ product: "Crushed Stone Aggregate", qty: 8, pricePerQty: 18, amount: 144 }],
+                        items: [{ product: "Crushed Stone Aggregate", qty: 8, unit: "kg", pricePerQty: 18, amount: 144 }],
                         totalAmount: 144,
                         advanceRemaining: 200,
                     },
                     {
                         billNo: "B010",
                         date: "06 March 2025",
-                        items: [{ product: "Fly Ash", qty: 50, pricePerQty: 4, amount: 200 }],
+                        items: [{ product: "Fly Ash", qty: 50, unit: "kg", pricePerQty: 4, amount: 200 }],
                         totalAmount: 200,
                         advanceRemaining: 100,
                     },
                     {
                         billNo: "B011",
                         date: "07 March 2025",
-                        items: [{ product: "Paver Blocks", qty: 30, pricePerQty: 20, amount: 600 }],
+                        items: [{ product: "Paver Blocks", qty: 30, unit: "pieces", pricePerQty: 20, amount: 600 }],
                         totalAmount: 600,
                         advanceRemaining: 50,
                     },
@@ -86,21 +86,21 @@ const customersData = [
                     {
                         billNo: "B005",
                         date: "02 March 2025",
-                        items: [{ product: "Crushed Stone Aggregate", qty: 15, pricePerQty: 18, amount: 270 }],
+                        items: [{ product: "Crushed Stone Aggregate", qty: 15, unit: "kg", pricePerQty: 18, amount: 270 }],
                         totalAmount: 270,
                         advanceRemaining: 300,
                     },
                     {
                         billNo: "B012",
                         date: "03 March 2025",
-                        items: [{ product: "Cement OPC 53 Grade", qty: 4, pricePerQty: 350, amount: 1400 }],
+                        items: [{ product: "Cement OPC 53 Grade", qty: 4, unit: "bags", pricePerQty: 350, amount: 1400 }],
                         totalAmount: 1400,
                         advanceRemaining: 200,
                     },
                     {
                         billNo: "B013",
                         date: "04 March 2025",
-                        items: [{ product: "M-Sand", qty: 8, pricePerQty: 25, amount: 200 }],
+                        items: [{ product: "M-Sand", qty: 8, unit: "kg", pricePerQty: 25, amount: 200 }],
                         totalAmount: 200,
                         advanceRemaining: 100,
                     },
@@ -118,14 +118,14 @@ const customersData = [
                     {
                         billNo: "B021",
                         date: "08 March 2025",
-                        items: [{ product: "Bricks", qty: 150, pricePerQty: 6, amount: 900 }],
+                        items: [{ product: "Bricks", qty: 150, unit: "pieces", pricePerQty: 6, amount: 900 }],
                         totalAmount: 900,
                         advanceRemaining: 600,
                     },
                     {
                         billNo: "B022",
                         date: "09 March 2025",
-                        items: [{ product: "Red Soil", qty: 20, pricePerQty: 10, amount: 200 }],
+                        items: [{ product: "Red Soil", qty: 20, unit: "kg", pricePerQty: 10, amount: 200 }],
                         totalAmount: 200,
                         advanceRemaining: 500,
                     },
@@ -148,21 +148,21 @@ const customersData = [
                     {
                         billNo: "B006",
                         date: "03 March 2025",
-                        items: [{ product: "Steel Reinforcement Bars", qty: 2, pricePerQty: 75, amount: 150 }],
+                        items: [{ product: "Steel Reinforcement Bars", qty: 2, unit: "kg", pricePerQty: 75, amount: 150 }],
                         totalAmount: 150,
                         advanceRemaining: 3500,
                     },
                     {
                         billNo: "B014",
                         date: "05 March 2025",
-                        items: [{ product: "Concrete Mix", qty: 3, pricePerQty: 500, amount: 1500 }],
+                        items: [{ product: "Concrete Mix", qty: 3, unit: "bags", pricePerQty: 500, amount: 1500 }],
                         totalAmount: 1500,
                         advanceRemaining: 2000,
                     },
                     {
                         billNo: "B015",
                         date: "06 March 2025",
-                        items: [{ product: "Red Soil", qty: 10, pricePerQty: 20, amount: 200 }],
+                        items: [{ product: "Red Soil", qty: 10, unit: "kg", pricePerQty: 20, amount: 200 }],
                         totalAmount: 200,
                         advanceRemaining: 1800,
                     },
@@ -180,14 +180,14 @@ const customersData = [
                     {
                         billNo: "B016",
                         date: "07 March 2025",
-                        items: [{ product: "Fly Ash", qty: 70, pricePerQty: 5, amount: 350 }],
+                        items: [{ product: "Fly Ash", qty: 70, unit: "kg", pricePerQty: 5, amount: 350 }],
                         totalAmount: 350,
                         advanceRemaining: 2650,
                     },
                     {
                         billNo: "B017",
                         date: "08 March 2025",
-                        items: [{ product: "M-Sand", qty: 15, pricePerQty: 25, amount: 375 }],
+                        items: [{ product: "M-Sand", qty: 15, unit: "kg", pricePerQty: 25, amount: 375 }],
                         totalAmount: 375,
                         advanceRemaining: 2275,
                     },
@@ -207,7 +207,7 @@ const customersData = [
                     {
                         billNo: "B007",
                         date: "04 March 2025",
-                        items: [{ product: "Cement OPC 53 Grade", qty: 2, pricePerQty: 350, amount: 700 }],
+                        items: [{ product: "Cement OPC 53 Grade", qty: 2, unit: "bags", pricePerQty: 350, amount: 700 }],
                         totalAmount: 700,
                     },
                 ],
@@ -227,8 +227,8 @@ const customersData = [
                         billNo: "B008",
                         date: "05 March 2025",
                         items: [
-                            { product: "River Sand", qty: 15, pricePerQty: 12, amount: 180 },
-                            { product: "Crushed Stone Aggregate", qty: 10, pricePerQty: 18, amount: 180 },
+                            { product: "River Sand", qty: 15, unit: "kg", pricePerQty: 12, amount: 180 },
+                            { product: "Crushed Stone Aggregate", qty: 10, unit: "kg", pricePerQty: 18, amount: 180 },
                         ],
                         totalAmount: 360,
                     },
@@ -244,8 +244,8 @@ const customersData = [
                         billNo: "B009",
                         date: "06 March 2025",
                         items: [
-                            { product: "Steel Reinforcement Bars", qty: 2, pricePerQty: 75, amount: 150 },
-                            { product: "Cement OPC 53 Grade", qty: 3, pricePerQty: 350, amount: 1050 },
+                            { product: "Steel Reinforcement Bars", qty: 2, unit: "kg", pricePerQty: 75, amount: 150 },
+                            { product: "Cement OPC 53 Grade", qty: 3, unit: "bags", pricePerQty: 350, amount: 1050 },
                         ],
                         totalAmount: 1200,
                     },
@@ -255,4 +255,155 @@ const customersData = [
     },
 ];
 
-export default customersData;
+const customersData2 = [
+    {
+        phoneNumber: "9988776655",
+        profiles: [
+            {
+                profileId: "s1k9mj",
+                name: "Vikram Singh [A]",
+                advanceGiven: 1200,
+                advanceUsed: 500,
+                balance: 700,
+                paymentMethod: "Cash",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S201",
+                        date: "10 March 2025",
+                        items: [
+                            { product: "Ready Mix Concrete", qty: 3, unit: "bags", pricePerQty: 450, amount: 1350 },
+                        ],
+                        totalAmount: 1350,
+                        advanceRemaining: 700,
+                    },
+                    {
+                        billNo: "S202",
+                        date: "11 March 2025",
+                        items: [{ product: "Fly Ash Bricks", qty: 80, unit: "pieces", pricePerQty: 7, amount: 560 }],
+                        totalAmount: 560,
+                        advanceRemaining: 600,
+                    },
+                ],
+            },
+            {
+                profileId: "l8z2fk",
+                name: "Vikram Singh [B]",
+                advanceGiven: 1800,
+                advanceUsed: 1500,
+                balance: 300,
+                paymentMethod: "Online",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S203",
+                        date: "12 March 2025",
+                        items: [{ product: "Construction Chemicals", qty: 2, unit: "liters", pricePerQty: 400, amount: 800 }],
+                        totalAmount: 800,
+                        advanceRemaining: 1000,
+                    },
+                    {
+                        billNo: "S204",
+                        date: "13 March 2025",
+                        items: [{ product: "Wall Putty", qty: 5, unit: "kg", pricePerQty: 100, amount: 500 }],
+                        totalAmount: 500,
+                        advanceRemaining: 500,
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        phoneNumber: "8899776655",
+        profiles: [
+            {
+                profileId: "m3b1tv",
+                name: "Anita Desai [A]",
+                advanceGiven: 2500,
+                advanceUsed: 1000,
+                balance: 1500,
+                paymentMethod: "Card",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S205",
+                        date: "11 March 2025",
+                        items: [{ product: "Concrete Blocks", qty: 40, unit: "pieces", pricePerQty: 25, amount: 1000 }],
+                        totalAmount: 1000,
+                        advanceRemaining: 1500,
+                    },
+                ],
+            },
+            {
+                profileId: "j7w3rh",
+                name: "Anita Desai [B]",
+                advanceGiven: 1000,
+                advanceUsed: 800,
+                balance: 200,
+                paymentMethod: "Cash",
+                advance: true,
+                bills: [
+                    {
+                        billNo: "S206",
+                        date: "14 March 2025",
+                        items: [{ product: "PVC Pipes", qty: 10, unit: "meters", pricePerQty: 50, amount: 500 }],
+                        totalAmount: 500,
+                        advanceRemaining: 300,
+                    },
+                    {
+                        billNo: "S207",
+                        date: "15 March 2025",
+                        items: [{ product: "Binding Wire", qty: 5, unit: "kg", pricePerQty: 60, amount: 300 }],
+                        totalAmount: 300,
+                        advanceRemaining: 200,
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        phoneNumber: "7788665544",
+        profiles: [
+            {
+                profileId: "v9k6wl",
+                name: "Rahul Joshi",
+                advance: false,
+                paymentMethod: "Online",
+                bills: [
+                    {
+                        billNo: "S208",
+                        date: "10 March 2025",
+                        items: [
+                            { product: "Plaster of Paris", qty: 6, unit: "kg", pricePerQty: 90, amount: 540 },
+                        ],
+                        totalAmount: 540,
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        phoneNumber: "6677554433",
+        profiles: [
+            {
+                profileId: "n4p9xq",
+                name: "Deepa Verma",
+                advance: false,
+                paymentMethod: "Card",
+                bills: [
+                    {
+                        billNo: "S209",
+                        date: "13 March 2025",
+                        items: [
+                            { product: "Cement OPC 43 Grade", qty: 3, unit: "bags", pricePerQty: 330, amount: 990 },
+                            { product: "Sand", qty: 20, unit: "kg", pricePerQty: 10, amount: 200 },
+                        ],
+                        totalAmount: 1190,
+                    },
+                ],
+            },
+        ],
+    },
+];
+
+export {customersData, customersData2};

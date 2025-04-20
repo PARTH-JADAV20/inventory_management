@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Trash2, Plus } from "lucide-react";
-import stockItems from "../stockItems.js";
+import { Pencil, Trash2 } from "lucide-react";
+import { stockItems, stockItems2 } from "../stockItems.js";
 import "./StockManage.css";
 
 const StockManage = () => {
-  const [items, setItems] = useState(stockItems);
+  const [items, setItems] = useState(stockItems); // Shop 1 stock
+  const [items2, setItems2] = useState(stockItems2); // Shop 2 stock
+  const [shop, setShop] = useState("Shop 1"); // Active shop
   const [categories] = useState([
     "Cement",
     "Sand",
@@ -18,8 +20,8 @@ const StockManage = () => {
   ]);
   const [filterCategory, setFilterCategory] = useState("All");
   const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-
   const [newItem, setNewItem] = useState({
     name: "",
     quantity: "",
@@ -27,12 +29,11 @@ const StockManage = () => {
     category: "Cement",
     price: "",
   });
-
   const [editingItem, setEditingItem] = useState(null);
   const [filteredItems, setFilteredItems] = useState([]);
 
   useEffect(() => {
-    let filtered = items;
+    let filtered = shop === "Shop 1" ? items : items2;
 
     // Apply category filter
     if (filterCategory !== "All") {
@@ -47,7 +48,7 @@ const StockManage = () => {
     }
 
     setFilteredItems(filtered);
-  }, [items, filterCategory, searchTerm]);
+  }, [items, items2, shop, filterCategory, searchTerm]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -63,19 +64,32 @@ const StockManage = () => {
   };
 
   const handleAddItem = () => {
-    if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.category) {
+    if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.category || !newItem.unit) {
       alert("Please fill all fields");
       return;
     }
 
     if (editingItem) {
-      setItems(
-        items.map((item) => (item.id === editingItem.id ? { ...newItem, id: item.id } : item))
-      );
+      const updateItems = (items, setItems) =>
+        items.map((item) => (item.id === editingItem.id ? { ...newItem, id: item.id } : item));
+      if (shop === "Shop 1") {
+        setItems(updateItems(items, setItems));
+      } else {
+        setItems2(updateItems(items2, setItems2));
+      }
       setEditingItem(null);
     } else {
-      const maxId = items.length > 0 ? Math.max(...items.map((item) => item.id)) : 0;
-      setItems([...items, { ...newItem, id: maxId + 1 }]);
+      const maxId = (items, items2) =>
+        Math.max(
+          items.length > 0 ? Math.max(...items.map((item) => item.id)) : 0,
+          items2.length > 0 ? Math.max(...items2.map((item) => item.id)) : 0
+        );
+      const newId = maxId(items, items2) + 1;
+      if (shop === "Shop 1") {
+        setItems([...items, { ...newItem, id: newId }]);
+      } else {
+        setItems2([...items2, { ...newItem, id: newId }]);
+      }
     }
 
     setNewItem({
@@ -86,6 +100,7 @@ const StockManage = () => {
       price: "",
     });
     setIsCustomCategory(false);
+    setIsCustomUnit(false);
   };
 
   const handleEdit = (item) => {
@@ -98,10 +113,15 @@ const StockManage = () => {
       price: item.price,
     });
     setIsCustomCategory(!categories.includes(item.category));
+    setIsCustomUnit(!["KG", "Bag", "Pieces", "Liter"].includes(item.unit));
   };
 
   const handleDelete = (id) => {
-    setItems(items.filter((item) => item.id !== id));
+    if (shop === "Shop 1") {
+      setItems(items.filter((item) => item.id !== id));
+    } else {
+      setItems2(items2.filter((item) => item.id !== id));
+    }
   };
 
   const handleCancelEdit = () => {
@@ -114,12 +134,21 @@ const StockManage = () => {
       price: "",
     });
     setIsCustomCategory(false);
+    setIsCustomUnit(false);
   };
 
   return (
     <div className="main-content">
       <div className="stock-form-container">
-        <h2>{editingItem ? "Edit Stock Item" : "Add New Stock"}</h2>
+        <div className="form-group shop-selector">
+          <label>Shop</label>
+          <select value={shop} onChange={(e) => setShop(e.target.value)}>
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
+          </select>
+        </div>
+        <h2>{editingItem ? "Edit Stock Item" : "Add New Stock"} - {shop}</h2>
+        {/* Rest of the form remains unchanged */}
         <div className="stock-form">
           <div className="form-group">
             <label>Item Name</label>
@@ -131,9 +160,18 @@ const StockManage = () => {
               onChange={handleInputChange}
             />
           </div>
-
           <div className="form-group">
-            <label>Quantity</label>
+            <label className="checkbox-label">
+              <div>Quantity</div>
+              <div className="custom-category-checkbox">
+                <input
+                  type="checkbox"
+                  checked={isCustomUnit}
+                  onChange={(e) => setIsCustomUnit(e.target.checked)}
+                />
+                Custom Unit
+              </div>
+            </label>
             <div className="quantity-group">
               <input
                 type="number"
@@ -142,15 +180,24 @@ const StockManage = () => {
                 value={newItem.quantity}
                 onChange={handleInputChange}
               />
-              <select name="unit" value={newItem.unit} onChange={handleInputChange}>
-                <option value="KG">KG</option>
-                <option value="Bag">Bag</option>
-                <option value="Pieces">Pieces</option>
-                <option value="Liter">Liter</option>
-              </select>
+              {isCustomUnit ? (
+                <input
+                  type="text"
+                  name="unit"
+                  placeholder="Enter custom unit"
+                  value={newItem.unit}
+                  onChange={handleInputChange}
+                />
+              ) : (
+                <select name="unit" value={newItem.unit} onChange={handleInputChange}>
+                  <option value="KG">KG</option>
+                  <option value="Bag">Bag</option>
+                  <option value="Pieces">Pieces</option>
+                  <option value="Liter">Liter</option>
+                </select>
+              )}
             </div>
           </div>
-
           <div className="form-group">
             <div className="category-group">
               <label className="checkbox-label">
@@ -183,7 +230,6 @@ const StockManage = () => {
               )}
             </div>
           </div>
-
           <div className="form-group">
             <label>Purchase Price (₹)</label>
             <input
@@ -194,7 +240,6 @@ const StockManage = () => {
               onChange={handleInputChange}
             />
           </div>
-
           <div className="form-buttons">
             <button className="add-btn" onClick={handleAddItem}>
               {editingItem ? "Update Stock" : "Add Stock"}

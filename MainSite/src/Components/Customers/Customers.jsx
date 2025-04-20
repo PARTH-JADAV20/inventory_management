@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, ChevronDown, ChevronUp } from "lucide-react";
-import customersData from "../customers";
+import { Pencil, Save, Trash2 } from "lucide-react";
+import { customersData, customersData2 } from "../customers";
 import "./Customers.css";
 
 const Customers = () => {
-  const [customers, setCustomers] = useState(customersData);
+  const [customers, setCustomers] = useState(customersData); // Shop 1 customers
+  const [customers2, setCustomers2] = useState(customersData2); // Shop 2 customers
+  const [shop, setShop] = useState("Shop 1"); // Active shop
   const [searchTerm, setSearchTerm] = useState("");
   const [editedProfile, setEditedProfile] = useState(null);
   const [selectedBills, setSelectedBills] = useState(null);
   const [selectedAdvanceDetails, setSelectedAdvanceDetails] = useState(null);
-  const [expandedContractors, setExpandedContractors] = useState({});
 
   // Derive common name from profiles
   const getCommonName = (profiles) => {
@@ -22,65 +23,102 @@ const Customers = () => {
     return bills.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
   };
 
-  // Toggle contractor profile visibility
-  const toggleContractor = (phoneNumber) => {
-    setExpandedContractors((prev) => ({
-      ...prev,
-      [phoneNumber]: !prev[phoneNumber],
-    }));
-  };
-
   // Sort customers by last updated (using the latest bill date or profileId timestamp)
   useEffect(() => {
-    const updatedCustomers = customers.map((customer) => ({
-      ...customer,
-      profiles: customer.profiles
-        .map((profile) => ({
-          ...profile,
-          lastUpdated:
-            profile.bills.length > 0
-              ? new Date(profile.bills[profile.bills.length - 1].date)
-              : new Date(parseInt(profile.profileId.split("-")[1])), // Proxy from profileId
-        }))
-        .sort((a, b) => b.lastUpdated - a.lastUpdated),
-    }));
-    setCustomers(updatedCustomers);
-  }, []);
+    const updateCustomers = (customerList, setCustomerList) => {
+      const updatedCustomers = customerList.map((customer) => ({
+        ...customer,
+        profiles: customer.profiles
+          .map((profile) => ({
+            ...profile,
+            lastUpdated:
+              profile.bills.length > 0
+                ? new Date(
+                  profile.bills[profile.bills.length - 1].date
+                    .split(" ")
+                    .reverse()
+                    .join("-")
+                )
+                : new Date(parseInt(profile.profileId.split("-")[1])), // Proxy from profileId
+          }))
+          .sort((a, b) => b.lastUpdated - a.lastUpdated),
+      }));
+      setCustomerList(updatedCustomers);
+    };
+    updateCustomers(customers, setCustomers);
+    updateCustomers(customers2, setCustomers2);
+  }, [shop]);
 
   // Filter customers based on search term (common name or phone number)
-  const filteredCustomers = customers.filter(
+  const filteredCustomers = (shop === "Shop 1" ? customers : customers2).filter(
     (customer) =>
       getCommonName(customer.profiles).toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.phoneNumber.includes(searchTerm)
   );
 
   // Summary statistics
-  const totalCustomers = customers.length; // Unique phone numbers
-  const advanceCustomers = customers.filter((c) => c.profiles.some((p) => p.advance)).length;
+  const totalCustomers = (shop === "Shop 1" ? customers : customers2).length; // Unique phone numbers
+  const advanceCustomers = (shop === "Shop 1" ? customers : customers2).filter(
+    (c) => c.profiles.some((p) => p.advance)
+  ).length;
 
   // Handle edit
-  const handleEdit = (profile, phoneNumber) => {
-    setEditedProfile({ ...profile, phoneNumber });
+  const handleEdit = (profile, phoneNumber, commonName, shop) => {
+    setEditedProfile({ ...profile, phoneNumber, commonName, shop });
   };
 
+  // Handle save edit
   const handleSaveEdit = () => {
-    setCustomers(
-      customers.map((c) =>
+    const setActiveCustomers = editedProfile.shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeCustomers = editedProfile.shop === "Shop 1" ? customers : customers2;
+    setActiveCustomers(
+      activeCustomers.map((c) =>
         c.phoneNumber === editedProfile.phoneNumber
           ? {
-              ...c,
-              profiles: c.profiles.map((p) =>
+            ...c,
+            phoneNumber: editedProfile.phoneNumber,
+            profiles: c.profiles.map((p) => ({
+              ...p,
+              name:
                 p.profileId === editedProfile.profileId
-                  ? { ...editedProfile, lastUpdated: new Date(), phoneNumber: c.phoneNumber }
-                  : p
-              ),
-            }
+                  ? editedProfile.name
+                  : p.name.replace(/^.*?(?=\s*\[|$)/, editedProfile.commonName),
+              paymentMethod:
+                p.profileId === editedProfile.profileId
+                  ? editedProfile.paymentMethod
+                  : p.paymentMethod,
+              lastUpdated:
+                p.profileId === editedProfile.profileId
+                  ? new Date()
+                  : p.lastUpdated,
+            })),
+          }
           : c
       )
     );
     setEditedProfile(null);
   };
 
+  // Handle delete profile
+  const handleDeleteProfile = (profileId, phoneNumber, shop) => {
+    if (!window.confirm(`Are you sure you want to delete this profile?`)) return;
+    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
+    setActiveCustomers(
+      activeCustomers
+        .map((c) =>
+          c.phoneNumber === phoneNumber
+            ? {
+              ...c,
+              profiles: c.profiles.filter((p) => p.profileId !== profileId),
+            }
+            : c
+        )
+        .filter((c) => c.profiles.length > 0) // Remove customer if no profiles remain
+    );
+  };
+
+  // Handle input change for editing
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setEditedProfile({ ...editedProfile, [name]: value });
@@ -92,6 +130,7 @@ const Customers = () => {
     setSelectedAdvanceDetails(null); // Close advance popup if open
   };
 
+  // Handle close bills modal
   const handleCloseBillsModal = () => {
     setSelectedBills(null);
   };
@@ -101,12 +140,14 @@ const Customers = () => {
     setSelectedAdvanceDetails({ ...profile, phoneNumber });
   };
 
+  // Handle close advance modal
   const handleCloseAdvanceModal = () => {
     setSelectedAdvanceDetails(null);
   };
 
   // Handle print bill
   const handlePrintBill = (bill, paymentMethod, profileName, phoneNumber) => {
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
     const printWindow = window.open("", "_blank");
     let billContent = `
       <html>
@@ -140,8 +181,8 @@ const Customers = () => {
             </thead>
             <tbody>
               ${bill.items
-                .map(
-                  (item) => `
+        .map(
+          (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -149,15 +190,15 @@ const Customers = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-                )
-                .join("")}
+        )
+        .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
               </tr>
     `;
 
-    const profile = customers
+    const profile = activeCustomers
       .find((c) => c.phoneNumber === phoneNumber)
       ?.profiles.find((p) => p.name === profileName);
     if (profile && profile.advance && bill.advanceRemaining !== undefined) {
@@ -184,18 +225,34 @@ const Customers = () => {
   return (
     <div className="main-content">
       <div className="customers-header-p2">
-        <h2>Customer Management</h2>
+        <div className="form-group-p2 shop-selector-p2">
+          <label>Shop</label>
+          <select
+            value={shop}
+            onChange={(e) => {
+              setShop(e.target.value);
+              setSearchTerm("");
+              setEditedProfile(null);
+              setSelectedBills(null);
+              setSelectedAdvanceDetails(null);
+            }}
+          >
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
+          </select>
+        </div>
+        <h2>Customer Management - {shop}</h2>
         <div className="summary-stats-p2">
           <p>Total Customers: {totalCustomers}</p>
           <p>Advance Payment Customers: {advanceCustomers}</p>
         </div>
-        <div className="search-container-p2">
+        <div className="search-container-p3">
           <input
             type="text"
             placeholder="Search by name or phone number"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input-p2"
+            className="search-input-p3"
           />
         </div>
       </div>
@@ -205,37 +262,54 @@ const Customers = () => {
           <thead>
             <tr>
               <th>Contractor</th>
-              <th>Phone</th>
+              <th>Phone Number</th>
               <th>Profile</th>
-              <th>Total Purchased (₹)</th>
+              <th>Total Purchased</th>
               <th>Payment Method</th>
-              <th>Advance Details</th>
+              <th>Advance</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map((customer) => (
-              <React.Fragment key={customer.phoneNumber}>
-                <tr className="contractor-row">
-                  <td colSpan={7}>
-                    <button
-                      className="contractor-toggle"
-                      onClick={() => toggleContractor(customer.phoneNumber)}
-                    >
-                      {expandedContractors[customer.phoneNumber] ? (
-                        <ChevronUp size={16} />
-                      ) : (
-                        <ChevronDown size={16} />
-                      )}
-                      {getCommonName(customer.profiles)} ({customer.profiles.length} profiles)
-                    </button>
-                  </td>
-                </tr>
-                {expandedContractors[customer.phoneNumber] &&
-                  customer.profiles.map((profile) => (
+            {filteredCustomers.map((customer) => {
+              const commonName = getCommonName(customer.profiles);
+              return (
+                <React.Fragment key={customer.phoneNumber}>
+                  <tr>
+                    <td colSpan={7}>
+                      <h5 className="contractor-heading">
+                        {commonName} ({customer.profiles.length} profiles)
+                      </h5>
+                    </td>
+                  </tr>
+                  {customer.profiles.map((profile) => (
                     <tr key={profile.profileId}>
-                      <td>{getCommonName(customer.profiles)}</td>
-                      <td>{customer.phoneNumber}</td>
+                      <td>
+                        {editedProfile && editedProfile.profileId === profile.profileId ? (
+                          <input
+                            type="text"
+                            name="commonName"
+                            value={editedProfile.commonName}
+                            onChange={handleInputChange}
+                            className="inline-edit-input-p2"
+                          />
+                        ) : (
+                          commonName
+                        )}
+                      </td>
+                      <td>
+                        {editedProfile && editedProfile.profileId === profile.profileId ? (
+                          <input
+                            type="text"
+                            name="phoneNumber"
+                            value={editedProfile.phoneNumber}
+                            onChange={handleInputChange}
+                            className="inline-edit-input-p2"
+                          />
+                        ) : (
+                          customer.phoneNumber
+                        )}
+                      </td>
                       <td>
                         {editedProfile && editedProfile.profileId === profile.profileId ? (
                           <input
@@ -271,7 +345,9 @@ const Customers = () => {
                         {profile.advance ? (
                           <button
                             className="advance-details-btn-p2"
-                            onClick={() => handleShowAdvanceDetails(profile, customer.phoneNumber)}
+                            onClick={() =>
+                              handleShowAdvanceDetails(profile, customer.phoneNumber)
+                            }
                           >
                             Advance Details
                           </button>
@@ -296,21 +372,34 @@ const Customers = () => {
                         </button>
                         {editedProfile && editedProfile.profileId === profile.profileId ? (
                           <button className="save-btn-p2" onClick={handleSaveEdit}>
-                            Save
+                            <Save size={16} />
                           </button>
                         ) : (
-                          <button
-                            className="edit-btn-p2"
-                            onClick={() => handleEdit(profile, customer.phoneNumber)}
-                          >
-                            <Pencil size={16} />
-                          </button>
+                          <>
+                            <button
+                              className="edit-btn-p2"
+                              onClick={() =>
+                                handleEdit(profile, customer.phoneNumber, commonName, shop)
+                              }
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              className="delete-btn-p2"
+                              onClick={() =>
+                                handleDeleteProfile(profile.profileId, customer.phoneNumber, shop)
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
                         )}
                       </td>
                     </tr>
                   ))}
-              </React.Fragment>
-            ))}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -383,18 +472,18 @@ const Customers = () => {
                         <tr key={index}>
                           <td>{item.product}</td>
                           <td>{item.qty}</td>
-                          <td>₹{item.pricePerQty}</td>
-                          <td>₹{item.amount}</td>
+                          <td>₹${item.pricePerQty}</td>
+                          <td>₹${item.amount}</td>
                         </tr>
                       ))}
                       <tr className="total">
                         <td colSpan="3">Total Amount</td>
-                        <td>₹{bill.totalAmount}</td>
+                        <td>₹${bill.totalAmount}</td>
                       </tr>
                       {selectedBills.bills[0].advanceRemaining !== undefined && (
                         <tr className="total">
                           <td colSpan="3">Advance Remaining</td>
-                          <td>₹{bill.advanceRemaining}</td>
+                          <td>₹${bill.advanceRemaining}</td>
                         </tr>
                       )}
                     </tbody>

@@ -32,5 +32,41 @@ const stockItems = [
       price: 75,
     },
   ];
+
+  const stockItems2 = [
+    {
+      id: 1,
+      name: "Cement PPC",
+      quantity: 75,
+      unit: "Bag",
+      category: "Cement",
+      price: 330,
+    },
+    {
+      id: 2,
+      name: "M-Sand",
+      quantity: 150,
+      unit: "KG",
+      category: "Sand",
+      price: 25,
+    },
+    {
+      id: 3,
+      name: "Crushed Stone Aggregate",
+      quantity: 300,
+      unit: "KG",
+      category: "Aggregate",
+      price: 20,
+    },
+    {
+      id: 4,
+      name: "Fly Ash",
+      quantity: 50,
+      unit: "KG",
+      category: "Steel",
+      price: 5,
+    },
+  ];
   
-  export default stockItems;
+  
+  export {stockItems, stockItems2};

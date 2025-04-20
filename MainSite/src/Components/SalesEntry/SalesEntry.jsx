@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import customersData from "../customers";
-import stockItems from "../stockItems";
+import { customersData, customersData2 } from "../customers";
+import { stockItems, stockItems2 } from "../stockItems";
 import "./SalesEntry.css";
 
 const SalesEntry = () => {
-  const [customers, setCustomers] = useState(customersData);
-  const [stock, setStock] = useState(stockItems);
+  const [customers, setCustomers] = useState(customersData); // Shop 1 customers
+  const [customers2, setCustomers2] = useState(customersData2); // Shop 2 customers
+  const [stock, setStock] = useState(stockItems); // Shop 1 stock
+  const [stock2, setStock2] = useState(stockItems2); // Shop 2 stock
+  const [shop, setShop] = useState("Shop 1"); // Active shop
   const [newSale, setNewSale] = useState({
     billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
     date: new Date().toLocaleDateString("en-GB", {
@@ -25,12 +28,14 @@ const SalesEntry = () => {
     unit: "",
     pricePerQty: "",
   });
-  const [recentSales, setRecentSales] = useState([]);
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [warning, setWarning] = useState("");
   const [isBillNoEditable, setIsBillNoEditable] = useState(false);
   const [isDateEditable, setIsDateEditable] = useState(false);
   const [isItemSearchManual, setIsItemSearchManual] = useState(false);
   const [advanceSearchTerm, setAdvanceSearchTerm] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Handle input changes
   const handleInputChange = (e) => {
@@ -116,9 +121,15 @@ const SalesEntry = () => {
     const pricePerQty = parseFloat(currentItem.pricePerQty);
     const amount = qty * pricePerQty;
 
-    const stockItem = stock.find((item) => item.name === currentItem.product);
-    if (!stockItem || stockItem.quantity < qty || stockItem.unit !== currentItem.unit) {
-      alert("Insufficient stock, invalid product, or unit mismatch");
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const stockItem = activeStock.find((item) => item.name === currentItem.product);
+    if (!stockItem || stockItem.quantity < qty) {
+      alert("Insufficient stock or invalid product");
+      return;
+    }
+
+    if (!isCustomUnit && stockItem.unit !== currentItem.unit) {
+      alert("Unit mismatch with stock item");
       return;
     }
 
@@ -127,23 +138,82 @@ const SalesEntry = () => {
       items: [...prev.items, { ...currentItem, qty, pricePerQty, amount }],
     }));
     setCurrentItem({ product: "", qty: "", unit: "", pricePerQty: "" });
+    setIsCustomUnit(false);
   };
 
   // Remove item from sale
   const removeItem = (index) => {
-    setNewSale((prev) => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index),
-    }));
+    setNewSale((prev) => {
+      const updatedItems = prev.items.filter((_, i) => i !== index);
+      if (updatedItems.length === 0) {
+        setIsCustomUnit(false);
+      }
+      return { ...prev, items: updatedItems };
+    });
   };
 
   // Calculate average price for a product
   const getAveragePrice = (product) => {
-    const stockItem = stock.find((item) => item.name === product);
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const stockItem = activeStock.find((item) => item.name === product);
     return stockItem ? stockItem.price : 0;
   };
 
-  // Save sale (shared logic for all buttons)
+  // Delete a sale
+  const handleDeleteSale = (billNo, profileId, phoneNumber, items) => {
+    if (!window.confirm("Are you sure you want to delete this sale?")) {
+      return;
+    }
+
+    // Restore stock quantities
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const setActiveStock = shop === "Shop 1" ? setStock : setStock2;
+    items.forEach((item) => {
+      const stockItem = activeStock.find((s) => s.name === item.product);
+      if (stockItem) {
+        setActiveStock(
+          activeStock.map((s) =>
+            s.id === stockItem.id ? { ...s, quantity: s.quantity + item.qty } : s
+          )
+        );
+      }
+    });
+
+    // Remove sale from customer's profile
+    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
+    setActiveCustomers(
+      activeCustomers.map((c) =>
+        c.phoneNumber === phoneNumber
+          ? {
+            ...c,
+            profiles: c.profiles.map((p) =>
+              p.profileId === profileId
+                ? {
+                  ...p,
+                  bills: p.bills.filter((bill) => bill.billNo !== billNo),
+                  credit: p.credit
+                    ? p.credit -
+                    (p.bills.find((bill) => bill.billNo === billNo)?.creditAmount || 0)
+                    : 0,
+                  advanceUsed: p.advanceUsed
+                    ? p.advanceUsed -
+                    (p.bills.find((bill) => bill.billNo === billNo)?.totalAmount || 0)
+                    : 0,
+                  balance: p.balance
+                    ? p.balance +
+                    (p.bills.find((bill) => bill.billNo === billNo)?.totalAmount || 0)
+                    : 0,
+                }
+                : p
+            ),
+          }
+          : c
+      )
+    );
+  };
+
+  // Save sale
   const saveSale = () => {
     const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
     if (!newSale.profileName || !newSale.phoneNumber) {
@@ -151,7 +221,12 @@ const SalesEntry = () => {
       return false;
     }
 
-    let customer = customers.find((c) => c.phoneNumber === newSale.phoneNumber);
+    const activeCustomers = shop === "Shop 1" ? customers : customers2;
+    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
+    const activeStock = shop === "Shop 1" ? stock : stock2;
+    const setActiveStock = shop === "Shop 1" ? setStock : setStock2;
+
+    let customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
     let profile = customer?.profiles.find((p) => p.name === newSale.profileName);
 
     if (newSale.paymentType === "Advance" && !profile?.advance) {
@@ -177,43 +252,43 @@ const SalesEntry = () => {
           setWarning("Advance balance insufficient");
           return false;
         }
-        setCustomers(
-          customers.map((c) =>
+        setActiveCustomers(
+          activeCustomers.map((c) =>
             c.phoneNumber === newSale.phoneNumber
               ? {
-                  ...c,
-                  profiles: c.profiles.map((p) =>
-                    p.profileId === profile.profileId
-                      ? {
-                          ...p,
-                          advanceUsed: p.advanceUsed + profile.balance,
-                          balance: 0,
-                          credit: (p.credit || 0) - newBalance,
-                          bills: [...p.bills, { ...newBill, advanceRemaining: 0 }],
-                        }
-                      : p
-                  ),
-                }
+                ...c,
+                profiles: c.profiles.map((p) =>
+                  p.profileId === profile.profileId
+                    ? {
+                      ...p,
+                      advanceUsed: p.advanceUsed + profile.balance,
+                      balance: 0,
+                      credit: (p.credit || 0) - newBalance,
+                      bills: [...p.bills, { ...newBill, advanceRemaining: 0 }],
+                    }
+                    : p
+                ),
+              }
               : c
           )
         );
       } else {
-        setCustomers(
-          customers.map((c) =>
+        setActiveCustomers(
+          activeCustomers.map((c) =>
             c.phoneNumber === newSale.phoneNumber
               ? {
-                  ...c,
-                  profiles: c.profiles.map((p) =>
-                    p.profileId === profile.profileId
-                      ? {
-                          ...p,
-                          advanceUsed: p.advanceUsed + totalAmount,
-                          balance: newBalance,
-                          bills: [...p.bills, { ...newBill, advanceRemaining: newBalance }],
-                        }
-                      : p
-                  ),
-                }
+                ...c,
+                profiles: c.profiles.map((p) =>
+                  p.profileId === profile.profileId
+                    ? {
+                      ...p,
+                      advanceUsed: p.advanceUsed + totalAmount,
+                      balance: newBalance,
+                      bills: [...p.bills, { ...newBill, advanceRemaining: newBalance }],
+                    }
+                    : p
+                ),
+              }
               : c
           )
         );
@@ -235,7 +310,7 @@ const SalesEntry = () => {
           },
         ],
       };
-      setCustomers([...customers, newCustomer]);
+      setActiveCustomers([...activeCustomers, newCustomer]);
     } else if (!profile) {
       const newProfile = {
         profileId: `profile-${Date.now()}`,
@@ -248,44 +323,44 @@ const SalesEntry = () => {
         advance: false,
         bills: newSale.paymentType === "Credit" ? [{ ...newBill, creditAmount: totalAmount }] : [newBill],
       };
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newSale.phoneNumber
             ? { ...c, profiles: [...c.profiles, newProfile] }
             : c
         )
       );
     } else if (newSale.paymentType === "Credit") {
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newSale.phoneNumber
             ? {
-                ...c,
-                profiles: c.profiles.map((p) =>
-                  p.profileId === profile.profileId
-                    ? {
-                        ...p,
-                        credit: (p.credit || 0) + totalAmount,
-                        bills: [...p.bills, { ...newBill, creditAmount: totalAmount }],
-                      }
-                    : p
-                ),
-              }
+              ...c,
+              profiles: c.profiles.map((p) =>
+                p.profileId === profile.profileId
+                  ? {
+                    ...p,
+                    credit: (p.credit || 0) + totalAmount,
+                    bills: [...p.bills, { ...newBill, creditAmount: totalAmount }],
+                  }
+                  : p
+              ),
+            }
             : c
         )
       );
     } else {
-      setCustomers(
-        customers.map((c) =>
+      setActiveCustomers(
+        activeCustomers.map((c) =>
           c.phoneNumber === newSale.phoneNumber
             ? {
-                ...c,
-                profiles: c.profiles.map((p) =>
-                  p.profileId === profile.profileId
-                    ? { ...p, bills: [...p.bills, newBill] }
-                    : p
-                ),
-              }
+              ...c,
+              profiles: c.profiles.map((p) =>
+                p.profileId === profile.profileId
+                  ? { ...p, bills: [...p.bills, newBill] }
+                  : p
+              ),
+            }
             : c
         )
       );
@@ -293,21 +368,15 @@ const SalesEntry = () => {
 
     // Update stock
     newSale.items.forEach((item) => {
-      const stockItem = stock.find((s) => s.name === item.product);
+      const stockItem = activeStock.find((s) => s.name === item.product);
       if (stockItem) {
-        setStock(
-          stock.map((s) =>
+        setActiveStock(
+          activeStock.map((s) =>
             s.id === stockItem.id ? { ...s, quantity: s.quantity - item.qty } : s
           )
         );
       }
     });
-
-    // Update recent sales
-    setRecentSales((prev) => [
-      { ...newSale, totalAmount, bills: [newBill] },
-      ...prev.slice(0, 4),
-    ]);
 
     // Reset form
     setNewSale({
@@ -343,7 +412,8 @@ const SalesEntry = () => {
         totalAmount,
         advanceRemaining: null,
       };
-      const customer = customers.find((c) => c.phoneNumber === newSale.phoneNumber);
+      const activeCustomers = shop === "Shop 1" ? customers : customers2;
+      const customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
       const profile = customer?.profiles.find((p) => p.name === newSale.profileName);
       if (profile?.advance) {
         bill.advanceRemaining = profile.balance - totalAmount;
@@ -363,7 +433,8 @@ const SalesEntry = () => {
         totalAmount,
         advanceRemaining: null,
       };
-      const customer = customers.find((c) => c.phoneNumber === newSale.phoneNumber);
+      const activeCustomers = shop === "Shop 1" ? customers : customers2;
+      const customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
       const profile = customer?.profiles.find((p) => p.name === newSale.profileName);
       if (profile?.advance) {
         bill.advanceRemaining = profile.balance - totalAmount;
@@ -407,8 +478,8 @@ const SalesEntry = () => {
             </thead>
             <tbody>
               ${bill.items
-                .map(
-                  (item) => `
+        .map(
+          (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -416,8 +487,8 @@ const SalesEntry = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-                )
-                .join("")}
+        )
+        .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
@@ -454,17 +525,107 @@ const SalesEntry = () => {
     printWindow.print();
   };
 
+  // Convert date from YYYY-MM-DD to DD Month YYYY
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  // Handle date filter change
+  const handleDateFilterChange = (e) => {
+    setFilterDate(e.target.value);
+  };
+
+  // Handle search term change
+  const handleSearchTermChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Get all sales, grouped by date
+  const allSales = (shop === "Shop 1" ? customers : customers2)
+    .flatMap((c) =>
+      c.profiles.flatMap((p) =>
+        p.bills.map((bill) => ({
+          ...bill,
+          profileName: p.name,
+          phoneNumber: c.phoneNumber,
+          paymentType: p.paymentMethod || newSale.paymentType,
+          profileId: p.profileId,
+        }))
+      )
+    )
+    .filter((sale) =>
+      filterDate
+        ? sale.date === formatDate(filterDate)
+        : true
+    )
+    .filter((sale) =>
+      searchTerm
+        ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sale.phoneNumber.includes(searchTerm)
+        : true
+    );
+
+  // Group sales by date
+  const salesByDate = allSales.reduce((acc, sale) => {
+    if (!acc[sale.date]) {
+      acc[sale.date] = [];
+    }
+    acc[sale.date].push(sale);
+    return acc;
+  }, {});
+
+  // Sort dates in descending order
+  const sortedDates = Object.keys(salesByDate).sort(
+    (a, b) => new Date(b.split(" ").reverse().join("-")) - new Date(a.split(" ").reverse().join("-"))
+  );
+
   const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
 
   // Filter advance profiles for datalist
-  const advanceProfiles = customers
+  const advanceProfiles = (shop === "Shop 1" ? customers : customers2)
     .flatMap((c) => c.profiles.map((p) => ({ ...p, phoneNumber: c.phoneNumber })))
     .filter((p) => p.advance);
 
   return (
     <div className="main-content">
       <div className="sales-form-container-p">
-        <h2>New Sale Entry</h2>
+        <div className="form-group-p shop-selector-p">
+          <label>Shop</label>
+          <select value={shop} onChange={(e) => {
+            setShop(e.target.value);
+            setNewSale({
+              billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
+              date: new Date().toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              }),
+              profileName: "",
+              phoneNumber: "",
+              paymentType: "Cash",
+              items: [],
+            });
+            setCurrentItem({ product: "", qty: "", unit: "", pricePerQty: "" });
+            setAdvanceSearchTerm("");
+            setSearchTerm("");
+            setFilterDate("");
+            setIsCustomUnit(false);
+            setIsBillNoEditable(false);
+            setIsDateEditable(false);
+            setIsItemSearchManual(false);
+            setWarning("");
+          }}>
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
+          </select>
+        </div>
+        <h2>New Sale Entry - {shop}</h2>
         <div className="sales-form-p">
           <div className="form-group-p">
             <label>
@@ -493,7 +654,8 @@ const SalesEntry = () => {
                 checked={isDateEditable}
                 onChange={toggleDateEditable}
                 style={{ marginLeft: "8px", marginRight: "4px" }}
-              />Manual Date
+              />
+              Manual Date
             </label>
             <input
               type="text"
@@ -584,7 +746,7 @@ const SalesEntry = () => {
                     list="stock-items"
                   />
                   <datalist id="stock-items">
-                    {stock.map((item) => (
+                    {(shop === "Shop 1" ? stock : stock2).map((item) => (
                       <option key={item.id} value={item.name}>
                         {item.name} (Qty: {item.quantity} {item.unit})
                       </option>
@@ -598,7 +760,7 @@ const SalesEntry = () => {
                   onChange={handleItemChange}
                 >
                   <option value="">Select item</option>
-                  {stock.map((item) => (
+                  {(shop === "Shop 1" ? stock : stock2).map((item) => (
                     <option key={item.id} value={item.name}>
                       {item.name} (Qty: {item.quantity} {item.unit})
                     </option>
@@ -615,18 +777,42 @@ const SalesEntry = () => {
               min="1"
               className="small-input-p"
             />
-            <select
-              name="unit"
-              value={currentItem.unit}
-              onChange={handleItemChange}
-              style={{ flex: "1", marginRight: "10px" }}
-            >
-              <option value="">Select unit</option>
-              <option value="KG">KG</option>
-              <option value="Bag">Bag</option>
-              <option value="Pieces">Pieces</option>
-              <option value="Liter">Liter</option>
-            </select>
+            <div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={isCustomUnit}
+                  onChange={() => setIsCustomUnit(!isCustomUnit)}
+                  style={{ marginRight: "8px" }}
+                />
+                Manual
+              </label>
+              {isCustomUnit ? (
+                <input
+                  type="text"
+                  name="unit"
+                  placeholder="Enter unit"
+                  value={currentItem.unit}
+                  onChange={handleItemChange}
+                  className="small-input-p"
+                  style={{ flex: "1", marginRight: "10px" }}
+                />
+              ) : (
+                <select
+                  style={{ flex: "1", marginRight: "10px" }}
+                  name="unit"
+                  value={currentItem.unit}
+                  onChange={handleItemChange}
+                  className="small-input-p"
+                >
+                  <option value="">Select unit</option>
+                  <option value="KG">KG</option>
+                  <option value="Bag">Bag</option>
+                  <option value="Pieces">Pieces</option>
+                  <option value="Liter">Liter</option>
+                </select>
+              )}
+            </div>
             <input
               type="number"
               name="pricePerQty"
@@ -712,38 +898,140 @@ const SalesEntry = () => {
       </div>
 
       <div className="recent-sales-container-p">
-        <h2>Recent Sales</h2>
-        {recentSales.length > 0 ? (
-          <table className="sales-table-p">
-            <thead>
-              <tr>
-                <th>Profile</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Price/Unit</th>
-                <th>Total</th>
-                <th>Payment</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentSales.map((sale, index) =>
-                sale.items.map((item, i) => (
-                  <tr key={`${index}-${i}`}>
-                    <td>{sale.profileName}</td>
-                    <td>{item.product}</td>
-                    <td>{item.qty}</td>
-                    <td>{item.unit}</td>
-                    <td>₹{item.pricePerQty}</td>
-                    <td>₹{item.amount}</td>
-                    <td>{sale.paymentType}</td>
+        <h2>All Sales</h2>
+        <div className="sales-filter-row-p">
+          <label>Date:</label>
+          <input
+            type="date"
+            value={filterDate}
+            onChange={handleDateFilterChange}
+          />
+          <label>Search:</label>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={handleSearchTermChange}
+            placeholder="Profile or phone"
+          />
+        </div>
+        {sortedDates.length > 0 ? (
+          sortedDates.map((date) => (
+            <div key={date}>
+              <h3 style={{ color: "#ff6b35", margin: "20px 0 10px" }}>{date}</h3>
+              <table
+                className="sales-table-p"
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  marginTop: "10px",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      backgroundColor: "#2b2b40",
+                      color: "#a1a5b7",
+                    }}
+                  >
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
+                      Profile
+                    </th>
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
+                      Bill No
+                    </th>
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
+                      Items
+                    </th>
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
+                      Total
+                    </th>
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
+                      Payment
+                    </th>
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
+                      Action
+                    </th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {salesByDate[date]
+                    .sort((a, b) => a.billNo.localeCompare(b.billNo))
+                    .map((sale) => (
+                      <tr
+                        key={sale.billNo}
+                        style={{
+                          backgroundColor: "#1e1e2d",
+                          color: "#ffffff",
+                        }}
+                      >
+                        <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
+                          {sale.profileName}
+                        </td>
+                        <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
+                          {sale.billNo}
+                        </td>
+                        <td
+                          style={{ border: "1px solid #3a3a5a", padding: "10px" }}
+                          dangerouslySetInnerHTML={{
+                            __html: sale.items
+                              .map(
+                                (item) =>
+                                  `${item.product}: ${item.qty} ${item.unit}`
+                              )
+                              .join("<br />"),
+                          }}
+                        />
+                        <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
+                          ₹{sale.totalAmount}
+                        </td>
+                        <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
+                          {sale.paymentType}
+                        </td>
+                        <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button
+                              className="print-btn"
+                              onClick={() =>
+                                handlePrintBill(
+                                  {
+                                    billNo: sale.billNo,
+                                    date: sale.date,
+                                    items: sale.items,
+                                    totalAmount: sale.totalAmount,
+                                    advanceRemaining: sale.advanceRemaining,
+                                    creditAmount: sale.creditAmount,
+                                  },
+                                  sale.paymentType,
+                                  sale.profileName,
+                                  sale.phoneNumber
+                                )
+                              }
+                            >
+                              Print Bill
+                            </button>
+                            <button
+                              className="delete-btn"
+                              onClick={() =>
+                                handleDeleteSale(
+                                  sale.billNo,
+                                  sale.profileId,
+                                  sale.phoneNumber,
+                                  sale.items
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ))
         ) : (
-          <p>No recent sales.</p>
+          <p>No sales found.</p>
         )}
       </div>
     </div>

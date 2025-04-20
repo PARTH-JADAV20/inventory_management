@@ -10,7 +10,7 @@ const Navbar = ({ pageTitles }) => {
 
   return (
     <div className="header">
-      <h1>{getPageTitle(location.pathname)}</h1>
+      <h1 className='h1-base'>{getPageTitle(location.pathname)}</h1>
       <div className="user-info">
         <div className="notification">
           <span className="notification-icon">🔔</span>

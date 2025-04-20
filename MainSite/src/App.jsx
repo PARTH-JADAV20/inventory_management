@@ -3,13 +3,13 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Four04 from "./Components/Four04";
 import Sidebar from './Components/Sidebar';
 import Navbar from './Components/Navbar';
-
 import Dashboard from "./Pages/Dashboard";
 import CreditSales from "./Pages/CreditSales";
 import StockManage from "./Components/StockManage/StockManage";
 import AdvancePayments from "./Components/AdvancePayments/AdvancePayments";
 import SalesEntry from "./Components/SalesEntry/SalesEntry";
 import Customers from "./Components/Customers/Customers";
+import ExpenseTracker from "./Components/ExpenseTracker/ExpenseTracker";
 
 function App() {
   const [allowedAccess, setAllowedAccess] = useState(null);
@@ -23,58 +23,56 @@ function App() {
     '/customers': 'Customers',
     '/credit-sales': 'Credit Sales',
   };
-
-  const ExpenseTracking = () => <div className="main-content"><h1>Expense Tracking</h1></div>;
   
-  useEffect(() => {
-    const allowedReferrer = "https://codingame2048.netlify.app/"; 
-    // const allowedReferrer = "http://localhost:5173/"; 
-    const referrer = document.referrer;
-    const params = new URLSearchParams(window.location.search);
+  // useEffect(() => {
+  //   const allowedReferrer = "https://codingame2048.netlify.app/"; 
+  //   const allowedReferrer = "http://localhost:5173/"; 
+  //   const referrer = document.referrer;
+  //   const params = new URLSearchParams(window.location.search);
   
-    const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
-    const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
+  //   const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
+  //   const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
   
-    if (fromDummySite) {
-      // ✅ Success path — allow and store session
-      sessionStorage.setItem("authorized-entry", "true");
-      setAllowedAccess(true);
+  //   if (fromDummySite) {
+  //     // ✅ Success path — allow and store session
+  //     sessionStorage.setItem("authorized-entry", "true");
+  //     setAllowedAccess(true);
   
-      // Remove ?auth=true from URL after validation
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (alreadyAuthorized === "true") {
-      // ✅ Still in same session/tab
-      setAllowedAccess(true);
-    } else {
-      // ❌ Access denied
-      setAllowedAccess(false);
-    }
-  }, []);
+  //     // Remove ?auth=true from URL after validation
+  //     window.history.replaceState({}, document.title, window.location.pathname);
+  //   } else if (alreadyAuthorized === "true") {
+  //     // ✅ Still in same session/tab
+  //     setAllowedAccess(true);
+  //   } else {
+  //     // ❌ Access denied
+  //     setAllowedAccess(false);
+  //   }
+  // }, []);
  
 
-  useEffect(() => {
-    const handleUnload = () => {
-      sessionStorage.removeItem("authorized-entry");
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-    };
-  }, []);
+  // useEffect(() => {
+  //   const handleUnload = () => {
+  //     sessionStorage.removeItem("authorized-entry");
+  //   };
+  //   window.addEventListener("beforeunload", handleUnload);
+  //   return () => {
+  //     window.removeEventListener("beforeunload", handleUnload);
+  //   };
+  // }, []);
 
-  useEffect(() => {
-    const handleUnload = () => {
-      sessionStorage.removeItem("authorized-entry");
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-    };
-  }, []);
+  // useEffect(() => {
+  //   const handleUnload = () => {
+  //     sessionStorage.removeItem("authorized-entry");
+  //   };
+  //   window.addEventListener("beforeunload", handleUnload);
+  //   return () => {
+  //     window.removeEventListener("beforeunload", handleUnload);
+  //   };
+  // }, []);
 
-  if (!allowedAccess) {
-    return <Four04 />;
-  }
+  // if (!allowedAccess) {
+  //   return <Four04 />;
+  // }
 
 
   return (
@@ -88,7 +86,7 @@ function App() {
             <Route path="/stock-management" element={<StockManage />} />
             <Route path="/sales-entry" element={<SalesEntry />} />
             <Route path="/advance-payments" element={<AdvancePayments />} />
-            <Route path="/expense-tracking" element={<ExpenseTracking />} />
+            <Route path="/expense-tracking" element={<ExpenseTracker />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/credit-sales" element={<CreditSales />} />
           </Routes>

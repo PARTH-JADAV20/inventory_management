@@ -1,4 +1,5 @@
 import React from 'react';
+import '../../../App.css';
 import SectionHeader from '../UI/SectionHeader';
 
 const RecentActivity = () => {
