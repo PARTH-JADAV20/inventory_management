@@ -64,6 +64,7 @@
   grid-column: 1 / -1;
   display: flex;
   justify-content: flex-start;
+  gap: 10px;
 }
 
 .submit-btn {
@@ -80,6 +81,60 @@
   background-color: #e55a2b;
 }
 
+.cancel-btn {
+  background-color: #6c757d;
+  color: #ffffff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cancel-btn:hover {
+  background-color: #5a6268;
+}
+
+/* Monthly Total Expenses Section */
+.monthly-total-container {
+  margin: 40px 0;
+  padding: 20px;
+  background-color: #1e1e2d;
+  border-radius: 8px;
+}
+
+.monthly-total-container h2 {
+  color: #ff6b35;
+  margin-bottom: 20px;
+}
+
+.month-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.month-selector label {
+  color: #a1a5b7;
+  font-size: 14px;
+}
+
+.month-selector input {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #3a3a5a;
+  background-color: #fff;
+  color: #000;
+  font-size: 14px;
+}
+
+.total-expense {
+  font-size: 18px;
+  color: #ffffff;
+  font-weight: bold;
+}
+
 .table-container {
   margin-top: 20px;
 }
@@ -91,6 +146,35 @@
 
 .table-actions {
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.search-container {
+  display: flex;
+  gap: 20px;
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-group label {
+  color: #a1a5b7;
+  font-size: 14px;
+}
+
+.search-group input {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #3a3a5a;
+  background-color: #fff;
+  color: #000;
+  font-size: 14px;
 }
 
 .print-btn {
@@ -134,3 +218,4 @@
   background-color: #1e1e2d;
   color: #ffffff;
 }
+

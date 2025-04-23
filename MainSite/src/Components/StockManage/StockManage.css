@@ -235,7 +235,8 @@
 }
 
 .add-btn,
-.cancel-btn {
+.cancel-btn,
+.toggle-btn {
     padding: 10px 20px;
     border-radius: 5px;
     border: none;
@@ -252,6 +253,11 @@
     background-color: transparent;
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
+}
+
+.toggle-btn {
+    background-color: var(--accent-color);
+    color: white;
 }
 
 /* Stock List Styles */
@@ -377,13 +383,13 @@
         margin-bottom: 0;
         white-space: nowrap;
     }
-}
 
-@media (max-width: 768px) {
     .stock-form {
         grid-template-columns: 1fr;
     }
+}
 
+@media (max-width: 768px) {
     .stock-table th:nth-child(3),
     .stock-table td:nth-child(3) {
         display: none;
