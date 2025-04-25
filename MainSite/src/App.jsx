@@ -26,7 +26,7 @@ function App() {
   
   // useEffect(() => {
   //   const allowedReferrer = "https://codingame2048.netlify.app/"; 
-  //   const allowedReferrer = "http://localhost:5173/"; 
+  //   // const allowedReferrer = "http://localhost:5173/"; 
   //   const referrer = document.referrer;
   //   const params = new URLSearchParams(window.location.search);
   
