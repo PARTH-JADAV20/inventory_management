@@ -28,16 +28,19 @@ const StockManage = () => {
     unit: "KG",
     category: "Cement",
     price: "",
+    addedDate: new Date().toISOString().split("T")[0], // Default to today
   });
   const [editingItem, setEditingItem] = useState(null);
   const [filteredItems, setFilteredItems] = useState([]);
+  const [view, setView] = useState("current"); // Toggle between current and history
 
   useEffect(() => {
-    let filtered = shop === "Shop 1" ? items : items2;
+    // Start with a fresh filtered array
+    let filtered = shop === "Shop 1" ? [...items] : [...items2];
 
     // Apply category filter
     if (filterCategory !== "All") {
-      filtered = filtered.filter((item) => item.category === filterCategory);
+      filtered = filtered.filter((item) => (item.category || "Uncategorized") === filterCategory);
     }
 
     // Apply search filter
@@ -47,15 +50,54 @@ const StockManage = () => {
       );
     }
 
-    setFilteredItems(filtered);
-  }, [items, items2, shop, filterCategory, searchTerm]);
+    // Process based on view
+    if (view === "current") {
+      const groupedItems = [];
+      const uniqueKeys = new Set();
+
+      filtered.forEach((item) => {
+        const category = item.category || "Uncategorized";
+        const key = `${item.name}|${category}|${item.unit}`;
+        if (!uniqueKeys.has(key)) {
+          uniqueKeys.add(key);
+          const sameItems = filtered.filter(
+            (i) => i.name === item.name && (i.category || "Uncategorized") === category && i.unit === item.unit
+          );
+          const totalQuantity = sameItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
+          const averagePrice =
+            sameItems.length > 0
+              ? (sameItems.reduce((sum, i) => sum + (i.price || 0), 0) / sameItems.length).toFixed(2)
+              : "0.00";
+          groupedItems.push({
+            id: `${item.name}-${category}-${item.unit}-${Date.now()}`, // Unique ID for grouped items
+            name: item.name,
+            category: category,
+            unit: item.unit,
+            quantity: totalQuantity,
+            price: parseFloat(averagePrice),
+          });
+        }
+      });
+
+      setFilteredItems(groupedItems);
+    } else {
+      const sortedItems = [...filtered].sort(
+        (a, b) => new Date(b.addedDate) - new Date(a.addedDate)
+      );
+      setFilteredItems(sortedItems);
+    }
+  }, [items, items2, shop, filterCategory, searchTerm, view]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewItem({
       ...newItem,
       [name]:
-        name === "quantity" || name === "price" ? (value === "" ? "" : parseFloat(value)) : value,
+        name === "quantity" || name === "price"
+          ? value === ""
+            ? ""
+            : parseFloat(value)
+          : value,
     });
   };
 
@@ -64,14 +106,23 @@ const StockManage = () => {
   };
 
   const handleAddItem = () => {
-    if (!newItem.name || !newItem.quantity || !newItem.price || !newItem.category || !newItem.unit) {
+    if (
+      !newItem.name ||
+      !newItem.quantity ||
+      !newItem.price ||
+      !newItem.category ||
+      !newItem.unit ||
+      !newItem.addedDate
+    ) {
       alert("Please fill all fields");
       return;
     }
 
     if (editingItem) {
       const updateItems = (items, setItems) =>
-        items.map((item) => (item.id === editingItem.id ? { ...newItem, id: item.id } : item));
+        items.map((item) =>
+          item.id === editingItem.id ? { ...newItem, id: item.id } : item
+        );
       if (shop === "Shop 1") {
         setItems(updateItems(items, setItems));
       } else {
@@ -98,29 +149,41 @@ const StockManage = () => {
       unit: "KG",
       category: "Cement",
       price: "",
+      addedDate: new Date().toISOString().split("T")[0], // Reset to today
     });
     setIsCustomCategory(false);
     setIsCustomUnit(false);
   };
 
   const handleEdit = (item) => {
-    setEditingItem(item);
+    // Find the first matching item in the original stock for editing
+    const stock = shop === "Shop 1" ? items : items2;
+    const targetItem = stock.find(
+      (i) => i.name === item.name && i.category === item.category && i.unit === item.unit
+    );
+    setEditingItem(targetItem);
     setNewItem({
-      name: item.name,
-      quantity: item.quantity,
-      unit: item.unit,
-      category: item.category,
-      price: item.price,
+      name: targetItem.name,
+      quantity: targetItem.quantity,
+      unit: targetItem.unit,
+      category: targetItem.category,
+      price: targetItem.price,
+      addedDate: targetItem.addedDate,
     });
-    setIsCustomCategory(!categories.includes(item.category));
-    setIsCustomUnit(!["KG", "Bag", "Pieces", "Liter"].includes(item.unit));
+    setIsCustomCategory(!categories.includes(targetItem.category));
+    setIsCustomUnit(!["KG", "Bag", "Pieces", "Liter"].includes(targetItem.unit));
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (item) => {
+    // Delete all items with the same name, category, and unit
+    const filterItems = (items) =>
+      items.filter(
+        (i) => !(i.name === item.name && i.category === item.category && i.unit === item.unit)
+      );
     if (shop === "Shop 1") {
-      setItems(items.filter((item) => item.id !== id));
+      setItems(filterItems(items));
     } else {
-      setItems2(items2.filter((item) => item.id !== id));
+      setItems2(filterItems(items2));
     }
   };
 
@@ -132,6 +195,7 @@ const StockManage = () => {
       unit: "KG",
       category: "Cement",
       price: "",
+      addedDate: new Date().toISOString().split("T")[0], // Reset to today
     });
     setIsCustomCategory(false);
     setIsCustomUnit(false);
@@ -148,8 +212,16 @@ const StockManage = () => {
           </select>
         </div>
         <h2>{editingItem ? "Edit Stock Item" : "Add New Stock"} - {shop}</h2>
-        {/* Rest of the form remains unchanged */}
         <div className="stock-form">
+          <div className="form-group">
+            <label>Date</label>
+            <input
+              type="date"
+              name="addedDate"
+              value={newItem.addedDate}
+              onChange={handleInputChange}
+            />
+          </div>
           <div className="form-group">
             <label>Item Name</label>
             <input
@@ -255,7 +327,7 @@ const StockManage = () => {
 
       <div className="stock-list-container">
         <div className="stock-filter">
-          <label>View Stock:</label>
+          <label>{view === "current" ? "Current Stock:" : "Stock History:"}</label>
           <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
             <option value="All">All Categories</option>
             {categories.map((category, index) => (
@@ -271,39 +343,70 @@ const StockManage = () => {
             value={searchTerm}
             onChange={handleSearchChange}
           />
+          <button
+            className="toggle-btn"
+            onClick={() => setView(view === "current" ? "history" : "current")}
+          >
+            {view === "current" ? "View Stock History" : "View Current Stock"}
+          </button>
         </div>
 
-        <table className="stock-table">
-          <thead>
-            <tr>
-              <th>Item Name</th>
-              <th>Quantity</th>
-              <th>Category</th>
-              <th>Purchase Price</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredItems.map((item) => (
-              <tr key={item.id}>
-                <td>{item.name}</td>
-                <td>
-                  {item.quantity} {item.unit}
-                </td>
-                <td>{item.category}</td>
-                <td>₹{item.price}/{item.unit}</td>
-                <td className="action-buttons">
-                  <button className="edit-btn" onClick={() => handleEdit(item)}>
-                    <Pencil size={16} />
-                  </button>
-                  <button className="delete-btn" onClick={() => handleDelete(item.id)}>
-                    <Trash2 size={16} />
-                  </button>
-                </td>
+        {view === "current" ? (
+          <table className="stock-table">
+            <thead>
+              <tr>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Category</th>
+                <th>Average Price</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredItems.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.name}</td>
+                  <td>
+                    {item.quantity} {item.unit}
+                  </td>
+                  <td>{item.category}</td>
+                  <td>₹{item.price.toFixed(2)}/{item.unit}</td>
+                  <td className="action-buttons">
+                    <button className="edit-btn" onClick={() => handleEdit(item)}>
+                      <Pencil size={16} />
+                    </button>
+                    <button className="delete-btn" onClick={() => handleDelete(item)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <table className="stock-table">
+            <thead>
+              <tr>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Added Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.name}</td>
+                  <td>
+                    {item.quantity} {item.unit}
+                  </td>
+                  <td>₹{item.price}/{item.unit}</td>
+                  <td>{item.addedDate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

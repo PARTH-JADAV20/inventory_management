@@ -1,72 +1,88 @@
 const stockItems = [
-    {
-      id: 1,
-      name: "Cement OPC 53 Grade",
-      quantity: 50,
-      unit: "Bag",
-      category: "Cement",
-      price: 350,
-    },
-    {
-      id: 2,
-      name: "River Sand",
-      quantity: 100,
-      unit: "KG",
-      category: "Sand",
-      price: 12,
-    },
-    {
-      id: 3,
-      name: "Crushed Stone Aggregate",
-      quantity: 200,
-      unit: "KG",
-      category: "Aggregate",
-      price: 18,
-    },
-    {
-      id: 4,
-      name: "Steel Reinforcement Bars",
-      quantity: 30,
-      unit: "Pieces",
-      category: "Steel",
-      price: 75,
-    },
-  ];
+  {
+    id: 1,
+    name: "Cement OPC 53 Grade",
+    quantity: 50,
+    unit: "Bag",
+    category: "Cement",
+    price: 350,
+    addedDate: "2025-04-20",
+  },
+  {
+    id: 5,
+    name: "Cement OPC 53 Grade",
+    quantity: 50,
+    unit: "Bag",
+    category: "Cement",
+    price: 300,
+    addedDate: "2025-04-20",
+  },
+  {
+    id: 2,
+    name: "River Sand",
+    quantity: 100,
+    unit: "KG",
+    category: "Sand",
+    price: 12,
+    addedDate: "2025-04-20",
+  },
+  {
+    id: 3,
+    name: "Crushed Stone Aggregate",
+    quantity: 200,
+    unit: "KG",
+    category: "Aggregate",
+    price: 18,
+    addedDate: "2025-04-20",
+  },
+  {
+    id: 4,
+    name: "Steel Reinforcement Bars",
+    quantity: 30,
+    unit: "Pieces",
+    category: "Steel",
+    price: 75,
+    addedDate: "2025-04-20",
+  },
+];
 
-  const stockItems2 = [
-    {
-      id: 1,
-      name: "Cement PPC",
-      quantity: 75,
-      unit: "Bag",
-      category: "Cement",
-      price: 330,
-    },
-    {
-      id: 2,
-      name: "M-Sand",
-      quantity: 150,
-      unit: "KG",
-      category: "Sand",
-      price: 25,
-    },
-    {
-      id: 3,
-      name: "Crushed Stone Aggregate",
-      quantity: 300,
-      unit: "KG",
-      category: "Aggregate",
-      price: 20,
-    },
-    {
-      id: 4,
-      name: "Fly Ash",
-      quantity: 50,
-      unit: "KG",
-      category: "Steel",
-      price: 5,
-    },
-  ];
-  
-  
-  export {stockItems, stockItems2};
+const stockItems2 = [
+  {
+    id: 1,
+    name: "Cement PPC",
+    quantity: 75,
+    unit: "Bag",
+    category: "Cement",
+    price: 330,
+    addedDate: "2025-04-21",
+  },
+  {
+    id: 2,
+    name: "M-Sand",
+    quantity: 150,
+    unit: "KG",
+    category: "Sand",
+    price: 25,
+    addedDate: "2025-04-21",
+  },
+  {
+    id: 3,
+    name: "Crushed Stone Aggregate",
+    quantity: 300,
+    unit: "KG",
+    category: "Aggregate",
+    price: 20,
+    addedDate: "2025-04-21",
+  },
+  {
+    id: 4,
+    name: "Fly Ash",
+    quantity: 50,
+    unit: "KG",
+    category: "Steel",
+    price: 5,
+    addedDate: "2025-04-21",
+  },
+];
+
+export { stockItems, stockItems2 };
