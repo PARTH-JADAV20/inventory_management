@@ -25,56 +25,56 @@ function App() {
   };
   
 
-  useEffect(() => {
-    const allowedReferrer = "https://codingame2048.netlify.app/"; 
-    // const allowedReferrer = "http://localhost:5173/"; 
-    const referrer = document.referrer;
-    const params = new URLSearchParams(window.location.search);
+  // useEffect(() => {
+  //   const allowedReferrer = "https://codingame2048.netlify.app/"; 
+  //   // const allowedReferrer = "http://localhost:5173/"; 
+  //   const referrer = document.referrer;
+  //   const params = new URLSearchParams(window.location.search);
 
   
-    const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
-    const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
+  //   const fromDummySite = referrer.includes(allowedReferrer) && params.get("auth") === "true";
+  //   const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
   
-    if (fromDummySite) {
-      // ✅ Success path — allow and store session
-      sessionStorage.setItem("authorized-entry", "true");
-      setAllowedAccess(true);
+  //   if (fromDummySite) {
+  //     // ✅ Success path — allow and store session
+  //     sessionStorage.setItem("authorized-entry", "true");
+  //     setAllowedAccess(true);
   
-      // Remove ?auth=true from URL after validation
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (alreadyAuthorized === "true") {
-      // ✅ Still in same session/tab
-      setAllowedAccess(true);
-    } else {
-      // ❌ Access denied
-      setAllowedAccess(false);
-    }
-  }, []);
+  //     // Remove ?auth=true from URL after validation
+  //     window.history.replaceState({}, document.title, window.location.pathname);
+  //   } else if (alreadyAuthorized === "true") {
+  //     // ✅ Still in same session/tab
+  //     setAllowedAccess(true);
+  //   } else {
+  //     // ❌ Access denied
+  //     setAllowedAccess(false);
+  //   }
+  // }, []);
  
 
-  useEffect(() => {
-    const handleUnload = () => {
-      sessionStorage.removeItem("authorized-entry");
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-    };
-  }, []);
+  // useEffect(() => {
+  //   const handleUnload = () => {
+  //     sessionStorage.removeItem("authorized-entry");
+  //   };
+  //   window.addEventListener("beforeunload", handleUnload);
+  //   return () => {
+  //     window.removeEventListener("beforeunload", handleUnload);
+  //   };
+  // }, []);
 
-  useEffect(() => {
-    const handleUnload = () => {
-      sessionStorage.removeItem("authorized-entry");
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-    };
-  }, []);
+  // useEffect(() => {
+  //   const handleUnload = () => {
+  //     sessionStorage.removeItem("authorized-entry");
+  //   };
+  //   window.addEventListener("beforeunload", handleUnload);
+  //   return () => {
+  //     window.removeEventListener("beforeunload", handleUnload);
+  //   };
+  // }, []);
 
-  if (!allowedAccess) {
-    return <Four04 />;
-  }
+  // if (!allowedAccess) {
+  //   return <Four04 />;
+  // }
 
 
   return (
