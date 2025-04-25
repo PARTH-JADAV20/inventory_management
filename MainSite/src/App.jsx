@@ -4,7 +4,7 @@ import Four04 from "./Components/Four04";
 import Sidebar from './Components/Sidebar';
 import Navbar from './Components/Navbar';
 import Dashboard from "./Pages/Dashboard";
-import CreditSales from "./Pages/CreditSales";
+import CreditSales from "./Pages/CreditSalesDashboard";
 import StockManage from "./Components/StockManage/StockManage";
 import AdvancePayments from "./Components/AdvancePayments/AdvancePayments";
 import SalesEntry from "./Components/SalesEntry/SalesEntry";
