@@ -116,6 +116,32 @@ const expenseFilterSchema = Joi.object({
   return value;
 }, 'Filter validation');
 
+
+// Credit sale validation schema
+const creditSaleSchema = Joi.object({
+  customerName: Joi.string().required(),
+  phoneNumber: Joi.string().required(),
+  items: Joi.array().items(
+    Joi.object({
+      product: Joi.string().required(),
+      qty: Joi.number().min(0.01).required(),
+      unit: Joi.string().required(),
+      pricePerUnit: Joi.number().min(0.01).required(),
+      amount: Joi.number().min(0.01).required(),
+      date: Joi.date().required()
+    })
+  ).required(),
+  totalAmount: Joi.number().min(0.01).required()
+});
+
+// Dashboard filter validation schema
+const dashboardFilterSchema = Joi.object({
+  shop: Joi.string().valid('All Shops', 'Shop A', 'Shop B').required(),
+  timePeriod: Joi.string().valid('Today', 'This Week', 'This Month').required()
+});
+
+
+
 // Middleware to validate request body
 const validateRequest = (schema) => {
   return (req, res, next) => {
@@ -138,6 +164,8 @@ const validateQuery = (schema) => {
   };
 };
 
+
+
 module.exports = {
   validateCustomer: validateRequest(customerSchema),
   validateProfile: validateRequest(profileSchema),
@@ -146,5 +174,7 @@ module.exports = {
   validateStock: validateRequest(stockSchema),
   validateStockDelete: validateRequest(stockDeleteSchema),
   validateExpense: validateRequest(expenseSchema),
-  validateExpenseFilter: validateQuery(expenseFilterSchema)
+  validateExpenseFilter: validateQuery(expenseFilterSchema),
+  validateCreditSale: validateRequest(creditSaleSchema),
+  validateDashboardFilter: validateQuery(dashboardFilterSchema),
 };
