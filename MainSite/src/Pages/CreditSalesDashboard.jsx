@@ -240,8 +240,8 @@ const CreditSalesDashboard = () => {
                 onChange={(e) => setAmountFilter(e.target.value)}
               >
                 <option value="All">All</option>
-                <option value=">10000">Credit `&gt` ₹10,000</option>
-                <option value=">2months">Overdue `&gt` 2 Months</option>
+                <option value=">10000">Credit &gt; ₹10,000</option>
+                <option value=">2months">Overdue &gt; 2 Months</option>
               </select>
             </div>
             <div className="search-group">
