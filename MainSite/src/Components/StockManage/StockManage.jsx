@@ -1,76 +1,91 @@
-import React, { useState, useEffect } from "react";
-import { Pencil, Trash2 } from "lucide-react";
-import { stockItems, stockItems2 } from "../stockItems.js";
-import "./StockManage.css";
+// src/StockManage.jsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
+import { getStock, addStock, updateStock, deleteStock } from '../api.js';
+import './StockManage.css';
 
 const StockManage = () => {
-  const [items, setItems] = useState(stockItems); // Shop 1 stock
-  const [items2, setItems2] = useState(stockItems2); // Shop 2 stock
-  const [shop, setShop] = useState("Shop 1"); // Active shop
+  const [items, setItems] = useState([]);
+  const [shop, setShop] = useState('shop1');
   const [categories] = useState([
-    "Cement",
-    "Sand",
-    "Aggregate",
-    "Steel",
-    "Bricks",
-    "Paint",
-    "Plumbing",
-    "Electrical",
-    "Wood",
+    'Cement',
+    'Sand',
+    'Aggregate',
+    'Steel',
+    'Bricks',
+    'Paint',
+    'Plumbing',
+    'Electrical',
+    'Wood',
   ]);
-  const [filterCategory, setFilterCategory] = useState("All");
+  const [filterCategory, setFilterCategory] = useState('All');
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [isCustomUnit, setIsCustomUnit] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [newItem, setNewItem] = useState({
-    name: "",
-    quantity: "",
-    unit: "KG",
-    category: "Cement",
-    price: "",
-    addedDate: new Date().toISOString().split("T")[0], // Default to today
+    name: '',
+    quantity: '',
+    unit: 'KG',
+    category: 'Cement',
+    price: '',
+    addedDate: new Date().toISOString().split('T')[0],
   });
   const [editingItem, setEditingItem] = useState(null);
   const [filteredItems, setFilteredItems] = useState([]);
-  const [view, setView] = useState("current"); // Toggle between current and history
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showAveragePrices, setShowAveragePrices] = useState(false);
 
-  useEffect(() => {
-    // Start with a fresh filtered array
-    let filtered = shop === "Shop 1" ? [...items] : [...items2];
+  const processItems = useCallback(
+    (itemsToProcess) => {
+      // Filter items for current stock table (no grouping)
+      let filtered = [...itemsToProcess];
 
-    // Apply category filter
-    if (filterCategory !== "All") {
-      filtered = filtered.filter((item) => (item.category || "Uncategorized") === filterCategory);
-    }
+      if (filterCategory !== 'All') {
+        filtered = filtered.filter(
+          (item) => (item.category || 'Uncategorized').toLowerCase() === filterCategory.toLowerCase()
+        );
+      }
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter((item) =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+      if (searchTerm) {
+        filtered = filtered.filter((item) =>
+          item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      // Sort by addedDate (newest first) for current stock
+      filtered = filtered.sort(
+        (a, b) => new Date(b.addedDate) - new Date(a.addedDate)
       );
-    }
 
-    // Process based on view
-    if (view === "current") {
+      // Group items for average price popup (case-insensitive)
       const groupedItems = [];
       const uniqueKeys = new Set();
 
-      filtered.forEach((item) => {
-        const category = item.category || "Uncategorized";
-        const key = `${item.name}|${category}|${item.unit}`;
+      itemsToProcess.forEach((item) => {
+        const category = item.category || 'Uncategorized';
+        const key = `${item.name.toLowerCase()}|${category.toLowerCase()}|${item.unit.toLowerCase()}`;
         if (!uniqueKeys.has(key)) {
           uniqueKeys.add(key);
-          const sameItems = filtered.filter(
-            (i) => i.name === item.name && (i.category || "Uncategorized") === category && i.unit === item.unit
+          const sameItems = itemsToProcess.filter(
+            (i) =>
+              i.name.toLowerCase() === item.name.toLowerCase() &&
+              (i.category || 'Uncategorized').toLowerCase() === category.toLowerCase() &&
+              i.unit.toLowerCase() === item.unit.toLowerCase()
           );
-          const totalQuantity = sameItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
+          const totalQuantity = sameItems.reduce(
+            (sum, i) => sum + (i.quantity || 0),
+            0
+          );
+          const totalValue = sameItems.reduce(
+            (sum, i) => sum + (i.quantity || 0) * (i.price || 0),
+            0
+          );
           const averagePrice =
-            sameItems.length > 0
-              ? (sameItems.reduce((sum, i) => sum + (i.price || 0), 0) / sameItems.length).toFixed(2)
-              : "0.00";
+            totalQuantity > 0 ? (totalValue / totalQuantity).toFixed(2) : '0.00';
           groupedItems.push({
-            id: `${item.name}-${category}-${item.unit}-${Date.now()}`, // Unique ID for grouped items
-            name: item.name,
+            id: `${item.name}-${category}-${item.unit}-${Date.now()}`,
+            name: item.name, // Preserve original case for display
             category: category,
             unit: item.unit,
             quantity: totalQuantity,
@@ -79,23 +94,43 @@ const StockManage = () => {
         }
       });
 
-      setFilteredItems(groupedItems);
-    } else {
-      const sortedItems = [...filtered].sort(
-        (a, b) => new Date(b.addedDate) - new Date(a.addedDate)
-      );
-      setFilteredItems(sortedItems);
-    }
-  }, [items, items2, shop, filterCategory, searchTerm, view]);
+      return { filtered, groupedItems };
+    },
+    [filterCategory, searchTerm]
+  );
+
+  useEffect(() => {
+    const fetchStock = async () => {
+      setIsLoading(true);
+      try {
+        setError(null);
+        const data = await getStock(shop);
+        console.log('getStock response:', data);
+        setItems(data);
+        const { filtered } = processItems(data);
+        setFilteredItems(filtered);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStock();
+  }, [shop, processItems]);
+
+  useEffect(() => {
+    const { filtered } = processItems(items);
+    setFilteredItems(filtered);
+  }, [filterCategory, searchTerm, items, processItems]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewItem({
       ...newItem,
       [name]:
-        name === "quantity" || name === "price"
-          ? value === ""
-            ? ""
+        name === 'quantity' || name === 'price'
+          ? value === ''
+            ? ''
             : parseFloat(value)
           : value,
     });
@@ -105,7 +140,7 @@ const StockManage = () => {
     setSearchTerm(e.target.value);
   };
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (
       !newItem.name ||
       !newItem.quantity ||
@@ -114,88 +149,98 @@ const StockManage = () => {
       !newItem.unit ||
       !newItem.addedDate
     ) {
-      alert("Please fill all fields");
+      alert('Please fill all fields');
       return;
     }
 
-    if (editingItem) {
-      const updateItems = (items, setItems) =>
-        items.map((item) =>
-          item.id === editingItem.id ? { ...newItem, id: item.id } : item
+    try {
+      setError(null);
+      setIsLoading(true);
+      if (editingItem) {
+        const updatedItem = await updateStock(shop, editingItem.id, newItem);
+        const updatedItems = items.map((item) =>
+          item.id === updatedItem.id ? updatedItem : item
         );
-      if (shop === "Shop 1") {
-        setItems(updateItems(items, setItems));
+        setItems(updatedItems);
+        const { filtered } = processItems(updatedItems);
+        setFilteredItems(filtered);
+        setEditingItem(null);
       } else {
-        setItems2(updateItems(items2, setItems2));
+        const addedItem = await addStock(shop, newItem);
+        const updatedItems = [...items, addedItem];
+        setItems(updatedItems);
+        const { filtered } = processItems(updatedItems);
+        setFilteredItems(filtered);
       }
-      setEditingItem(null);
-    } else {
-      const maxId = (items, items2) =>
-        Math.max(
-          items.length > 0 ? Math.max(...items.map((item) => item.id)) : 0,
-          items2.length > 0 ? Math.max(...items2.map((item) => item.id)) : 0
-        );
-      const newId = maxId(items, items2) + 1;
-      if (shop === "Shop 1") {
-        setItems([...items, { ...newItem, id: newId }]);
-      } else {
-        setItems2([...items2, { ...newItem, id: newId }]);
-      }
-    }
 
-    setNewItem({
-      name: "",
-      quantity: "",
-      unit: "KG",
-      category: "Cement",
-      price: "",
-      addedDate: new Date().toISOString().split("T")[0], // Reset to today
-    });
-    setIsCustomCategory(false);
-    setIsCustomUnit(false);
+      setNewItem({
+        name: '',
+        quantity: '',
+        unit: 'KG',
+        category: 'Cement',
+        price: '',
+        addedDate: new Date().toISOString().split('T')[0],
+      });
+      setIsCustomCategory(false);
+      setIsCustomUnit(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = (item) => {
-    // Find the first matching item in the original stock for editing
-    const stock = shop === "Shop 1" ? items : items2;
-    const targetItem = stock.find(
-      (i) => i.name === item.name && i.category === item.category && i.unit === item.unit
-    );
-    setEditingItem(targetItem);
+    setEditingItem(item);
     setNewItem({
-      name: targetItem.name,
-      quantity: targetItem.quantity,
-      unit: targetItem.unit,
-      category: targetItem.category,
-      price: targetItem.price,
-      addedDate: targetItem.addedDate,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      category: item.category,
+      price: item.price,
+      addedDate: new Date(item.addedDate).toISOString().split('T')[0],
     });
-    setIsCustomCategory(!categories.includes(targetItem.category));
-    setIsCustomUnit(!["KG", "Bag", "Pieces", "Liter"].includes(targetItem.unit));
+    setIsCustomCategory(!categories.includes(item.category));
+    setIsCustomUnit(!['KG', 'Bag', 'Pieces', 'Liter'].includes(item.unit));
   };
 
-  const handleDelete = (item) => {
-    // Delete all items with the same name, category, and unit
-    const filterItems = (items) =>
-      items.filter(
-        (i) => !(i.name === item.name && i.category === item.category && i.unit === item.unit)
+  const handleDelete = async (item) => {
+    try {
+      setError(null);
+      setIsLoading(true);
+      await deleteStock(shop, {
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        unit: item.unit,
+      });
+      const updatedItems = items.filter(
+        (i) =>
+          !(i.id === item.id &&
+            i.name.toLowerCase() === item.name.toLowerCase() &&
+            (i.category || 'Uncategorized').toLowerCase() === (item.category || 'Uncategorized').toLowerCase() &&
+            i.unit.toLowerCase() === item.unit.toLowerCase()
+          )
       );
-    if (shop === "Shop 1") {
-      setItems(filterItems(items));
-    } else {
-      setItems2(filterItems(items2));
+      setItems(updatedItems);
+      const { filtered } = processItems(updatedItems);
+      setFilteredItems(filtered);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleCancelEdit = () => {
     setEditingItem(null);
     setNewItem({
-      name: "",
-      quantity: "",
-      unit: "KG",
-      category: "Cement",
-      price: "",
-      addedDate: new Date().toISOString().split("T")[0], // Reset to today
+      name: '',
+      quantity: '',
+      unit: 'KG',
+      category: 'Cement',
+      price: '',
+      addedDate: new Date().toISOString().split('T')[0],
     });
     setIsCustomCategory(false);
     setIsCustomUnit(false);
@@ -203,15 +248,20 @@ const StockManage = () => {
 
   return (
     <div className="main-content">
+      {error && <div className="error-message">{error}</div>}
+      {isLoading && <div className="loading-message">Loading...</div>}
       <div className="stock-form-container">
         <div className="form-group shop-selector">
           <label>Shop</label>
           <select value={shop} onChange={(e) => setShop(e.target.value)}>
-            <option value="Shop 1">Shop 1</option>
-            <option value="Shop 2">Shop 2</option>
+            <option value="shop1">Shop 1</option>
+            <option value="shop2">Shop 2</option>
           </select>
         </div>
-        <h2>{editingItem ? "Edit Stock Item" : "Add New Stock"} - {shop}</h2>
+        <h2>
+          {editingItem ? 'Edit Stock Item' : 'Add New Stock'} -{' '}
+          {shop === 'shop1' ? 'Shop 1' : 'Shop 2'}
+        </h2>
         <div className="stock-form">
           <div className="form-group">
             <label>Date</label>
@@ -261,7 +311,11 @@ const StockManage = () => {
                   onChange={handleInputChange}
                 />
               ) : (
-                <select name="unit" value={newItem.unit} onChange={handleInputChange}>
+                <select
+                  name="unit"
+                  value={newItem.unit}
+                  onChange={handleInputChange}
+                >
                   <option value="KG">KG</option>
                   <option value="Bag">Bag</option>
                   <option value="Pieces">Pieces</option>
@@ -292,7 +346,11 @@ const StockManage = () => {
                   onChange={handleInputChange}
                 />
               ) : (
-                <select name="category" value={newItem.category} onChange={handleInputChange}>
+                <select
+                  name="category"
+                  value={newItem.category}
+                  onChange={handleInputChange}
+                >
                   {categories.map((category, index) => (
                     <option key={index} value={category}>
                       {category}
@@ -313,11 +371,19 @@ const StockManage = () => {
             />
           </div>
           <div className="form-buttons">
-            <button className="add-btn" onClick={handleAddItem}>
-              {editingItem ? "Update Stock" : "Add Stock"}
+            <button
+              className="add-btn"
+              onClick={handleAddItem}
+              disabled={isLoading}
+            >
+              {editingItem ? 'Update Stock' : 'Add Stock'}
             </button>
             {editingItem && (
-              <button className="cancel-btn" onClick={handleCancelEdit}>
+              <button
+                className="cancel-btn"
+                onClick={handleCancelEdit}
+                disabled={isLoading}
+              >
                 Cancel
               </button>
             )}
@@ -327,8 +393,11 @@ const StockManage = () => {
 
       <div className="stock-list-container">
         <div className="stock-filter">
-          <label>{view === "current" ? "Current Stock:" : "Stock History:"}</label>
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+          <label>Current Stock:</label>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+          >
             <option value="All">All Categories</option>
             {categories.map((category, index) => (
               <option key={index} value={category}>
@@ -345,69 +414,84 @@ const StockManage = () => {
           />
           <button
             className="toggle-btn"
-            onClick={() => setView(view === "current" ? "history" : "current")}
+            onClick={() => setShowAveragePrices(true)}
           >
-            {view === "current" ? "View Stock History" : "View Current Stock"}
+            Show Average Prices
           </button>
         </div>
 
-        {view === "current" ? (
-          <table className="stock-table">
-            <thead>
-              <tr>
-                <th>Item Name</th>
-                <th>Quantity</th>
-                <th>Category</th>
-                <th>Average Price</th>
-                <th>Actions</th>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item Name</th>
+              <th>Quantity</th>
+              <th>Category</th>
+              <th>Purchase Price</th>
+              <th>Added Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredItems.map((item) => (
+              <tr key={item.id}>
+                <td>{item.name}</td>
+                <td>
+                  {item.quantity} {item.unit}
+                </td>
+                <td>{item.category}</td>
+                <td>₹{item.price.toFixed(2)}/{item.unit}</td>
+                <td>{new Date(item.addedDate).toLocaleDateString()}</td>
+                <td className="action-buttons">
+                  <button
+                    className="edit-btn"
+                    onClick={() => handleEdit(item)}
+                    disabled={isLoading}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    className="delete-btn"
+                    onClick={() => handleDelete(item)}
+                    disabled={isLoading}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.name}</td>
-                  <td>
-                    {item.quantity} {item.unit}
-                  </td>
-                  <td>{item.category}</td>
-                  <td>₹{item.price.toFixed(2)}/{item.unit}</td>
-                  <td className="action-buttons">
-                    <button className="edit-btn" onClick={() => handleEdit(item)}>
-                      <Pencil size={16} />
-                    </button>
-                    <button className="delete-btn" onClick={() => handleDelete(item)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <table className="stock-table">
-            <thead>
-              <tr>
-                <th>Item Name</th>
-                <th>Quantity</th>
-                <th>Price</th>
-                <th>Added Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.name}</td>
-                  <td>
-                    {item.quantity} {item.unit}
-                  </td>
-                  <td>₹{item.price}/{item.unit}</td>
-                  <td>{item.addedDate}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
+
+      {showAveragePrices && (
+        <div className="average-price-popup">
+          <div className="average-price-content">
+            <h3>Average Prices</h3>
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Average Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {processItems(items).groupedItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+                    <td>₹{item.price.toFixed(2)}/{item.unit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              className="close-btn"
+              onClick={() => setShowAveragePrices(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

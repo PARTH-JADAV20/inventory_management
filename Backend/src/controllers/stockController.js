@@ -1,3 +1,4 @@
+// backend/controllers/stockController.js
 const asyncHandler = require('express-async-handler');
 const { getStockModel } = require('../models/Stock');
 
@@ -22,9 +23,13 @@ const getStock = asyncHandler(async (req, res) => {
   // Fetch stock items
   let stockItems = await Stock.find(query).sort({ addedDate: -1 });
   
-  // If current view is requested, group items
+  // For 'current' view, return ungrouped items
   if (view === 'current') {
-    // Group by name, category, and unit
+    return res.status(200).json(stockItems);
+  }
+  
+  // For 'grouped' view, group items (optional, if needed elsewhere)
+  if (view === 'grouped') {
     const groupedItems = {};
     
     stockItems.forEach(item => {
@@ -32,12 +37,12 @@ const getStock = asyncHandler(async (req, res) => {
       
       if (!groupedItems[key]) {
         groupedItems[key] = {
-          id: item.id, // Keep the first ID
+          id: item.id,
           name: item.name,
           category: item.category,
           unit: item.unit,
           quantity: 0,
-          totalValue: 0
+          totalValue: 0,
         };
       }
       
@@ -45,7 +50,6 @@ const getStock = asyncHandler(async (req, res) => {
       groupedItems[key].totalValue += item.quantity * item.price;
     });
     
-    // Calculate average price and format result
     const result = Object.values(groupedItems).map(item => ({
       id: item.id,
       name: item.name,
@@ -53,13 +57,13 @@ const getStock = asyncHandler(async (req, res) => {
       unit: item.unit,
       category: item.category,
       price: item.quantity > 0 ? item.totalValue / item.quantity : 0,
-      addedDate: new Date()
+      addedDate: new Date(), // Consider preserving the latest addedDate
     }));
     
     return res.status(200).json(result);
   }
   
-  // Return full list for history view
+  // Default: return ungrouped items (same as 'current')
   res.status(200).json(stockItems);
 });
 
@@ -82,7 +86,7 @@ const addStock = asyncHandler(async (req, res) => {
     unit,
     category,
     price,
-    addedDate: addedDate || new Date()
+    addedDate: addedDate || new Date(),
   });
   
   res.status(201).json(stockItem);
@@ -110,33 +114,26 @@ const updateStock = asyncHandler(async (req, res) => {
   res.status(200).json(stockItem);
 });
 
-// Delete stock items by name, category, and unit
+// Delete stock item by ID
 const deleteStock = asyncHandler(async (req, res) => {
-  const { shop } = req.params;
-  const { name, category, unit } = req.body;
+  const { shop, id } = req.params;
   
   const Stock = getStockModel(shop);
   
-  // Delete matching stock items
-  const result = await Stock.deleteMany({ 
-    name, 
-    category, 
-    unit 
-  });
+  // Delete stock item by ID
+  const result = await Stock.deleteOne({ id: Number(id) });
   
   if (result.deletedCount === 0) {
     res.status(404);
-    throw new Error('No matching stock items found');
+    throw new Error('Stock item not found');
   }
   
-  res.status(200).json({ 
-    message: `${result.deletedCount} stock items deleted` 
-  });
+  res.status(200).json({ message: 'Stock item deleted' });
 });
 
 module.exports = {
   getStock,
   addStock,
   updateStock,
-  deleteStock
+  deleteStock,
 };

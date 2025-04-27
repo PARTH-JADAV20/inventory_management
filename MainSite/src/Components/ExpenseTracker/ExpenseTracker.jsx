@@ -1,49 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { parse, format } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
+import { getExpenses, addExpense, updateExpense, deleteExpense } from "../api";
 import "./ExpenseTracker.css";
 
 const ExpenseTracker = () => {
-  const today = format(new Date(), "dd MMMM yyyy"); // e.g., "19 April 2025"
-  const [expenses, setExpenses] = useState([
-    {
-      id: 1,
-      date: "2025-04-20",
-      category: "Labor",
-      expenseDescription: "Mason payment",
-      amount: 5000,
-      paidTo: "Rajesh",
-      paymentMode: "Cash",
-    },
-    {
-      id: 2,
-      date: "2025-04-21",
-      category: "Transport",
-      expenseDescription: "Truck for sand delivery",
-      amount: 3000,
-      paidTo: "Mohan Logistics",
-      paymentMode: "UPI",
-    },
-    {
-      id: 3,
-      date: "2025-04-22",
-      category: "Site Rent",
-      expenseDescription: "Monthly rent for site",
-      amount: 15000,
-      paidTo: "Landowner",
-      paymentMode: "Cheque",
-    },
-    {
-      id: 4,
-      date: "2025-04-23",
-      category: "Fuel",
-      expenseDescription: "Diesel for mixer machine",
-      amount: 1200,
-      paidTo: "Petrol Bunk",
-      paymentMode: "Card",
-    },
-  ]);
-
+  const today = format(new Date(), "dd-MM-yyyy"); // e.g., "27-04-2025"
+  const [shop, setShop] = useState("Shop 1"); // Shop selector state
+  const [expenses, setExpenses] = useState([]); // API-fetched expenses
   const [formData, setFormData] = useState({
     date: today,
     category: "Labor",
@@ -56,8 +20,9 @@ const ExpenseTracker = () => {
   const [isManualCategory, setIsManualCategory] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
-  const [searchDate, setSearchDate] = useState(""); // For date search (format: yyyy-MM-dd)
+  const [searchDate, setSearchDate] = useState(""); // For date search (yyyy-MM-dd for API)
   const [searchPaidTo, setSearchPaidTo] = useState(""); // For paidTo search
+  const [error, setError] = useState(null);
 
   const categories = [
     "Labor",
@@ -74,10 +39,45 @@ const ExpenseTracker = () => {
     "Miscellaneous",
   ];
 
+  // Fetch expenses when shop, search filters, or selected month changes
+  useEffect(() => {
+    const fetchExpenses = async () => {
+      try {
+        setError(null);
+        const filters = {};
+        if (searchDate) {
+          // Convert dd-mm-yyyy to yyyy-MM-dd for API
+          const [day, month, year] = searchDate.split("-");
+          filters.startDate = `${year}-${month}-${day}`;
+          filters.endDate = `${year}-${month}-${day}`;
+        }
+        if (searchPaidTo) {
+          filters.paidTo = searchPaidTo;
+        }
+        if (selectedMonth) {
+          filters.month = selectedMonth;
+        }
+        const response = await getExpenses(shop, filters);
+        setExpenses(response.expenses || []);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+    fetchExpenses();
+  }, [shop, searchDate, searchPaidTo, selectedMonth]);
+
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    if (name === "date" && value) {
+      // Convert yyyy-MM-dd (from date picker) to dd-mm-yyyy
+      const parsed = parse(value, "yyyy-MM-dd", new Date());
+      if (!isNaN(parsed)) {
+        setFormData({ ...formData, date: format(parsed, "dd-MM-yyyy") });
+      }
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   // Handle checkbox changes
@@ -92,10 +92,10 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Parse date from "DD MMMM YYYY" to "YYYY-MM-DD" for storage
-  const parseDate = (dateStr) => {
+  // Parse date from "dd-mm-yyyy" to "yyyy-MM-dd" for API
+  const parseDateForAPI = (dateStr) => {
     try {
-      const parsed = parse(dateStr, "dd MMMM yyyy", new Date());
+      const parsed = parse(dateStr, "dd-MM-yyyy", new Date());
       if (isNaN(parsed)) throw new Error("Invalid date");
       return format(parsed, "yyyy-MM-dd");
     } catch {
@@ -104,12 +104,11 @@ const ExpenseTracker = () => {
   };
 
   // Handle form submission (Add or Update)
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (
       !formData.date ||
       !formData.category ||
-      !formData.expenseDescription ||
       !formData.amount ||
       !formData.paidTo ||
       !formData.paymentMode
@@ -121,60 +120,56 @@ const ExpenseTracker = () => {
       alert("Amount must be a positive number");
       return;
     }
-    const parsedDate = parseDate(formData.date);
+    const parsedDate = parseDateForAPI(formData.date);
     if (!parsedDate) {
-      alert("Invalid date format. Use 'DD MMMM YYYY' (e.g., '24 April 2025')");
+      alert("Invalid date format. Use 'dd-mm-yyyy' (e.g., '24-04-2025')");
       return;
     }
 
-    if (editingExpense) {
-      // Update existing expense
-      setExpenses(
-        expenses.map((exp) =>
-          exp.id === editingExpense.id
-            ? {
-                ...exp,
-                date: parsedDate,
-                category: formData.category,
-                expenseDescription: formData.expenseDescription,
-                amount: parseFloat(formData.amount),
-                paidTo: formData.paidTo,
-                paymentMode: formData.paymentMode,
-              }
-            : exp
-        )
-      );
-      setEditingExpense(null);
-    } else {
-      // Add new expense
-      setExpenses([
-        ...expenses,
-        {
-          ...formData,
-          date: parsedDate,
-          amount: parseFloat(formData.amount),
-          id: Date.now(),
-        },
-      ]);
-    }
+    const expenseData = {
+      date: parsedDate,
+      category: formData.category,
+      expenseDescription: formData.expenseDescription || "",
+      amount: parseFloat(formData.amount),
+      paidTo: formData.paidTo,
+      paymentMode: formData.paymentMode,
+    };
 
-    // Reset form
-    setFormData({
-      date: today,
-      category: isManualCategory ? "" : "Labor",
-      expenseDescription: "",
-      amount: "",
-      paidTo: "",
-      paymentMode: "Cash",
-    });
-    setIsManualDate(false);
+    try {
+      setError(null);
+      if (editingExpense) {
+        // Update existing expense
+        const updatedExpense = await updateExpense(shop, editingExpense.id, expenseData);
+        setExpenses((prev) =>
+          prev.map((exp) => (exp.id === updatedExpense.id ? updatedExpense : exp))
+        );
+        setEditingExpense(null);
+      } else {
+        // Add new expense
+        const newExpense = await addExpense(shop, expenseData);
+        setExpenses((prev) => [...prev, newExpense]);
+      }
+      // Reset form
+      setFormData({
+        date: today,
+        category: isManualCategory ? "" : "Labor",
+        expenseDescription: "",
+        amount: "",
+        paidTo: "",
+        paymentMode: "Cash",
+      });
+      setIsManualDate(false);
+    } catch (err) {
+      setError(err.message);
+      alert(`Error: ${err.message}`);
+    }
   };
 
   // Handle edit expense
   const handleEdit = (expense) => {
     setEditingExpense(expense);
     setFormData({
-      date: format(new Date(expense.date), "dd MMMM yyyy"),
+      date: format(new Date(expense.date), "dd-MM-yyyy"),
       category: expense.category,
       expenseDescription: expense.expenseDescription,
       amount: expense.amount,
@@ -186,9 +181,16 @@ const ExpenseTracker = () => {
   };
 
   // Handle delete expense
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this expense?")) return;
-    setExpenses(expenses.filter((exp) => exp.id !== id));
+    try {
+      setError(null);
+      await deleteExpense(shop, id);
+      setExpenses((prev) => prev.filter((exp) => exp.id !== id));
+    } catch (err) {
+      setError(err.message);
+      alert(`Error: ${err.message}`);
+    }
   };
 
   // Handle print
@@ -197,7 +199,7 @@ const ExpenseTracker = () => {
     const printContent = `
       <html>
         <head>
-          <title>Construction Expense Report</title>
+          <title>Construction Expense Report - ${shop}</title>
           <style>
             body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
             h2 { color: #ff6b35; }
@@ -208,7 +210,7 @@ const ExpenseTracker = () => {
           </style>
         </head>
         <body>
-          <h2>Construction Expense Report</h2>
+          <h2>Construction Expense Report - ${shop}</h2>
           <table>
             <thead>
               <tr>
@@ -225,7 +227,7 @@ const ExpenseTracker = () => {
                 .map(
                   (exp) => `
                 <tr>
-                  <td>${format(new Date(exp.date), "dd MMMM yyyy")}</td>
+                  <td>${format(new Date(exp.date), "dd-MM-yyyy")}</td>
                   <td>${exp.category}</td>
                   <td>${exp.expenseDescription}</td>
                   <td>₹${exp.amount.toFixed(2)}</td>
@@ -247,17 +249,13 @@ const ExpenseTracker = () => {
 
   // Calculate monthly total expenses
   const calculateMonthlyTotal = () => {
-    const filteredExpenses = expenses.filter((exp) => {
-      const expenseDate = format(new Date(exp.date), "yyyy-MM");
-      return expenseDate === selectedMonth;
-    });
-    return filteredExpenses.reduce((total, exp) => total + exp.amount, 0);
+    return expenses.reduce((total, exp) => total + exp.amount, 0);
   };
 
-  // Filter expenses based on search criteria
+  // Filter expenses based on search criteria (client-side fallback)
   const filteredExpenses = expenses.filter((exp) => {
     const matchesDate = searchDate
-      ? format(new Date(exp.date), "yyyy-MM-dd") === searchDate
+      ? format(new Date(exp.date), "dd-MM-yyyy") === searchDate
       : true;
     const matchesPaidTo = searchPaidTo
       ? exp.paidTo.toLowerCase().includes(searchPaidTo.toLowerCase())
@@ -265,10 +263,25 @@ const ExpenseTracker = () => {
     return matchesDate && matchesPaidTo;
   });
 
+  // Convert dd-mm-yyyy to yyyy-MM-dd for date picker value
+  const formatDateForPicker = (dateStr) => {
+    if (!dateStr) return "";
+    const parsed = parse(dateStr, "dd-MM-yyyy", new Date());
+    return isNaN(parsed) ? "" : format(parsed, "yyyy-MM-dd");
+  };
+
   return (
     <div className="main-content">
+      {error && <div className="error-message">{error}</div>}
       <div className="form-container">
         <h2>{editingExpense ? "Edit Expense" : "Add Expenses"}</h2>
+        <div className="shop-selector">
+          <label>Shop:</label>
+          <select value={shop} onChange={(e) => setShop(e.target.value)}>
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
+          </select>
+        </div>
         <form className="expense-form" onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="checkbox-label">
@@ -280,16 +293,15 @@ const ExpenseTracker = () => {
                   checked={isManualDate}
                   onChange={handleCheckboxChange}
                 />
-                Manual Date Input
+                Manual Date
               </div>
             </label>
             {isManualDate ? (
               <input
-                type="text"
+                type="date"
                 name="date"
-                value={formData.date}
+                value={formatDateForPicker(formData.date)}
                 onChange={handleInputChange}
-                placeholder="e.g., 24 April 2025"
                 required
               />
             ) : (
@@ -306,7 +318,7 @@ const ExpenseTracker = () => {
                   checked={isManualCategory}
                   onChange={handleCheckboxChange}
                 />
-                Manual Category Input
+                Manual ultrapower Input
               </div>
             </label>
             {isManualCategory ? (
@@ -419,7 +431,7 @@ const ExpenseTracker = () => {
 
       {/* Monthly Total Expenses Section */}
       <div className="monthly-total-container">
-        <h2>Monthly Total Expenses</h2>
+        <h2>Monthly Total Expenses - {shop}</h2>
         <div className="month-selector">
           <label>Select Month:</label>
           <input
@@ -429,22 +441,25 @@ const ExpenseTracker = () => {
           />
         </div>
         <div className="total-expense">
-          Total for {format(new Date(selectedMonth), "MMMM yyyy")}: ₹
+          Total for {format(new Date(selectedMonth), "MM-yyyy")}: ₹
           {calculateMonthlyTotal().toFixed(2)}
         </div>
       </div>
 
       {/* Expense Table */}
       <div className="table-container">
-        <h2>Expense List</h2>
+        <h2>Expense List - {shop}</h2>
         <div className="table-actions">
           <div className="search-container">
             <div className="search-group">
               <label>Date:</label>
               <input
                 type="date"
-                value={searchDate}
-                onChange={(e) => setSearchDate(e.target.value)}
+                value={formatDateForPicker(searchDate)}
+                onChange={(e) => {
+                  const parsed = parse(e.target.value, "yyyy-MM-dd", new Date());
+                  setSearchDate(isNaN(parsed) ? "" : format(parsed, "dd-MM-yyyy"));
+                }}
               />
             </div>
             <div className="search-group">
@@ -480,18 +495,18 @@ const ExpenseTracker = () => {
           <tbody>
             {filteredExpenses.length === 0 ? (
               <tr>
-                <td colSpan="7">No expenses found.</td>
+                <td colSpan="7">{error ? error : "No expenses found."}</td>
               </tr>
             ) : (
               filteredExpenses.map((expense) => (
                 <tr key={expense.id}>
-                  <td>{format(new Date(expense.date), "dd MMMM yyyy")}</td>
+                  <td>{format(new Date(expense.date), "dd-MM-yyyy")}</td>
                   <td>{expense.category}</td>
                   <td>{expense.expenseDescription}</td>
                   <td>₹{expense.amount.toFixed(2)}</td>
                   <td>{expense.paidTo}</td>
                   <td>{expense.paymentMode}</td>
-                  <td style={{display:"flex"}}>
+                  <td style={{ display: "flex" }}>
                     <button
                       className="edit-btn"
                       onClick={() => handleEdit(expense)}
