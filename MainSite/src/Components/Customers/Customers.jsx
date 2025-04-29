@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Pencil, Save, Trash2 } from "lucide-react";
-import { fetchCustomers as apiGetCustomers, updateCustomerProfile, softDeleteCustomerProfile, restoreCustomerProfile, permanentDeleteCustomerProfile } from "../api.js";
+import { fetchCustomers as apiGetCustomers, updateCustomerProfile, softDeleteCustomerProfileNew, restoreCustomerProfile, permanentDeleteCustomerProfile } from "../api.js";
 import "./Customers.css";
 
 const Customers = () => {
@@ -14,7 +14,7 @@ const Customers = () => {
   const [showDeleted, setShowDeleted] = useState(false); // Toggle deleted profiles section
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const shopApiName = shop === "Shop 1" ? "shop1" : "shop2";
+  const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
 
   // Derive common name from profiles
   const getCommonName = (profiles) => {
@@ -41,13 +41,13 @@ const Customers = () => {
       const activeData = await apiGetCustomers(shopApiName, searchTerm, false);
       const updatedCustomers = activeData.map((customer) => ({
         ...customer,
-        profiles: Array.isArray(customer.profiles) 
+        profiles: Array.isArray(customer.profiles)
           ? customer.profiles
-              .map((profile) => ({
-                ...profile,
-                creationTime: parseInt(profile.profileId.split("-")[1]),
-              }))
-              .sort((a, b) => a.creationTime - b.creationTime)
+            .map((profile) => ({
+              ...profile,
+              creationTime: parseInt(profile.profileId.split("-")[1]),
+            }))
+            .sort((a, b) => a.creationTime - b.creationTime)
           : []
       }));
       setCustomers(updatedCustomers);
@@ -122,7 +122,7 @@ const Customers = () => {
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
         customer.phoneNumber.includes(searchTerm)) &&
-      Array.isArray(customer.profiles) && 
+      Array.isArray(customer.profiles) &&
       customer.profiles.some((p) => !p.deleteuser?.value)
   );
 
@@ -145,11 +145,11 @@ const Customers = () => {
     const customer = customers.find((c) => c.phoneNumber === phoneNumber);
     setEditedProfile({
       ...profile,
-      phoneNumber, // Store original phoneNumber
-      originalPhoneNumber: phoneNumber, // Add original phoneNumber for reference
-      name: profile.name, // Ensure name is set to current profile name
+      phoneNumber,
+      originalPhoneNumber: phoneNumber,
+      name: profile.name,
       commonName: getCommonName(customer?.profiles || []),
-      paymentType: profile.advance?.paymentType || profile.paymentType || "Cash",
+      paymentMethod: profile.advance?.paymentMethod || "Cash",
     });
   };
 
@@ -174,7 +174,7 @@ const Customers = () => {
       const updateData = {
         name: editedProfile.name, // Always include name
         advance: editedProfile.advance
-          ? { ...editedProfile.advance, paymentType: editedProfile.paymentType }
+          ? { ...editedProfile.advance, paymentMethod: editedProfile.paymentMethod }
           : undefined,
       };
 
@@ -221,7 +221,7 @@ const Customers = () => {
     if (!window.confirm(`Are you sure you want to delete this profile?`)) return;
     setLoading(true);
     try {
-      await softDeleteCustomerProfile(shopApiName, phoneNumber, profileId);
+      await softDeleteCustomerProfileNew(shopApiName, phoneNumber, profileId);
       await fetchCustomers();
       setError(null);
     } catch (err) {
@@ -267,12 +267,11 @@ const Customers = () => {
   };
 
   // Handle show bills
-  const handleShowBills = (bills, paymentType, profileName, phoneNumber) => {
-    setSelectedBills({ 
-      bills: Array.isArray(bills) ? bills : [], 
-      paymentType, 
-      profileName, 
-      phoneNumber 
+  const handleShowBills = (bills, profileName, phoneNumber) => {
+    setSelectedBills({
+      bills: Array.isArray(bills) ? bills : [],
+      profileName,
+      phoneNumber
     });
     setSelectedAdvanceDetails(null);
   };
@@ -287,9 +286,8 @@ const Customers = () => {
     const totalDeposits = profile.advanceHistory && Array.isArray(profile.advanceHistory)
       ? profile.advanceHistory
         .filter((h) => h.transactionType === "Deposit")
-        .reduce((sum, h) => sum + h.amount, 0)
+        .reduce((sum, h) => sum + (h.amount || 0), 0)
       : 0;
-    
     const bills = Array.isArray(profile.bills) ? profile.bills : [];
     const totalUsed = bills.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
     const balance = profile.advance?.currentamount || 0;
@@ -318,7 +316,7 @@ const Customers = () => {
   };
 
   // Handle print bill
-  const handlePrintBill = (bill, paymentType, profileName, phoneNumber) => {
+  const handlePrintBill = (bill, profileName, phoneNumber) => {
     const customer = customers.find((c) => c.phoneNumber === phoneNumber);
     const profile = customer && Array.isArray(customer.profiles)
       ? customer.profiles.find((p) => p.name === profileName)
@@ -345,7 +343,7 @@ const Customers = () => {
           <p>Profile Name: ${profileName}</p>
           <p>Phone Number: ${phoneNumber}</p>
           <p>Date: ${bill.date || "N/A"}</p>
-          <p class="payment-type">Payment Type: ${paymentType ?? "N/A"}</p>
+          <p class="payment-type">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
           <table>
             <thead>
               <tr>
@@ -356,14 +354,14 @@ const Customers = () => {
               </tr>
             </thead>
             <tbody>
-               ${Array.isArray(bill.items) ? bill.items.map((item) => `
+              ${Array.isArray(bill.items) ? bill.items.map((item) => `
                 <tr>
                   <td>${item.product || 'N/A'}</td>
                   <td>${item.qty || 0}</td>
                   <td>₹${item.pricePerQty || 0}</td>
                   <td>₹${item.amount || 0}</td>
                 </tr>
-               `).join("") : ''}
+              `).join("") : ''}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount || 0}</td>
@@ -453,7 +451,7 @@ const Customers = () => {
                         </button>
                       </td>
                     </tr>
-                    {Array.isArray(customer.profiles) ? 
+                    {Array.isArray(customer.profiles) ?
                       customer.profiles
                         .filter((profile) => !profile.deleteuser?.value)
                         .map((profile) => (
@@ -502,11 +500,10 @@ const Customers = () => {
                             </td>
                             <td>₹{calculateTotalPurchased(profile.bills)}</td>
                             <td>
-                              {editedProfile &&
-                                editedProfile.profileId === profile.profileId ? (
+                              {editedProfile && editedProfile.profileId === profile.profileId ? (
                                 <select
-                                  name="paymentType"
-                                  value={editedProfile.paymentType}
+                                  name="paymentMethod"
+                                  value={editedProfile.paymentMethod}
                                   onChange={handleInputChange}
                                   className="inline-edit-input-p2"
                                 >
@@ -516,8 +513,7 @@ const Customers = () => {
                                   <option value="Cheque">Cheque</option>
                                 </select>
                               ) : (
-                                (profile.advance?.paymentType || profile.paymentType) ??
-                                "N/A"
+                                profile.advance?.paymentMethod
                               )}
                             </td>
                             <td>
@@ -540,7 +536,7 @@ const Customers = () => {
                                 onClick={() =>
                                   handleShowBills(
                                     profile.bills || [],
-                                    profile.advance?.paymentType || profile.paymentType,
+                                    profile.advance?.paymentMethod ,
                                     profile.name,
                                     customer.phoneNumber
                                   )
@@ -678,8 +674,6 @@ const Customers = () => {
               onClick={() =>
                 handleShowBills(
                   Array.isArray(selectedAdvanceDetails.bills) ? selectedAdvanceDetails.bills : [],
-                  selectedAdvanceDetails.advance?.paymentType ||
-                  selectedAdvanceDetails.paymentType,
                   selectedAdvanceDetails.name,
                   selectedAdvanceDetails.phoneNumber
                 )
@@ -708,7 +702,7 @@ const Customers = () => {
                 <div key={bill.billNo} className="bill-details">
                   <h3>Bill No: {bill.billNo}</h3>
                   <p>Date: {bill.date || "N/A"}</p>
-                  <p>Payment Type: {selectedBills.paymentType ?? "N/A"}</p>
+                  <p>Payment Type: {selectedBills.paymentMethod ?? "N/A"}</p>
                   <table className="bill-table">
                     <thead>
                       <tr>
@@ -744,7 +738,7 @@ const Customers = () => {
                     onClick={() =>
                       handlePrintBill(
                         bill,
-                        selectedBills.paymentType,
+                        selectedBills.paymentMethod,
                         selectedBills.profileName,
                         selectedBills.phoneNumber
                       )
