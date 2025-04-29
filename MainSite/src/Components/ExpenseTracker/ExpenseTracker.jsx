@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { parse, format } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
-import { getExpenses, addExpense, updateExpense, deleteExpense } from "../api";
+import { fetchExpenses, addExpense, updateExpense, deleteExpense } from "../api"; // Adjust path to your api.js
 import "./ExpenseTracker.css";
 
 const ExpenseTracker = () => {
   const today = format(new Date(), "dd-MM-yyyy"); // e.g., "27-04-2025"
-  const [shop, setShop] = useState("Shop 1"); // Shop selector state
-  const [expenses, setExpenses] = useState([]); // API-fetched expenses
+  const [shop, setShop] = useState("Shop 1");
+  const [expenses, setExpenses] = useState([]);
   const [formData, setFormData] = useState({
     date: today,
     category: "Labor",
@@ -20,9 +20,10 @@ const ExpenseTracker = () => {
   const [isManualCategory, setIsManualCategory] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
-  const [searchDate, setSearchDate] = useState(""); // For date search (yyyy-MM-dd for API)
-  const [searchPaidTo, setSearchPaidTo] = useState(""); // For paidTo search
+  const [searchDate, setSearchDate] = useState("");
+  const [searchPaidTo, setSearchPaidTo] = useState("");
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const categories = [
     "Labor",
@@ -41,36 +42,26 @@ const ExpenseTracker = () => {
 
   // Fetch expenses when shop, search filters, or selected month changes
   useEffect(() => {
-    const fetchExpenses = async () => {
+    const fetchData = async () => {
+      setLoading(true);
       try {
         setError(null);
-        const filters = {};
-        if (searchDate) {
-          // Convert dd-mm-yyyy to yyyy-MM-dd for API
-          const [day, month, year] = searchDate.split("-");
-          filters.startDate = `${year}-${month}-${day}`;
-          filters.endDate = `${year}-${month}-${day}`;
-        }
-        if (searchPaidTo) {
-          filters.paidTo = searchPaidTo;
-        }
-        if (selectedMonth) {
-          filters.month = selectedMonth;
-        }
-        const response = await getExpenses(shop, filters);
-        setExpenses(response.expenses || []);
+        const data = await fetchExpenses(shop, searchDate ? parseDateForAPI(searchDate) : '', searchPaidTo);
+        setExpenses(data.expenses || []);
       } catch (err) {
         setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchExpenses();
+    fetchData();
   }, [shop, searchDate, searchPaidTo, selectedMonth]);
 
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === "date" && value) {
-      // Convert yyyy-MM-dd (from date picker) to dd-mm-yyyy
+      // Convert yyyy-MM-dd (from date picker) to dd-MM-yyyy
       const parsed = parse(value, "yyyy-MM-dd", new Date());
       if (!isNaN(parsed)) {
         setFormData({ ...formData, date: format(parsed, "dd-MM-yyyy") });
@@ -92,7 +83,7 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Parse date from "dd-mm-yyyy" to "yyyy-MM-dd" for API
+  // Parse date from "dd-MM-yyyy" to "yyyy-MM-dd" for API
   const parseDateForAPI = (dateStr) => {
     try {
       const parsed = parse(dateStr, "dd-MM-yyyy", new Date());
@@ -137,19 +128,17 @@ const ExpenseTracker = () => {
 
     try {
       setError(null);
+      setLoading(true);
       if (editingExpense) {
-        // Update existing expense
         const updatedExpense = await updateExpense(shop, editingExpense.id, expenseData);
         setExpenses((prev) =>
           prev.map((exp) => (exp.id === updatedExpense.id ? updatedExpense : exp))
         );
         setEditingExpense(null);
       } else {
-        // Add new expense
         const newExpense = await addExpense(shop, expenseData);
         setExpenses((prev) => [...prev, newExpense]);
       }
-      // Reset form
       setFormData({
         date: today,
         category: isManualCategory ? "" : "Labor",
@@ -162,6 +151,8 @@ const ExpenseTracker = () => {
     } catch (err) {
       setError(err.message);
       alert(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -177,7 +168,7 @@ const ExpenseTracker = () => {
       paymentMode: expense.paymentMode,
     });
     setIsManualDate(true);
-    setIsManualCategory(categories.includes(expense.category) ? false : true);
+    setIsManualCategory(!categories.includes(expense.category));
   };
 
   // Handle delete expense
@@ -185,11 +176,14 @@ const ExpenseTracker = () => {
     if (!window.confirm("Are you sure you want to delete this expense?")) return;
     try {
       setError(null);
+      setLoading(true);
       await deleteExpense(shop, id);
       setExpenses((prev) => prev.filter((exp) => exp.id !== id));
     } catch (err) {
       setError(err.message);
       alert(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -229,7 +223,7 @@ const ExpenseTracker = () => {
                 <tr>
                   <td>${format(new Date(exp.date), "dd-MM-yyyy")}</td>
                   <td>${exp.category}</td>
-                  <td>${exp.expenseDescription}</td>
+                  <td>${exp.expenseDescription || '-'}</td>
                   <td>₹${exp.amount.toFixed(2)}</td>
                   <td>${exp.paidTo}</td>
                   <td>${exp.paymentMode}</td>
@@ -249,10 +243,18 @@ const ExpenseTracker = () => {
 
   // Calculate monthly total expenses
   const calculateMonthlyTotal = () => {
-    return expenses.reduce((total, exp) => total + exp.amount, 0);
+    const [year, month] = selectedMonth.split('-');
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 0);
+    return expenses
+      .filter((exp) => {
+        const expDate = new Date(exp.date);
+        return expDate >= startOfMonth && expDate <= endOfMonth;
+      })
+      .reduce((total, exp) => total + exp.amount, 0);
   };
 
-  // Filter expenses based on search criteria (client-side fallback)
+  // Filter expenses client-side for display
   const filteredExpenses = expenses.filter((exp) => {
     const matchesDate = searchDate
       ? format(new Date(exp.date), "dd-MM-yyyy") === searchDate
@@ -260,10 +262,13 @@ const ExpenseTracker = () => {
     const matchesPaidTo = searchPaidTo
       ? exp.paidTo.toLowerCase().includes(searchPaidTo.toLowerCase())
       : true;
-    return matchesDate && matchesPaidTo;
+    const matchesMonth = selectedMonth
+      ? format(new Date(exp.date), "yyyy-MM") === selectedMonth
+      : true;
+    return matchesDate && matchesPaidTo && matchesMonth;
   });
 
-  // Convert dd-mm-yyyy to yyyy-MM-dd for date picker value
+  // Convert dd-MM-yyyy to yyyy-MM-dd for date picker value
   const formatDateForPicker = (dateStr) => {
     if (!dateStr) return "";
     const parsed = parse(dateStr, "dd-MM-yyyy", new Date());
@@ -273,11 +278,12 @@ const ExpenseTracker = () => {
   return (
     <div className="main-content">
       {error && <div className="error-message">{error}</div>}
+      {loading && <div className="loading">Loading...</div>}
       <div className="form-container">
         <h2>{editingExpense ? "Edit Expense" : "Add Expenses"}</h2>
         <div className="shop-selector">
           <label>Shop:</label>
-          <select value={shop} onChange={(e) => setShop(e.target.value)}>
+          <select value={shop} onChange={(e) => setShop(e.target.value)} disabled={loading}>
             <option value="Shop 1">Shop 1</option>
             <option value="Shop 2">Shop 2</option>
           </select>
@@ -292,6 +298,7 @@ const ExpenseTracker = () => {
                   name="isManualDate"
                   checked={isManualDate}
                   onChange={handleCheckboxChange}
+                  disabled={loading}
                 />
                 Manual Date
               </div>
@@ -303,6 +310,7 @@ const ExpenseTracker = () => {
                 value={formatDateForPicker(formData.date)}
                 onChange={handleInputChange}
                 required
+                disabled={loading}
               />
             ) : (
               <div className="non-editable-date">{formData.date}</div>
@@ -317,8 +325,9 @@ const ExpenseTracker = () => {
                   name="isManualCategory"
                   checked={isManualCategory}
                   onChange={handleCheckboxChange}
+                  disabled={loading}
                 />
-                Manual ultrapower Input
+                Manual Input
               </div>
             </label>
             {isManualCategory ? (
@@ -331,6 +340,7 @@ const ExpenseTracker = () => {
                   placeholder="Enter or select category"
                   list="categoryList"
                   required
+                  disabled={loading}
                 />
                 <datalist id="categoryList">
                   {categories.map((cat) => (
@@ -344,6 +354,7 @@ const ExpenseTracker = () => {
                 value={formData.category}
                 onChange={handleInputChange}
                 required
+                disabled={loading}
               >
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>
@@ -361,6 +372,7 @@ const ExpenseTracker = () => {
               value={formData.expenseDescription}
               onChange={handleInputChange}
               placeholder="Enter expense description (optional)"
+              disabled={loading}
             />
           </div>
           <div className="form-group">
@@ -374,6 +386,7 @@ const ExpenseTracker = () => {
               min="0"
               step="0.01"
               required
+              disabled={loading}
             />
           </div>
           <div className="form-group">
@@ -385,6 +398,7 @@ const ExpenseTracker = () => {
               onChange={handleInputChange}
               placeholder="Enter recipient"
               required
+              disabled={loading}
             />
           </div>
           <div className="form-group">
@@ -394,6 +408,7 @@ const ExpenseTracker = () => {
               value={formData.paymentMode}
               onChange={handleInputChange}
               required
+              disabled={loading}
             >
               <option value="Cash">Cash</option>
               <option value="UPI">UPI</option>
@@ -402,7 +417,7 @@ const ExpenseTracker = () => {
             </select>
           </div>
           <div className="form-buttons">
-            <button type="submit" className="submit-btn">
+            <button type="submit" className="submit-btn" disabled={loading}>
               {editingExpense ? "Update Expense" : "Add Expense"}
             </button>
             {editingExpense && (
@@ -421,6 +436,7 @@ const ExpenseTracker = () => {
                   });
                   setIsManualDate(false);
                 }}
+                disabled={loading}
               >
                 Cancel
               </button>
@@ -429,7 +445,6 @@ const ExpenseTracker = () => {
         </form>
       </div>
 
-      {/* Monthly Total Expenses Section */}
       <div className="monthly-total-container">
         <h2>Monthly Total Expenses - {shop}</h2>
         <div className="month-selector">
@@ -438,15 +453,15 @@ const ExpenseTracker = () => {
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
+            disabled={loading}
           />
         </div>
         <div className="total-expense">
-          Total for {format(new Date(selectedMonth), "MM-yyyy")}: ₹
+          Total for {format(new Date(selectedMonth), "MMMM yyyy")}: ₹
           {calculateMonthlyTotal().toFixed(2)}
         </div>
       </div>
 
-      {/* Expense Table */}
       <div className="table-container">
         <h2>Expense List - {shop}</h2>
         <div className="table-actions">
@@ -460,6 +475,7 @@ const ExpenseTracker = () => {
                   const parsed = parse(e.target.value, "yyyy-MM-dd", new Date());
                   setSearchDate(isNaN(parsed) ? "" : format(parsed, "dd-MM-yyyy"));
                 }}
+                disabled={loading}
               />
             </div>
             <div className="search-group">
@@ -469,13 +485,14 @@ const ExpenseTracker = () => {
                 value={searchPaidTo}
                 onChange={(e) => setSearchPaidTo(e.target.value)}
                 placeholder="Search by recipient"
+                disabled={loading}
               />
             </div>
           </div>
           <button
             className="print-btn"
             onClick={handlePrint}
-            disabled={filteredExpenses.length === 0}
+            disabled={filteredExpenses.length === 0 || loading}
           >
             Print PDF
           </button>
@@ -495,14 +512,14 @@ const ExpenseTracker = () => {
           <tbody>
             {filteredExpenses.length === 0 ? (
               <tr>
-                <td colSpan="7">{error ? error : "No expenses found."}</td>
+                <td colSpan="7">{loading ? "Loading..." : error ? error : "No expenses found."}</td>
               </tr>
             ) : (
               filteredExpenses.map((expense) => (
                 <tr key={expense.id}>
                   <td>{format(new Date(expense.date), "dd-MM-yyyy")}</td>
                   <td>{expense.category}</td>
-                  <td>{expense.expenseDescription}</td>
+                  <td>{expense.expenseDescription || '-'}</td>
                   <td>₹{expense.amount.toFixed(2)}</td>
                   <td>{expense.paidTo}</td>
                   <td>{expense.paymentMode}</td>
@@ -511,6 +528,7 @@ const ExpenseTracker = () => {
                       className="edit-btn"
                       onClick={() => handleEdit(expense)}
                       title="Edit"
+                      disabled={loading}
                     >
                       <Pencil size={16} />
                     </button>
@@ -518,6 +536,7 @@ const ExpenseTracker = () => {
                       className="delete-btn"
                       onClick={() => handleDelete(expense.id)}
                       title="Delete"
+                      disabled={loading}
                     >
                       <Trash2 size={16} />
                     </button>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { DollarSign, Users, CreditCard, Wallet } from "lucide-react";
 import SummaryCard from "../Components/Dashboard/SummaryCard";
 import RecentPurchases from "../Components/Dashboard/RecentPurchases";
@@ -7,99 +7,56 @@ import ProfitChart from "../Components/Dashboard/ProfitChart";
 import LowStockAlerts from "../Components/Dashboard/LowStockAlerts";
 import SaleDetailsModal from "../Components/Dashboard/SaleDetailsModal";
 import { motion } from "framer-motion";
+import { fetchLowStock, fetchRecentSales, fetchRecentPurchases, fetchProfitTrend, fetchSummary } from "../Components/api"; // Adjust path to your api.js
 import "./Dashboard.css";
 
 const MainDashboard = () => {
-  const [selectedShop, setSelectedShop] = useState("All Shops");
+  const [selectedShop, setSelectedShop] = useState("Shop 1");
   const [selectedTime, setSelectedTime] = useState("This Month");
   const [selectedSale, setSelectedSale] = useState(null);
+  const [data, setData] = useState({
+    shops: ["Shop 1", "Shop 2"],
+    sales: [],
+    purchases: [],
+    inventory: [],
+    summary: { totalSales: 0, users: 0, creditSales: 0, advancePayments: 0 },
+    profitData: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const mockData = {
-    shops: ["All Shops", "Shop A", "Shop B"],
-    sales: [
-      {
-        id: 1,
-        customer: "Amit Sharma",
-        product: "Cement (Ambuja)",
-        amount: 10000,
-        date: "2025-04-25",
-        status: "Paid",
-        shop: "Shop A",
-      },
-      {
-        id: 2,
-        customer: "Rajesh Patel",
-        product: "Steel Rod (Tata)",
-        amount: 15000,
-        date: "2025-04-24",
-        status: "Credit",
-        shop: "Shop B",
-      },
-      {
-        id: 3,
-        customer: "Vikram Singh",
-        product: "Sand",
-        amount: 5000,
-        date: "2025-04-23",
-        status: "Paid",
-        shop: "Shop A",
-      },
-      {
-        id: 4,
-        customer: "Suresh Kumar",
-        product: "Bricks",
-        amount: 2000,
-        date: "2025-04-22",
-        status: "Credit",
-        shop: "Shop B",
-      },
-      {
-        id: 5,
-        customer: "Anil Verma",
-        product: "Cement (UltraTech)",
-        amount: 12000,
-        date: "2025-04-21",
-        status: "Paid",
-        shop: "Shop A",
-      },
-    ],
-    purchases: [
-      {
-        id: 1,
-        product: "Cement",
-        amount: 15000,
-        customer: "Rajesh Patel",
-        date: "2025-04-24",
-      },
-      {
-        id: 2,
-        product: "Steel Rod",
-        amount: 20000,
-        customer: "Amit Sharma",
-        date: "2025-04-23",
-      },
-    ],
-    inventory: [
-      { product: "Cement (Ambuja)", stock: 5, unit: "Bag" },
-      { product: "Steel Rod (Tata)", stock: 100, unit: "Kg" },
-      { product: "Sand", stock: 2, unit: "Truck" },
-    ],
-    summary: {
-      totalSales: 500000,
-      users: 25,
-      creditSales: 100000,
-      advancePayments: 50000,
-    },
-    profitData: [
-      { month: "Jan", profit: 20000 },
-      { month: "Feb", profit: 25000 },
-      { month: "Mar", profit: 30000 },
-      { month: "Apr", profit: 35000 },
-    ],
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [lowStock, recentSales, recentPurchases, profitTrend, summary] = await Promise.all([
+        fetchLowStock(selectedShop),
+        fetchRecentSales(selectedShop),
+        fetchRecentPurchases(selectedShop),
+        fetchProfitTrend(selectedShop),
+        fetchSummary(selectedShop),
+      ]);
+      setData({
+        shops: ["Shop 1", "Shop 2"],
+        sales: recentSales,
+        purchases: recentPurchases,
+        inventory: lowStock,
+        summary,
+        profitData: profitTrend,
+      });
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filterData = (data, type) => {
-    return data.filter((item) => {
+  useEffect(() => {
+    fetchData();
+  }, [selectedShop]);
+
+  const filterData = (items, type) => {
+    return items.filter((item) => {
       const matchesShop = selectedShop === "All Shops" || item.shop === selectedShop;
       const itemDate = new Date(item.date);
       const today = new Date();
@@ -117,13 +74,13 @@ const MainDashboard = () => {
     });
   };
 
-  const filteredSales = filterData(mockData.sales, "sales");
-  const filteredPurchases = filterData(mockData.purchases, "purchases");
+  const filteredSales = filterData(data.sales, "sales");
+  const filteredPurchases = filterData(data.purchases, "purchases");
   const filteredSummary = {
-    totalSales: selectedShop === "All Shops" ? mockData.summary.totalSales : mockData.summary.totalSales / 2,
-    users: selectedShop === "All Shops" ? mockData.summary.users : mockData.summary.users / 2,
-    creditSales: selectedShop === "All Shops" ? mockData.summary.creditSales : mockData.summary.creditSales / 2,
-    advancePayments: selectedShop === "All Shops" ? mockData.summary.advancePayments : mockData.summary.advancePayments / 2,
+    totalSales: selectedShop === "All Shops" ? data.summary.totalSales : data.summary.totalSales,
+    users: selectedShop === "All Shops" ? data.summary.users : data.summary.users,
+    creditSales: selectedShop === "All Shops" ? data.summary.creditSales : data.summary.creditSales,
+    advancePayments: selectedShop === "All Shops" ? data.summary.advancePayments : data.summary.advancePayments,
   };
 
   return (
@@ -134,7 +91,7 @@ const MainDashboard = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <h1>Construction Dashboard</h1>
+        <h1>Dashboard Overview</h1>
         <div className="filter-container">
           <div className="filter-group">
             <label>Shop:</label>
@@ -142,7 +99,7 @@ const MainDashboard = () => {
               value={selectedShop}
               onChange={(e) => setSelectedShop(e.target.value)}
             >
-              {mockData.shops.map((shop) => (
+              {data.shops.map((shop) => (
                 <option key={shop} value={shop}>
                   {shop}
                 </option>
@@ -162,6 +119,8 @@ const MainDashboard = () => {
           </div>
         </div>
       </motion.div>
+      {error && <div className="warning">{error}</div>}
+      {loading && <div>Loading...</div>}
       <motion.div
         className="summary-container"
         initial={{ opacity: 0, y: 20 }}
@@ -210,7 +169,7 @@ const MainDashboard = () => {
         </div>
         <div className="section-right">
           <h2>Profit Trend</h2>
-          <ProfitChart data={mockData.profitData} />
+          <ProfitChart data={data.profitData} />
         </div>
       </motion.div>
       <motion.div
@@ -220,7 +179,7 @@ const MainDashboard = () => {
         transition={{ duration: 0.5, delay: 0.8 }}
       >
         <h2>Low Stock Alerts</h2>
-        <LowStockAlerts inventory={mockData.inventory.filter((item) => item.stock < 10)} />
+        <LowStockAlerts inventory={data.inventory} />
       </motion.div>
       {selectedSale && (
         <SaleDetailsModal
