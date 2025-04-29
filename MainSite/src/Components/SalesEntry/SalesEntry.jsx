@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale } from "../api.js";
+import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber } from "../api.js";
 import "./SalesEntry.css";
 
 // Function to format date to DD-MM-YYYY
@@ -17,7 +17,7 @@ const SalesEntry = () => {
   const [customers, setCustomers] = useState([]);
   const [stock, setStock] = useState([]);
   const [groupedStock, setGroupedStock] = useState([]);
-  const [sales, setSales] = useState([]); // Initialize as empty array
+  const [sales, setSales] = useState([]);
   const [shop, setShop] = useState("Shop 1");
   const [newSale, setNewSale] = useState({
     billNo: "",
@@ -36,7 +36,6 @@ const SalesEntry = () => {
   });
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [warning, setWarning] = useState("");
-  const [isBillNoEditable, setIsBillNoEditable] = useState(false);
   const [isDateEditable, setIsDateEditable] = useState(false);
   const [isItemSearchManual, setIsItemSearchManual] = useState(false);
   const [advanceSearchTerm, setAdvanceSearchTerm] = useState("");
@@ -44,26 +43,42 @@ const SalesEntry = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Fetch next bill number when shop changes
+  useEffect(() => {
+    const loadBillNumber = async () => {
+      try {
+        const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+        const { billNo } = await fetchNextBillNumber(shopApiName);
+        setNewSale((prev) => ({ ...prev, billNo }));
+      } catch (err) {
+        console.error("fetchNextBillNumber error:", err);
+        setWarning("Failed to fetch bill number.");
+      }
+    };
+    loadBillNumber();
+  }, [shop]);
+
   // Fetch stock, customers, and sales on shop change
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
         setWarning("");
+        const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
         const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
-          fetchStock(shop).catch((err) => {
+          fetchStock(shopApiName).catch((err) => {
             console.error("fetchStock error:", err);
             return [];
           }),
-          fetchCurrentStock(shop).catch((err) => {
+          fetchCurrentStock(shopApiName).catch((err) => {
             console.error("fetchCurrentStock error:", err);
             return [];
           }),
-          fetchCustomers(shop).catch((err) => {
+          fetchCustomers(shopApiName).catch((err) => {
             console.error("fetchCustomers error:", err);
             return [];
           }),
-          fetchSales(shop).catch((err) => {
+          fetchSales(shopApiName).catch((err) => {
             console.error("fetchSales error:", err);
             return [];
           }),
@@ -88,7 +103,8 @@ const SalesEntry = () => {
       setIsLoading(true);
       try {
         setWarning("");
-        const salesData = await fetchSales(shop, filterDate, searchTerm).catch((err) => {
+        const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+        const salesData = await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
           console.error("fetchSales error:", err);
           return [];
         });
@@ -175,19 +191,6 @@ const SalesEntry = () => {
     }
   };
 
-  // Toggle bill no editability and reset if unchecked
-  const toggleBillNoEditable = () => {
-    setIsBillNoEditable((prev) => {
-      if (prev) {
-        setNewSale((prevSale) => ({
-          ...prevSale,
-          billNo: "",
-        }));
-      }
-      return !prev;
-    });
-  };
-
   // Toggle date editability and reset if unchecked
   const toggleDateEditable = () => {
     setIsDateEditable((prev) => {
@@ -265,32 +268,61 @@ const SalesEntry = () => {
     setIsLoading(true);
     try {
       setWarning("");
-      await deleteSale(shop, billNo, profileId, phoneNumber, items);
+      const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+
+      // Enrich items with category from groupedStock
+      const enrichedItems = items.map(item => {
+        const stockItem = groupedStock.find(
+          s => s.name === item.product && s.unit === item.unit
+        );
+        return {
+          ...item,
+          category: stockItem ? stockItem.category : 'Unknown',
+        };
+      });
+
+      const response = await deleteSale(shopApiName, billNo, profileId, phoneNumber, enrichedItems);
+      const { updatedCustomer } = response;
+
+      // Update local state
       const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
-        fetchStock(shop).catch((err) => {
+        fetchStock(shopApiName).catch((err) => {
           console.error("fetchStock error:", err);
           return [];
         }),
-        fetchCurrentStock(shop).catch((err) => {
+        fetchCurrentStock(shopApiName).catch((err) => {
           console.error("fetchCurrentStock error:", err);
           return [];
         }),
-        fetchCustomers(shop).catch((err) => {
+        fetchCustomers(shopApiName).catch((err) => {
           console.error("fetchCustomers error:", err);
           return [];
         }),
-        fetchSales(shop, filterDate, searchTerm).catch((err) => {
+        fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
           console.error("fetchSales error:", err);
           return [];
         }),
       ]);
+
       setStock(Array.isArray(stockData) ? stockData : []);
       setGroupedStock(Array.isArray(groupedStockData) ? groupedStockData : []);
-      setCustomers(Array.isArray(customerData) ? customerData : []);
+      setCustomers((prev) =>
+        prev
+          .map((c) =>
+            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+          )
+          .concat(
+            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+              ? [updatedCustomer]
+              : []
+          )
+      );
       setSales(Array.isArray(salesData) ? salesData : []);
+
+      setWarning("Sale deleted successfully");
     } catch (err) {
       console.error("deleteSale error:", err);
-      setWarning(err.message);
+      setWarning(`Failed to delete sale: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -311,44 +343,60 @@ const SalesEntry = () => {
     setIsLoading(true);
     try {
       setWarning("");
+      const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+      // Determine paymentMethod based on customer profile
+      let paymentMethod = newSale.paymentType;
+      const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
+      if (customer) {
+        const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
+        if (profile && newSale.paymentType === 'Advance' && profile.advance?.value) {
+          paymentMethod = newSale.paymentType; // Ensure 'Advance' is sent
+        } else if (profile) {
+          paymentMethod = profile.paymentMethod || newSale.paymentType;
+        }
+      }
+
       const saleData = {
         profileName: newSale.profileName,
         phoneNumber: newSale.phoneNumber,
-        paymentType: newSale.paymentType,
+        paymentMethod,
         items: newSale.items,
         date: newSale.date,
       };
-      const response = await createSale(shop, saleData);
-      const { bill, customer } = response;
+      const response = await createSale(shopApiName, saleData);
+      const { bill, customer: updatedCustomer } = response;
 
       // Update local state
-      setStock(await fetchStock(shop).catch((err) => {
+      setStock(await fetchStock(shopApiName).catch((err) => {
         console.error("fetchStock error:", err);
         return [];
       }));
-      setGroupedStock(await fetchCurrentStock(shop).catch((err) => {
+      setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
         console.error("fetchCurrentStock error:", err);
         return [];
       }));
       setCustomers((prev) =>
         prev
           .map((c) =>
-            c.phoneNumber === customer.phoneNumber ? customer : c
+            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
           )
           .concat(
-            customer.phoneNumber && !prev.some((c) => c.phoneNumber === customer.phoneNumber)
-              ? [customer]
+            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+              ? [updatedCustomer]
               : []
           )
       );
-      setSales(await fetchSales(shop, filterDate, searchTerm).catch((err) => {
+      setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
         console.error("fetchSales error:", err);
         return [];
       }));
 
+      // Fetch new bill number
+      const { billNo } = await fetchNextBillNumber(shopApiName);
+
       // Reset form
       setNewSale({
-        billNo: "",
+        billNo,
         date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
         profileName: "",
         phoneNumber: "",
@@ -356,16 +404,16 @@ const SalesEntry = () => {
         items: [],
       });
       setAdvanceSearchTerm("");
+      setWarning("Sale created successfully");
       return bill;
     } catch (err) {
       console.error("createSale error:", err);
-      setWarning(err.message);
+      setWarning(`Failed to create sale: ${err.message}`);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
-
   // Handle Sale Entry
   const handleSaleEntry = async () => {
     await saveSale();
@@ -375,7 +423,7 @@ const SalesEntry = () => {
   const handleGenerateBillAndSale = async () => {
     const bill = await saveSale();
     if (bill) {
-      handlePrintBill(bill, newSale.paymentType, newSale.profileName, newSale.phoneNumber);
+      handlePrintBill(bill, bill.paymentMethod, newSale.profileName, newSale.phoneNumber);
     }
   };
 
@@ -383,7 +431,7 @@ const SalesEntry = () => {
   const handleGenerateBill = async () => {
     const bill = await saveSale();
     if (bill) {
-      handlePrintBill(bill, newSale.paymentType, newSale.profileName, newSale.phoneNumber);
+      handlePrintBill(bill, bill.paymentMethod, newSale.profileName, newSale.phoneNumber);
     }
   };
 
@@ -410,7 +458,7 @@ const SalesEntry = () => {
           <p>Profile Name: ${profileName}</p>
           <p>Phone Number: ${phoneNumber}</p>
           <p>Date: ${bill.date}</p>
-          <p className="payment-method">Payment Method: ${paymentMethod}</p>
+          <p class="payment-method">Payment Method: ${paymentMethod}</p>
           <table>
             <thead>
               <tr>
@@ -422,8 +470,8 @@ const SalesEntry = () => {
             </thead>
             <tbody>
               ${bill.items
-                .map(
-                  (item) => `
+        .map(
+          (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -431,15 +479,15 @@ const SalesEntry = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-                )
-                .join("")}
+        )
+        .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
               </tr>
     `;
 
-    if (bill.advanceRemaining !== null && bill.advanceRemaining >= 0) {
+    if (bill.paymentMethod === 'Advance' && bill.advanceRemaining !== undefined) {
       billContent += `
               <tr class="total">
                 <td colspan="3">Advance Remaining</td>
@@ -482,17 +530,17 @@ const SalesEntry = () => {
   // Get all sales for display with guard clause
   const allSales = Array.isArray(sales)
     ? sales
-        .filter((sale) =>
-          filterDate
-            ? sale.date === filterDate
-            : true
-        )
-        .filter((sale) =>
-          searchTerm
-            ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              sale.phoneNumber.includes(searchTerm)
-            : true
-        )
+      .filter((sale) =>
+        filterDate
+          ? sale.date === filterDate
+          : true
+      )
+      .filter((sale) =>
+        searchTerm
+          ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sale.phoneNumber.includes(searchTerm)
+          : true
+      )
     : [];
 
   // Group sales by date
@@ -520,8 +568,8 @@ const SalesEntry = () => {
     .flatMap((c) =>
       Array.isArray(c.profiles)
         ? c.profiles
-            .filter((p) => p.advance?.value && !p.deleteuser?.value)
-            .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
+          .filter((p) => p.advance?.value && !p.deleteuser?.value)
+          .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
         : []
     );
 
@@ -547,7 +595,6 @@ const SalesEntry = () => {
             setSearchTerm("");
             setFilterDate("");
             setIsCustomUnit(false);
-            setIsBillNoEditable(false);
             setIsDateEditable(false);
             setIsItemSearchManual(false);
             setWarning("");
@@ -559,22 +606,12 @@ const SalesEntry = () => {
         <h2>New Sale Entry - {shop}</h2>
         <div className="sales-form-p">
           <div className="form-group-p">
-            <label>
-              Bill No
-              <input
-                type="checkbox"
-                checked={isBillNoEditable}
-                onChange={toggleBillNoEditable}
-                style={{ marginLeft: "8px", marginRight: "4px" }}
-              />
-              Manual Bill No
-            </label>
+            <label>Bill No</label>
             <input
               type="text"
               name="billNo"
               value={newSale.billNo}
-              onChange={handleInputChange}
-              readOnly={!isBillNoEditable}
+              readOnly
             />
           </div>
           <div className="form-group-p">
@@ -881,7 +918,7 @@ const SalesEntry = () => {
                       Total
                     </th>
                     <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
-                      Payment
+                      Payment Method
                     </th>
                     <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
                       Action
@@ -914,7 +951,7 @@ const SalesEntry = () => {
                           ₹{sale.totalAmount}
                         </td>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
-                          {sale.paymentType}
+                          {sale.paymentMethod}
                         </td>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           <div style={{ display: "flex", gap: "8px" }}>
@@ -929,8 +966,9 @@ const SalesEntry = () => {
                                     totalAmount: sale.totalAmount,
                                     advanceRemaining: sale.advanceRemaining,
                                     creditAmount: sale.creditAmount,
+                                    paymentMethod: sale.paymentMethod,
                                   },
-                                  sale.paymentType,
+                                  sale.paymentMethod,
                                   sale.profileName,
                                   sale.phoneNumber
                                 )

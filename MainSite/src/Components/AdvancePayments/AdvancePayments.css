@@ -40,14 +40,14 @@
     margin-bottom: 10px;
 }
 
-.checkbox-container {
+.checkbox-container-p {
     display: flex;
     align-items: center;
     color: var(--text-secondary);
     font-size: 14px;
 }
 
-.checkbox-container input {
+.checkbox-container-p input {
     margin-right: 5px;
 }
 

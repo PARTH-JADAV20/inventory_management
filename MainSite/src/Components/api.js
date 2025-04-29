@@ -64,10 +64,15 @@ export const deleteSale = async (shop, billNo, profileId, phoneNumber, items) =>
 
 // Expense APIs
 export const fetchExpenses = async (shop, date = '', paidTo = '') => {
-  const params = new URLSearchParams();
-  if (date) params.append('date', date);
-  if (paidTo) params.append('paidTo', paidTo);
-  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/expenses?${params}`);
+  try {
+    const params = new URLSearchParams();
+    if (date) params.append('date', date);
+    if (paidTo) params.append('paidTo', paidTo);
+    const data = await request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/expenses?${params}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch expenses for ${shop}: ${error.message}`);
+  }
 };
 
 export const addExpense = async (shop, expense) => {
@@ -84,10 +89,15 @@ export const deleteExpense = async (shop, id) => {
 
 // Customer APIs
 export const fetchCustomers = async (shop, search = '', deleted = false) => {
-  const params = new URLSearchParams();
-  if (search) params.append('search', search);
-  if (deleted) params.append('deleted', deleted);
-  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/customers?${params}`);
+  try {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (deleted) params.append('deleted', deleted);
+    const data = await request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/customers?${params}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch customers for ${shop}: ${error.message}`);
+  }
 };
 
 export const createCustomer = async (shop, customerData) => {
@@ -96,6 +106,15 @@ export const createCustomer = async (shop, customerData) => {
 
 export const fetchCustomerByPhone = async (shop, phoneNumber) => {
   return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}`);
+};
+
+export const appendCustomerProfile = async (shop, phoneNumber, profileData) => {
+  try {
+    const data = await request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}/profiles`, profileData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to append profile for ${phoneNumber} in ${shop}: ${error.message}`);
+  }
 };
 
 export const updateCustomerProfile = async (shop, phoneNumber, profileId, profileData) => {
@@ -159,4 +178,12 @@ export const addCreditSale = async (shop, saleData) => {
 
 export const updateCreditSale = async (shop, id, updateData) => {
   return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, updateData);
+};
+
+export const softDeleteCustomerProfileNew = async (shop, phoneNumber, profileId) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}/softdelete`);
+};
+
+export const fetchNextBillNumber = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/next-bill-number`);
 };
