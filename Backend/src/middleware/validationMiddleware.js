@@ -1,5 +1,12 @@
 const Joi = require('joi');
 
+// Advance transaction validation schema
+const advanceTransactionSchema = Joi.object({
+  transactionType: Joi.string().valid('Deposit', 'Refund').required(),
+  amount: Joi.number().required(),
+  date: Joi.date().required()
+});
+
 // Customer validation schema
 const customerSchema = Joi.object({
   phoneNumber: Joi.string().required(),
@@ -17,6 +24,7 @@ const customerSchema = Joi.object({
         showinadvance: true,
         paymentMethod: 'Cash'
       }),
+      advanceHistory: Joi.array().items(advanceTransactionSchema).default([]),
       paymentMethod: Joi.string().default('Cash'),
       credit: Joi.number().default(0),
       deleteuser: Joi.object({
@@ -116,7 +124,6 @@ const expenseFilterSchema = Joi.object({
   return value;
 }, 'Filter validation');
 
-
 // Credit sale validation schema
 const creditSaleSchema = Joi.object({
   customerName: Joi.string().required(),
@@ -140,8 +147,6 @@ const dashboardFilterSchema = Joi.object({
   timePeriod: Joi.string().valid('Today', 'This Week', 'This Month').required()
 });
 
-
-
 // Middleware to validate request body
 const validateRequest = (schema) => {
   return (req, res, next) => {
@@ -163,8 +168,6 @@ const validateQuery = (schema) => {
     next();
   };
 };
-
-
 
 module.exports = {
   validateCustomer: validateRequest(customerSchema),

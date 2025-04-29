@@ -390,6 +390,7 @@
 }
 
 @media (max-width: 768px) {
+
     .stock-table th:nth-child(3),
     .stock-table td:nth-child(3) {
         display: none;
@@ -432,3 +433,65 @@
     margin-bottom: 8px;
     display: block;
 }
+
+.error-message {
+    color: #f64e60;
+    background-color: rgba(246, 78, 96, 0.1);
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.loading-message {
+    color: var(--text-secondary);
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.average-price-container {
+    margin-top: 30px;
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.average-price-container h3 {
+    color: var(--text-primary);
+    margin-bottom: 15px;
+}
+
+.average-price-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.average-price-content {
+    position: relative;
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.average-price-content h3 {
+    color: var(--text-primary);
+    margin-bottom: 15px;
+}
+

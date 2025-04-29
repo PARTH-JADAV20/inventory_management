@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Pencil, Save, Trash2, MoreVertical, Receipt, History } from "lucide-react";
-import { customersData, customersData2 } from "../customers.js";
+import { getCustomers, createCustomer, updateProfile, softDeleteProfile, addAdvancePayment, getCustomerByPhone } from "../api";
 import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
-  const [customers, setCustomers] = useState(customersData);
-  const [customers2, setCustomers2] = useState(customersData2);
+  const [customers, setCustomers] = useState([]);
   const [shop, setShop] = useState("Shop 1");
   const [newPayment, setNewPayment] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -23,12 +22,32 @@ const AdvancePayments = () => {
   const [editingProfile, setEditingProfile] = useState(null);
   const [editedProfile, setEditedProfile] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const shopApiName = shop === "Shop 1" ? "shop1" : "shop2";
 
   const getCommonName = (profiles) => profiles.map(p => p.name.replace(/ \[.*\]$/, ""))[0] || "Unknown";
 
-  const handleInputChange = (e) => {
+  const fetchCustomers = async () => {
+    setLoading(true);
+    try {
+      const data = await getCustomers(shopApiName, searchTerm, false);
+      console.log('Fetched customers:', data);
+      setCustomers(data);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [shop, searchTerm]);
+
+  const handleInputChange = async (e) => {
     const { name, value } = e.target;
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
     if (name === "customerName" && isExistingCustomer) {
       const match = value.match(/^(.+)\s*\((\d+)\)$/);
       if (match) {
@@ -38,8 +57,12 @@ const AdvancePayments = () => {
         setNewPayment({ ...newPayment, customerName: value, phoneNumber: "", profileId: "", newProfileName: "" });
       }
     } else if (name === "phoneNumber" && isExistingCustomer) {
-      const customer = activeCustomers.find(c => c.phoneNumber === value);
-      setNewPayment({ ...newPayment, phoneNumber: value, customerName: customer ? getCommonName(customer.profiles) : "", profileId: "", newProfileName: "" });
+      try {
+        const customer = await getCustomerByPhone(shopApiName, value);
+        setNewPayment({ ...newPayment, phoneNumber: value, customerName: customer ? getCommonName(customer.profiles) : "", profileId: "", newProfileName: "" });
+      } catch (err) {
+        setNewPayment({ ...newPayment, phoneNumber: value, customerName: "", profileId: "", newProfileName: "" });
+      }
     } else {
       setNewPayment({ ...newPayment, [name]: value });
     }
@@ -50,24 +73,26 @@ const AdvancePayments = () => {
     setNewPayment({ date: new Date().toISOString().split("T")[0], customerName: "", phoneNumber: "", profileId: "", advanceAmount: "", newProfileName: "", paymentMethod: "Cash" });
   };
 
-  const handleAddPayment = () => {
-    if (!newPayment.date || !newPayment.customerName || !newPayment.phoneNumber || !newPayment.profileId || !newPayment.advanceAmount || !newPayment.paymentMethod) {
-      alert("Please fill all required fields");
-      return;
-    }
+ const handleAddPayment = async () => {
+  if (!newPayment.date || !newPayment.customerName || !newPayment.phoneNumber || !newPayment.profileId || !newPayment.advanceAmount || !newPayment.paymentMethod) {
+    alert("Please fill all required fields");
+    return;
+  }
 
-    if (newPayment.profileId.startsWith("new-profile") && !newPayment.newProfileName) {
-      alert("Please enter a profile name");
-      return;
-    }
+  if (newPayment.profileId.startsWith("new-profile") && !newPayment.newProfileName) {
+    alert("Please enter a profile name");
+    return;
+  }
 
-    const advanceAmount = parseFloat(newPayment.advanceAmount);
-    const transactionType = advanceAmount < 0 ? "Refund" : "Deposit";
-    const absoluteAmount = Math.abs(advanceAmount);
+  const advanceAmount = parseFloat(newPayment.advanceAmount);
+  if (advanceAmount === 0) {
+    alert("Advance amount cannot be zero");
+    return;
+  }
 
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
-    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
-    const existingCustomer = activeCustomers.find(c => c.phoneNumber === newPayment.phoneNumber);
+  setLoading(true);
+  try {
+    const existingCustomer = customers.find(c => c.phoneNumber === newPayment.phoneNumber);
 
     if (!isExistingCustomer && existingCustomer) {
       alert("Phone number exists. Use Existing Customer option.");
@@ -75,73 +100,74 @@ const AdvancePayments = () => {
     }
 
     if (existingCustomer && newPayment.profileId.startsWith("new-profile")) {
-      if (existingCustomer.profiles.some(p => p.name.toLowerCase() === newPayment.newProfileName.toLowerCase())) {
-        alert("Profile name already exists");
+      // Check for exact duplicate profile names (case-sensitive)
+      if (existingCustomer.profiles.some(p => p.name === newPayment.newProfileName)) {
+        alert("Profile name already exists for this customer");
         return;
       }
     }
 
-    const updateCustomers = (customers, setCustomers) => {
-      return customers.map(c =>
-        c.phoneNumber === newPayment.phoneNumber
-          ? {
-              ...c,
-              profiles: newPayment.profileId.startsWith("new-profile")
-                ? [...c.profiles, {
-                    profileId: `profile-${Date.now()}`,
-                    name: newPayment.newProfileName,
-                    advance: { value: true, currentamount: absoluteAmount, showinadvance: true, paymentMethod: newPayment.paymentMethod },
-                    advanceHistory: [{ transactionType, amount: absoluteAmount, date: newPayment.date }],
-                    bills: [],
-                    deleteuser: { value: false, date: "" },
-                  }]
-                : c.profiles.map(p =>
-                    p.profileId === newPayment.profileId
-                      ? {
-                          ...p,
-                          advance: { ...p.advance, currentamount: p.advance.currentamount + advanceAmount, paymentMethod: newPayment.paymentMethod },
-                          advanceHistory: [...p.advanceHistory, { transactionType, amount: absoluteAmount, date: newPayment.date }],
-                        }
-                      : p
-                  ),
-            }
-          : c
-      );
-    };
-
-    if (existingCustomer) {
-      const updatedCustomer = activeCustomers.find(c => c.phoneNumber === newPayment.phoneNumber);
-      const profile = updatedCustomer.profiles.find(p => p.profileId === newPayment.profileId);
-      if (profile && profile.advance.currentamount + advanceAmount < 0) {
+    if (existingCustomer && !newPayment.profileId.startsWith("new-profile")) {
+      const profile = existingCustomer.profiles.find(p => p.profileId === newPayment.profileId);
+      if (!profile) {
+        alert("Selected profile not found");
+        return;
+      }
+      if (advanceAmount < 0 && profile.advance.currentamount < Math.abs(advanceAmount)) {
         alert("Refund amount cannot exceed the current advance balance.");
         return;
       }
-      setActiveCustomers(updateCustomers(activeCustomers, setActiveCustomers));
+      console.log('addAdvancePayment request:', {
+        date: newPayment.date,
+        amount: advanceAmount,
+        paymentMethod: newPayment.paymentMethod,
+      });
+      await addAdvancePayment(shopApiName, newPayment.phoneNumber, newPayment.profileId, {
+        date: newPayment.date,
+        amount: advanceAmount,
+        paymentMethod: newPayment.paymentMethod,
+      });
     } else {
-      setActiveCustomers([...activeCustomers, {
+      if (advanceAmount < 0) {
+        alert("Cannot create a new customer with a refund. Please add a deposit first.");
+        return;
+      }
+      const profileData = {
+        name: newPayment.profileId.startsWith("new-profile") ? newPayment.newProfileName : newPayment.customerName,
+        advance: { value: true, currentamount: advanceAmount, showinadvance: true, paymentMethod: newPayment.paymentMethod },
+        paymentMethod: newPayment.paymentMethod,
+        credit: 0,
+        advanceHistory: [{
+          transactionType: "Deposit",
+          amount: advanceAmount,
+          date: newPayment.date
+        }]
+      };
+      const customerData = {
         phoneNumber: newPayment.phoneNumber,
-        profiles: [{
-          profileId: `profile-${Date.now()}`,
-          name: newPayment.customerName,
-          advance: { value: true, currentamount: absoluteAmount, showinadvance: true, paymentMethod: newPayment.paymentMethod },
-          advanceHistory: [{ transactionType, amount: absoluteAmount, date: newPayment.date }],
-          bills: [],
-          deleteuser: { value: false, date: "" },
-        }],
-      }]);
-      setNewPayment({ ...newPayment, profileId: `profile-${Date.now()}` });
+        profiles: [profileData],
+      };
+      console.log('createCustomer request:', customerData);
+      await createCustomer(shopApiName, customerData);
     }
 
+    await fetchCustomers();
     setNewPayment({ date: new Date().toISOString().split("T")[0], customerName: "", phoneNumber: "", profileId: "", advanceAmount: "", newProfileName: "", paymentMethod: "Cash" });
     setIsExistingCustomer(false);
-  };
+    setError(null);
+  } catch (err) {
+    setError(err.message);
+    alert(err.message);
+  }
+  setLoading(false);
+};
 
-  const handleEditStart = (profile, phoneNumber, shop) => {
+  const handleEditStart = (profile, phoneNumber) => {
     if (editingProfile?.profileId === profile.profileId) {
       setEditingProfile(null);
       setEditedProfile(null);
     } else {
-      setEditingProfile({ profileId: profile.profileId, phoneNumber, shop });
+      setEditingProfile({ profileId: profile.profileId, phoneNumber });
       setEditedProfile({ ...profile, paymentMethod: profile.advance.paymentMethod || "Cash" });
     }
     setDropdownOpen(null);
@@ -152,56 +178,47 @@ const AdvancePayments = () => {
     setEditedProfile({ ...editedProfile, [name]: value });
   };
 
-  const handleSaveEdit = () => {
-    const setActiveCustomers = editingProfile.shop === "Shop 1" ? setCustomers : setCustomers2;
-    const activeCustomers = editingProfile.shop === "Shop 1" ? customers : customers2;
-    setActiveCustomers(
-      activeCustomers.map(c =>
-        c.phoneNumber === editingProfile.phoneNumber
-          ? {
-              ...c,
-              profiles: c.profiles.map(p =>
-                p.profileId === editedProfile.profileId
-                  ? {
-                      ...p,
-                      name: editedProfile.name,
-                      advance: { ...p.advance, paymentMethod: editedProfile.paymentMethod },
-                    }
-                  : p
-              ),
-            }
-          : c
-      )
-    );
-    setEditingProfile(null);
-    setEditedProfile(null);
+  const handleSaveEdit = async () => {
+    setLoading(true);
+    try {
+      console.log('updateProfile request:', {
+        name: editedProfile.name,
+        advance: { ...editedProfile.advance, paymentMethod: editedProfile.paymentMethod }
+      });
+      await updateProfile(shopApiName, editingProfile.phoneNumber, editedProfile.profileId, {
+        name: editedProfile.name,
+        advance: { ...editedProfile.advance, paymentMethod: editedProfile.paymentMethod }
+      });
+      await fetchCustomers();
+      setEditingProfile(null);
+      setEditedProfile(null);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      alert(err.message);
+    }
+    setLoading(false);
   };
 
-  const handleDeleteProfile = (profile, phoneNumber) => {
+  const handleDeleteProfile = async (profile, phoneNumber) => {
     if (window.confirm("Are you sure you want to delete this profile?")) {
-      const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
-      const activeCustomers = shop === "Shop 1" ? customers : customers2;
-      setActiveCustomers(
-        activeCustomers.map(c =>
-          c.phoneNumber === phoneNumber
-            ? {
-                ...c,
-                profiles: c.profiles.map(p =>
-                  p.profileId === profile.profileId
-                    ? { ...p, advance: { ...p.advance, showinadvance: false } }
-                    : p
-                ),
-              }
-            : c
-        )
-      );
+      setLoading(true);
+      try {
+        await softDeleteProfile(shopApiName, phoneNumber, profile.profileId);
+        await fetchCustomers();
+        setError(null);
+      } catch (err) {
+        setError(err.message);
+        alert(err.message);
+      }
+      setLoading(false);
     }
     setDropdownOpen(null);
   };
 
   const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
 
-  const filteredCustomers = (shop === "Shop 1" ? customers : customers2).filter(c =>
+  const filteredCustomers = customers.filter(c =>
     (getCommonName(c.profiles).toLowerCase().includes(searchTerm) || c.phoneNumber.includes(searchTerm)) &&
     c.profiles.some(p => p.advance.value && p.advance.showinadvance)
   );
@@ -212,6 +229,7 @@ const AdvancePayments = () => {
   };
 
   const handleShowHistory = (history, profileName, phoneNumber) => {
+    console.log('Showing history for profile:', profileName, history);
     setSelectedHistory({ history, profileName, phoneNumber });
     setDropdownOpen(null);
   };
@@ -244,13 +262,15 @@ const AdvancePayments = () => {
     setDropdownOpen(dropdownOpen === profileId ? null : profileId);
   };
 
-  const filteredCustomerOptions = (shop === "Shop 1" ? customers : customers2).filter(c =>
+  const filteredCustomerOptions = customers.filter(c =>
     getCommonName(c.profiles).toLowerCase().includes(newPayment.customerName.toLowerCase()) &&
     c.profiles.some(p => p.advance.value && p.advance.showinadvance)
   );
 
   return (
     <div className="main-content">
+      {loading && <div className="loading">Loading...</div>}
+      {error && <div className="error">{error}</div>}
       <div className="advance-payment-form-container">
         <div className="form-group shop-selector">
           <label>Shop</label>
@@ -285,13 +305,13 @@ const AdvancePayments = () => {
             <select name="profileId" value={newPayment.profileId} onChange={handleInputChange} disabled={!newPayment.phoneNumber}>
               <option value="">Select profile</option>
               <option value={`new-profile-${newPayment.phoneNumber}`}>New Profile</option>
-              {(shop === "Shop 1" ? customers : customers2).find(c => c.phoneNumber === newPayment.phoneNumber)?.profiles.filter(p => p.advance.value && p.advance.showinadvance).map(p => <option key={p.profileId} value={p.profileId}>{p.name}</option>)}
+              {customers.find(c => c.phoneNumber === newPayment.phoneNumber)?.profiles.filter(p => p.advance.value && p.advance.showinadvance).map(p => <option key={p.profileId} value={p.profileId}>{p.name}</option>)}
             </select>
           </div>
           {newPayment.profileId.startsWith("new-profile") && <div className="form-group"><label>Profile Name</label><input type="text" name="newProfileName" placeholder="Enter profile name" value={newPayment.newProfileName} onChange={handleInputChange} /></div>}
           <div className="form-group">
             <label>Advance Amount</label>
-            <input type="number" name="advanceAmount" placeholder="Enter amount" value={newPayment.advanceAmount} onChange={handleInputChange} />
+            <input type="number" name="advanceAmount" placeholder="Enter amount (negative for refund)" value={newPayment.advanceAmount} onChange={handleInputChange} />
           </div>
           <div className="form-group">
             <label>Payment Method</label>
@@ -302,7 +322,7 @@ const AdvancePayments = () => {
             </select>
           </div>
           <div className="form-buttons">
-            <button className="add-btn" onClick={handleAddPayment}>Add Advance Payment</button>
+            <button className="add-btn" onClick={handleAddPayment} disabled={loading}>Add Advance Payment</button>
           </div>
         </div>
       </div>
@@ -329,10 +349,16 @@ const AdvancePayments = () => {
               <React.Fragment key={c.phoneNumber}>
                 <tr><td colSpan={7}><h3 className="contractor-heading">{getCommonName(c.profiles)} ({c.profiles.filter(p => p.advance.value && p.advance.showinadvance).length} profiles)</h3></td></tr>
                 {c.profiles.filter(p => p.advance.value && p.advance.showinadvance).map(p => {
-                  const totalDeposits = p.advanceHistory.filter(h => h.transactionType === "Deposit").reduce((sum, h) => sum + h.amount, 0);
-                  const totalUsed = p.bills.reduce((sum, b) => sum + b.totalAmount, 0);
-                  const currentBalance = p.advance.currentamount;
+                  const totalDeposits = p.advanceHistory
+                    .filter(h => h.transactionType === "Deposit")
+                    .reduce((sum, h) => sum + (h.amount || 0), 0);
+                  const totalRefunds = p.advanceHistory
+                    .filter(h => h.transactionType === "Refund")
+                    .reduce((sum, h) => sum + (h.amount || 0), 0);
+                  const totalUsed = p.bills.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+                  const currentBalance = p.advance.currentamount || 0;
                   const paymentMethod = p.advance.paymentMethod || "N/A";
+                  console.log(`Profile ${p.name} advanceHistory:`, p.advanceHistory);
                   return (
                     <tr key={p.profileId}>
                       <td>{getCommonName(c.profiles)}</td>
@@ -370,7 +396,7 @@ const AdvancePayments = () => {
                               <button className="dropdown-item show-history-btn" onClick={() => handleShowHistory(p.advanceHistory, p.name, c.phoneNumber)}>
                                 <History size={16} /> History
                               </button>
-                              <button className="dropdown-item edit-btn" onClick={() => handleEditStart(p, c.phoneNumber, shop)}>
+                              <button className="dropdown-item edit-btn" onClick={() => editingProfile?.profileId === p.profileId ? handleSaveEdit() : handleEditStart(p, c.phoneNumber)}>
                                 {editingProfile?.profileId === p.profileId ? <Save size={16} /> : <Pencil size={16} />}
                                 {editingProfile?.profileId === p.profileId ? "Save" : "Edit"}
                               </button>
@@ -405,8 +431,8 @@ const AdvancePayments = () => {
                   <table className="bill-table">
                     <thead><tr><th>Product</th><th>Qty</th><th>Price/Qty</th><th>Amount</th></tr></thead>
                     <tbody>{bill.items.map((item, i) => <tr key={i}><td>{item.product}</td><td>{item.qty}</td><td>₹{item.pricePerQty}</td><td>₹{item.amount}</td></tr>)}
-                      <tr className="total"><td colSpan="3">Total Amount</td><td>₹{bill.totalAmount}</td></tr>
-                      {bill.advanceRemaining !== undefined && <tr className="total"><td colSpan="3">Advance Remaining</td><td>₹{bill.advanceRemaining}</td></tr>}</tbody>
+                      <tr className="total"><td colspan="3">Total Amount</td><td>₹{bill.totalAmount}</td></tr>
+                      {bill.advanceRemaining !== undefined && <tr className="total"><td colspan="3">Advance Remaining</td><td>₹{bill.advanceRemaining}</td></tr>}</tbody>
                   </table>
                   <button className="print-btn" onClick={() => handlePrintBill(bill, selectedBills.profileName, selectedBills.phoneNumber)}>Print Bill</button>
                 </div>
@@ -414,7 +440,7 @@ const AdvancePayments = () => {
             ) : selectedHistory.history.length === 0 ? <p className="no-data">No advance history available.</p> : (
               <table className="history-table">
                 <thead><tr><th>Date</th><th>Type</th><th>Amount</th></tr></thead>
-                <tbody>{selectedHistory.history.map((h, i) => <tr key={i}><td>{h.date}</td><td>{h.transactionType}</td><td>₹{h.amount}</td></tr>)}</tbody>
+                <tbody>{selectedHistory.history.map((h, i) => <tr key={i}><td>{new Date(h.date).toLocaleDateString()}</td><td>{h.transactionType}</td><td>₹{h.amount}</td></tr>)}</tbody>
               </table>
             )}
           </div>

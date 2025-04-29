@@ -15,9 +15,9 @@ router.use(validateShop);
 router.route('/')
   .get(getStock)
   .post(validateStock, addStock)
-  .delete(validateStockDelete, deleteStock);
 
 router.route('/:id')
-  .put(validateStock, updateStock);
+  .put(validateStock, updateStock)
+  .delete(validateStockDelete, deleteStock)
 
 module.exports = router;

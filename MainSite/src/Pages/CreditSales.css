@@ -1,43 +1,7 @@
-.main-content {
-  padding: 20px;
-  background-color: #1e1e2d;
-  color: #ffffff;
-  min-height: 100vh;
-}
-
-/* Add these styles to your existing CSS file */
-select {
-    background-color: #1e1e2d;
-    color: #ffffff;
-    padding: 8px;
-    border: 1px solid #3a3a5a;
-    border-radius: 4px;
-    width: 100%;
-  }
-  
-  select option {
-    background-color: #1e1e2d;
-    color: #ffffff;
-    padding: 8px;
-  }
-  
-  /* If you want to style the dropdown arrow */
-  select {
-    appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 8px center;
-    background-size: 16px;
-    padding-right: 32px;
-  }
-
-
-
-
 .summary-card {
   display: flex;
   gap: 20px;
-  background-color: #2b2b40;
+  background-color: #242731;
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -59,7 +23,7 @@ select {
 }
 
 .form-container {
-  background-color: #2b2b40;
+  background-color: #242731;
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -144,7 +108,7 @@ select {
   }
 
 .customer-dropdown {
-  background-color: #2b2b40;
+  background-color: #242731;
   border: 1px solid #3a3a5a;
   border-radius: 4px;
   max-height: 200px;
@@ -169,7 +133,7 @@ select {
 }
 
 .selected-customer-header {
-    background: #2b2b40;
+    background: #242731;
     padding: 10px 15px;
     margin: 10px 0;
     border-radius: 4px;
@@ -235,13 +199,13 @@ select {
 }
 
 .edit-btn {
-  background-color: #2b2b40;
+  background-color: #242731;
   color: #ff6b35;
   margin-left: 5px;
 }
 
 .table-container {
-  background-color: #2b2b40;
+  background-color: #242731;
   padding: 20px;
   border-radius: 8px;
 }
@@ -264,7 +228,7 @@ select {
 }
 
 .expense-table th {
-  background-color: #2b2b40;
+  background-color: #242731;
   color: #a1a5b7;
 }
 
@@ -331,7 +295,7 @@ select {
 }
 
 .modal-content {
-  background: #2b2b40;
+  background: #242731;
   padding: 20px;
   border-radius: 8px;
   max-width: 800px;
@@ -400,7 +364,7 @@ select {
     margin-left: 180px;
     margin-right: -230px;
     padding: 10px 15px;
-    background: #2b2b40;
+    background: #242731;
     border-radius: 4px;
     border-left: 4px solid #ff6b35;
   }

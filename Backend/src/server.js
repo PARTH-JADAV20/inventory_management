@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
-require('dotenv').config();
 
 const { errorHandler } = require('./middleware/errorMiddleware');
 const customerRoutes = require('./routes/customerRoutes');
@@ -42,7 +41,7 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect("mongodb://localhost:27017/construction-management")
   .then(() => {
     console.log('Connected to MongoDB');
     app.listen(PORT, () => {

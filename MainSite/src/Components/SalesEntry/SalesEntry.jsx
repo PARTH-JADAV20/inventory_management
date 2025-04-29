@@ -1045,10 +1045,6 @@ const SalesEntry = () => {
                     .map((sale) => (
                       <tr
                         key={sale.billNo}
-                        style={{
-                          backgroundColor: "#1e1e2d",
-                          color: "#ffffff",
-                        }}
                       >
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           {sale.profileName}

@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Pencil, Save, Trash2 } from "lucide-react";
-import { customersData, customersData2 } from "../customers";
+import { getCustomers, updateProfile, softDeleteProfile, restoreProfile, permanentDeleteProfile } from "../api";
 import "./Customers.css";
 
 const Customers = () => {
-  const [customers, setCustomers] = useState(customersData); // Shop 1 customers
-  const [customers2, setCustomers2] = useState(customersData2); // Shop 2 customers
-  const [deletedProfiles, setDeletedProfiles] = useState({ "Shop 1": [], "Shop 2": [] }); // Track deleted profiles
+  const [customers, setCustomers] = useState([]); // Customers for active shop
+  const [deletedProfiles, setDeletedProfiles] = useState([]); // Deleted profiles for active shop
   const [shop, setShop] = useState("Shop 1"); // Active shop
   const [searchTerm, setSearchTerm] = useState("");
   const [editedProfile, setEditedProfile] = useState(null);
   const [selectedBills, setSelectedBills] = useState(null);
   const [selectedAdvanceDetails, setSelectedAdvanceDetails] = useState(null);
   const [showDeleted, setShowDeleted] = useState(false); // Toggle deleted profiles section
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const shopApiName = shop === "Shop 1" ? "shop1" : "shop2";
 
   // Derive common name from profiles
   const getCommonName = (profiles) => {
@@ -25,46 +27,76 @@ const Customers = () => {
     return bills.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
   };
 
-  // Sort customers by last updated (using the latest bill date or profileId timestamp)
-  useEffect(() => {
-    const updateCustomers = (customerList, setCustomerList) => {
-      const updatedCustomers = customerList.map((customer) => ({
+  // Fetch customers and deleted profiles
+  const fetchCustomers = async () => {
+    setLoading(true);
+    try {
+      // Fetch active customers
+      const activeData = await getCustomers(shopApiName, searchTerm, false);
+      const updatedCustomers = activeData.map((customer) => ({
         ...customer,
         profiles: customer.profiles
           .map((profile) => ({
             ...profile,
-            lastUpdated:
-              profile.bills.length > 0
-                ? new Date(
-                    profile.bills[profile.bills.length - 1].date
-                      .split(" ")
-                      .reverse()
-                      .join("-")
-                  )
-                : new Date(parseInt(profile.profileId.split("-")[1])), // Proxy from profileId
+            creationTime: parseInt(profile.profileId.split("-")[1]),
           }))
-          .sort((a, b) => b.lastUpdated - a.lastUpdated),
+          .sort((a, b) => a.creationTime - b.creationTime),
       }));
-      setCustomerList(updatedCustomers);
-    };
-    updateCustomers(customers, setCustomers);
-    updateCustomers(customers2, setCustomers2);
-  }, [shop]);
+      setCustomers(updatedCustomers);
+
+      // Fetch deleted profiles
+      const deletedData = await getCustomers(shopApiName, searchTerm, true);
+      const deletedProfiles = deletedData
+        .flatMap((c) =>
+          c.profiles
+            .filter((p) => p.deleteuser?.value)
+            .map((p) => ({
+              ...p,
+              phoneNumber: c.phoneNumber,
+              commonName: getCommonName(c.profiles),
+            }))
+        )
+        .filter((p) => {
+          const deletionDate = new Date(p.deleteuser.date);
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          return deletionDate > thirtyDaysAgo; // Keep profiles deleted within 30 days
+        });
+      setDeletedProfiles(deletedProfiles);
+
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  // Fetch customers on shop change or search term update
+  useEffect(() => {
+    fetchCustomers();
+  }, [shop, searchTerm]);
 
   // Auto-remove deleted profiles after 30 days
   useEffect(() => {
-    const checkDeletedProfiles = () => {
+    const checkDeletedProfiles = async () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      setDeletedProfiles((prev) => {
-        const updatedDeleted = { ...prev };
-        updatedDeleted[shop] = prev[shop].filter((deletedProfile) => {
-          const deletionDate = new Date(deletedProfile.deleteuser.date);
-          return deletionDate > thirtyDaysAgo;
-        });
-        return updatedDeleted;
+      const profilesToDelete = deletedProfiles.filter((p) => {
+        const deletionDate = new Date(p.deleteuser.date);
+        return deletionDate <= thirtyDaysAgo;
       });
+
+      for (const profile of profilesToDelete) {
+        try {
+          await permanentDeleteProfile(shopApiName, profile.phoneNumber, profile.profileId);
+        } catch (err) {
+          console.error(`Failed to permanently delete profile ${profile.profileId}:`, err);
+        }
+      }
+
+      // Refresh customers and deleted profiles
+      await fetchCustomers();
     };
 
     checkDeletedProfiles();
@@ -72,19 +104,18 @@ const Customers = () => {
     return () => clearInterval(interval);
   }, [shop]);
 
-  // Filter customers based on search term (common name or phone number)
-  const filteredCustomers = (shop === "Shop 1" ? customers : customers2)
-    .filter((customer) => customer.profiles.some((p) => !p.deleteuser?.value))
-    .filter(
-      (customer) =>
-        getCommonName(customer.profiles)
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        customer.phoneNumber.includes(searchTerm)
-    );
+  // Filter customers based on search term
+  const filteredCustomers = customers.filter(
+    (customer) =>
+      (getCommonName(customer.profiles)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+        customer.phoneNumber.includes(searchTerm)) &&
+      customer.profiles.some((p) => !p.deleteuser?.value)
+  );
 
   // Filter deleted profiles based on search term
-  const filteredDeletedProfiles = deletedProfiles[shop].filter(
+  const filteredDeletedProfiles = deletedProfiles.filter(
     (profile) =>
       (profile.commonName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         profile.phoneNumber.includes(searchTerm)) &&
@@ -92,129 +123,127 @@ const Customers = () => {
   );
 
   // Summary statistics
-  const totalCustomers = (shop === "Shop 1" ? customers : customers2).length; // Unique phone numbers
-  const advanceCustomers = (shop === "Shop 1" ? customers : customers2).filter(
-    (c) => c.profiles.some((p) => p.advance?.value)
+  const totalCustomers = customers.length;
+  const advanceCustomers = customers.filter((c) =>
+    c.profiles.some((p) => p.advance?.value)
   ).length;
 
   // Handle edit
-  const handleEdit = (profile, phoneNumber, commonName, shop) => {
-    setEditedProfile({ ...profile, phoneNumber, commonName, shop });
+  const handleEdit = (profile, phoneNumber, commonName) => {
+    const customer = customers.find((c) => c.phoneNumber === phoneNumber);
+    setEditedProfile({
+      ...profile,
+      phoneNumber, // Store original phoneNumber
+      originalPhoneNumber: phoneNumber, // Add original phoneNumber for reference
+      name: profile.name, // Ensure name is set to current profile name
+      commonName: getCommonName(customer?.profiles || []),
+      paymentMethod: profile.advance?.paymentMethod || profile.paymentMethod || "Cash",
+    });
   };
 
   // Handle save edit
-  const handleSaveEdit = () => {
-    const setActiveCustomers = editedProfile.shop === "Shop 1" ? setCustomers : setCustomers2;
-    const activeCustomers = editedProfile.shop === "Shop 1" ? customers : customers2;
-    setActiveCustomers(
-      activeCustomers.map((c) =>
-        c.phoneNumber === editedProfile.phoneNumber
-          ? {
-              ...c,
-              phoneNumber: editedProfile.phoneNumber,
-              profiles: c.profiles.map((p) => ({
-                ...p,
-                name:
-                  p.profileId === editedProfile.profileId
-                    ? editedProfile.name
-                    : p.name.replace(/^.*?(?=\s*\[|$)/, editedProfile.commonName),
-                advance:
-                  p.profileId === editedProfile.profileId && p.advance
-                    ? { ...p.advance, paymentMethod: editedProfile.paymentMethod }
-                    : p.advance,
-                lastUpdated:
-                  p.profileId === editedProfile.profileId
-                    ? new Date()
-                    : p.lastUpdated,
-              })),
-            }
-          : c
-      )
-    );
-    setEditedProfile(null);
+  const handleSaveEdit = async () => {
+    setLoading(true);
+    try {
+      const customer = customers.find((c) => c.phoneNumber === editedProfile.originalPhoneNumber);
+      if (!customer) {
+        setError("Customer not found");
+        alert("Customer not found");
+        return;
+      }
+  
+      // Validate name is present
+      if (!editedProfile.name || editedProfile.name.trim() === "") {
+        setError("Name is required");
+        alert("Name is required");
+        return;
+      }
+  
+      const updateData = {
+        name: editedProfile.name, // Always include name
+        advance: editedProfile.advance
+          ? { ...editedProfile.advance, paymentMethod: editedProfile.paymentMethod }
+          : undefined,
+      };
+  
+      // Include newPhoneNumber if phone number has changed
+      if (editedProfile.phoneNumber !== editedProfile.originalPhoneNumber) {
+        updateData.newPhoneNumber = editedProfile.phoneNumber; // Send newPhoneNumber
+      }
+  
+      // Update the current profile
+      await updateProfile(
+        shopApiName,
+        editedProfile.originalPhoneNumber, // Use original phoneNumber
+        editedProfile.profileId,
+        updateData
+      );
+  
+      // Update contractor name if changed
+      const firstProfile = customer.profiles[0];
+      if (
+        firstProfile &&
+        editedProfile.commonName !== getCommonName(customer.profiles) &&
+        editedProfile.profileId !== firstProfile.profileId
+      ) {
+        const firstProfileName = editedProfile.commonName + (firstProfile.name.match(/ \[.*\]$/) || "");
+        await updateProfile(shopApiName, editedProfile.originalPhoneNumber, firstProfile.profileId, {
+          name: firstProfileName,
+        });
+      }
+  
+      await fetchCustomers();
+      setEditedProfile(null);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      alert(err.message);
+    }
+    setLoading(false);
   };
 
   // Handle delete profile
-  const handleDeleteProfile = (profileId, phoneNumber, shop) => {
+  const handleDeleteProfile = async (profileId, phoneNumber) => {
     if (!window.confirm(`Are you sure you want to delete this profile?`)) return;
-    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
-
-    // Find the customer and profile to move to deleted section
-    const customer = activeCustomers.find((c) => c.phoneNumber === phoneNumber);
-    const profileToDelete = customer.profiles.find((p) => p.profileId === profileId);
-    const commonName = getCommonName(customer.profiles);
-
-    // Mark the profile as deleted with the current date
-    const updatedCustomers = activeCustomers.map((c) =>
-      c.phoneNumber === phoneNumber
-        ? {
-            ...c,
-            profiles: c.profiles.map((p) =>
-              p.profileId === profileId
-                ? {
-                    ...p,
-                    deleteuser: { value: true, date: new Date().toISOString().split("T")[0] },
-                  }
-                : p
-            ),
-          }
-        : c
-    );
-
-    // Add the deleted profile to deletedProfiles
-    setDeletedProfiles((prev) => ({
-      ...prev,
-      [shop]: [
-        ...prev[shop],
-        {
-          ...profileToDelete,
-          phoneNumber,
-          commonName,
-          deleteuser: { value: true, date: new Date().toISOString().split("T")[0] },
-        },
-      ],
-    }));
-
-    // Update active customers
-    setActiveCustomers(updatedCustomers);
+    setLoading(true);
+    try {
+      await softDeleteProfile(shopApiName, phoneNumber, profileId);
+      await fetchCustomers();
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      alert(err.message);
+    }
+    setLoading(false);
   };
 
   // Handle restore profile
-  const handleRestoreProfile = (profileId, phoneNumber, shop) => {
-    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
-
-    // Remove the deleteuser flag to restore the profile
-    setActiveCustomers(
-      activeCustomers.map((c) =>
-        c.phoneNumber === phoneNumber
-          ? {
-              ...c,
-              profiles: c.profiles.map((p) =>
-                p.profileId === profileId
-                  ? { ...p, deleteuser: { value: false, date: "" } }
-                  : p
-              ),
-            }
-          : c
-      )
-    );
-
-    // Remove from deleted profiles
-    setDeletedProfiles((prev) => ({
-      ...prev,
-      [shop]: prev[shop].filter((p) => p.profileId !== profileId),
-    }));
+  const handleRestoreProfile = async (profileId, phoneNumber) => {
+    setLoading(true);
+    try {
+      await restoreProfile(shopApiName, phoneNumber, profileId);
+      await fetchCustomers();
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      alert(err.message);
+    }
+    setLoading(false);
   };
 
   // Handle permanent delete
-  const handlePermanentDelete = (profileId, shop) => {
+  const handlePermanentDelete = async (profileId, phoneNumber) => {
     if (!window.confirm(`Are you sure you want to permanently delete this profile?`)) return;
-    setDeletedProfiles((prev) => ({
-      ...prev,
-      [shop]: prev[shop].filter((p) => p.profileId !== profileId),
-    }));
+    setLoading(true);
+    try {
+      await permanentDeleteProfile(shopApiName, phoneNumber, profileId);
+      await fetchCustomers();
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      alert(err.message);
+    }
+    setLoading(false);
   };
 
   // Handle input change for editing
@@ -226,7 +255,7 @@ const Customers = () => {
   // Handle show bills
   const handleShowBills = (bills, paymentMethod, profileName, phoneNumber) => {
     setSelectedBills({ bills, paymentMethod, profileName, phoneNumber });
-    setSelectedAdvanceDetails(null); // Close advance popup if open
+    setSelectedAdvanceDetails(null);
   };
 
   // Handle close bills modal
@@ -238,8 +267,8 @@ const Customers = () => {
   const handleShowAdvanceDetails = (profile, phoneNumber) => {
     const totalDeposits = profile.advanceHistory
       ? profile.advanceHistory
-          .filter((h) => h.transactionType === "Deposit")
-          .reduce((sum, h) => sum + h.amount, 0)
+        .filter((h) => h.transactionType === "Deposit")
+        .reduce((sum, h) => sum + h.amount, 0)
       : 0;
     const totalUsed = profile.bills.reduce((sum, b) => sum + b.totalAmount, 0);
     const balance = profile.advance?.currentamount || 0;
@@ -258,9 +287,17 @@ const Customers = () => {
     setSelectedAdvanceDetails(null);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   // Handle print bill
   const handlePrintBill = (bill, paymentMethod, profileName, phoneNumber) => {
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
     const printWindow = window.open("", "_blank");
     let billContent = `
       <html>
@@ -282,7 +319,7 @@ const Customers = () => {
           <p>Profile Name: ${profileName}</p>
           <p>Phone Number: ${phoneNumber}</p>
           <p>Date: ${bill.date || "N/A"}</p>
-          <p class="payment-method">Payment Method: ${paymentMethod}</p>
+          <p class="payment-method">Payment Method: ${paymentMethod ?? "N/A"}</p>
           <table>
             <thead>
               <tr>
@@ -294,8 +331,8 @@ const Customers = () => {
             </thead>
             <tbody>
               ${bill.items
-                .map(
-                  (item) => `
+        .map(
+          (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -303,15 +340,15 @@ const Customers = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-                )
-                .join("")}
+        )
+        .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
               </tr>
     `;
 
-    const profile = activeCustomers
+    const profile = customers
       .find((c) => c.phoneNumber === phoneNumber)
       ?.profiles.find((p) => p.name === profileName);
     if (profile && profile.advance?.value && bill.advanceRemaining !== undefined) {
@@ -337,6 +374,8 @@ const Customers = () => {
 
   return (
     <div className="main-content">
+      {loading && <div className="loading">Loading...</div>}
+      {error && <div className="error">{error}</div>}
       <div className="customers-header-p2">
         <div className="shop-selector-p2">
           <label>Shop</label>
@@ -399,7 +438,7 @@ const Customers = () => {
                     <tr className="contractor-row">
                       <td colSpan={7}>
                         <button className="contractor-toggle">
-                          {commonName} ({customer.profiles.length} profiles)
+                          {commonName} ({customer.profiles.filter((p) => !p.deleteuser?.value).length} profiles)
                         </button>
                       </td>
                     </tr>
@@ -409,7 +448,7 @@ const Customers = () => {
                         <tr key={profile.profileId}>
                           <td>
                             {editedProfile &&
-                            editedProfile.profileId === profile.profileId ? (
+                              editedProfile.profileId === profile.profileId ? (
                               <input
                                 type="text"
                                 name="commonName"
@@ -423,7 +462,7 @@ const Customers = () => {
                           </td>
                           <td>
                             {editedProfile &&
-                            editedProfile.profileId === profile.profileId ? (
+                              editedProfile.profileId === profile.profileId ? (
                               <input
                                 type="text"
                                 name="phoneNumber"
@@ -437,7 +476,7 @@ const Customers = () => {
                           </td>
                           <td>
                             {editedProfile &&
-                            editedProfile.profileId === profile.profileId ? (
+                              editedProfile.profileId === profile.profileId ? (
                               <input
                                 type="text"
                                 name="name"
@@ -452,7 +491,7 @@ const Customers = () => {
                           <td>₹{calculateTotalPurchased(profile.bills)}</td>
                           <td>
                             {editedProfile &&
-                            editedProfile.profileId === profile.profileId ? (
+                              editedProfile.profileId === profile.profileId ? (
                               <select
                                 name="paymentMethod"
                                 value={editedProfile.paymentMethod}
@@ -499,7 +538,7 @@ const Customers = () => {
                               Show Bills
                             </button>
                             {editedProfile &&
-                            editedProfile.profileId === profile.profileId ? (
+                              editedProfile.profileId === profile.profileId ? (
                               <button className="save-btn-p2" onClick={handleSaveEdit}>
                                 <Save size={16} />
                               </button>
@@ -508,7 +547,7 @@ const Customers = () => {
                                 <button
                                   className="edit-btn-p2"
                                   onClick={() =>
-                                    handleEdit(profile, customer.phoneNumber, commonName, shop)
+                                    handleEdit(profile, customer.phoneNumber, commonName)
                                   }
                                 >
                                   <Pencil size={16} />
@@ -516,11 +555,7 @@ const Customers = () => {
                                 <button
                                   className="delete-btn-p2"
                                   onClick={() =>
-                                    handleDeleteProfile(
-                                      profile.profileId,
-                                      customer.phoneNumber,
-                                      shop
-                                    )
+                                    handleDeleteProfile(profile.profileId, customer.phoneNumber)
                                   }
                                 >
                                   <Trash2 size={16} />
@@ -560,16 +595,20 @@ const Customers = () => {
                     <button
                       className="restore-btn"
                       onClick={() =>
-                        handleRestoreProfile(profile.profileId, profile.phoneNumber, shop)
+                        handleRestoreProfile(profile.profileId, profile.phoneNumber)
                       }
                     >
                       Restore
                     </button>
                     <button
                       className="delete-btn-p2"
-                      onClick={() => handlePermanentDelete(profile.profileId, shop)}
+                      onClick={() =>
+                        handlePermanentDelete(profile.profileId, profile.phoneNumber)
+                      }
                     >
-                      <div style={{display:"flex"}}><Trash2 size={16} /> Delete Permanent</div>
+                      <div style={{ display: "flex" }}>
+                        <Trash2 size={16} /> Delete Permanent
+                      </div>
                     </button>
                   </td>
                 </tr>
@@ -598,13 +637,36 @@ const Customers = () => {
                 <strong>Balance:</strong> ₹{selectedAdvanceDetails.balance || 0}
               </p>
             </div>
+            <h3>Advance History</h3>
+            {selectedAdvanceDetails.advanceHistory?.length > 0 ? (
+              <table className="history-table-p2">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Transaction Type</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedAdvanceDetails.advanceHistory.map((entry, index) => (
+                    <tr key={index}>
+                      <td>{formatDate(entry.date)}</td>
+                      <td>{entry.transactionType}</td>
+                      <td>₹{entry.amount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p>No advance history available.</p>
+            )}
             <button
               className="show-bills-btn-p2"
               onClick={() =>
                 handleShowBills(
                   selectedAdvanceDetails.bills,
                   selectedAdvanceDetails.advance?.paymentMethod ||
-                    selectedAdvanceDetails.paymentMethod,
+                  selectedAdvanceDetails.paymentMethod,
                   selectedAdvanceDetails.name,
                   selectedAdvanceDetails.phoneNumber
                 )
@@ -632,8 +694,8 @@ const Customers = () => {
               selectedBills.bills.map((bill) => (
                 <div key={bill.billNo} className="bill-details">
                   <h3>Bill No: {bill.billNo}</h3>
-                  <p>Date: {bill.date || "N/A"}</p>
-                  <p>Payment Method: {selectedBills.paymentMethod ?? "N/A"}</p>
+                  <p>Date: ${bill.date || "N/A"}</p>
+                  <p>Payment Method: ${selectedBills.paymentMethod ?? "N/A"}</p>
                   <table className="bill-table">
                     <thead>
                       <tr>
@@ -644,22 +706,22 @@ const Customers = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {bill.items.map((item, index) => (
+                      ${bill.items.map((item, index) => (
                         <tr key={index}>
-                          <td>{item.product}</td>
-                          <td>{item.qty}</td>
-                          <td>₹{item.pricePerQty}</td>
-                          <td>₹{item.amount}</td>
+                          <td>${item.product}</td>
+                          <td>${item.qty}</td>
+                          <td>₹${item.pricePerQty}</td>
+                          <td>₹${item.amount}</td>
                         </tr>
                       ))}
                       <tr className="total">
                         <td colSpan="3">Total Amount</td>
-                        <td>₹{bill.totalAmount}</td>
+                        <td>₹${bill.totalAmount}</td>
                       </tr>
-                      {selectedBills.bills[0].advanceRemaining !== undefined && (
+                      ${selectedBills.bills[0].advanceRemaining !== undefined && (
                         <tr className="total">
                           <td colSpan="3">Advance Remaining</td>
-                          <td>₹{bill.advanceRemaining}</td>
+                          <td>₹${bill.advanceRemaining}</td>
                         </tr>
                       )}
                     </tbody>
