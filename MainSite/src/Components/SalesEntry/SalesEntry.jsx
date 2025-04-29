@@ -14,14 +14,14 @@ const formatDateToDDMMYYYY = (dateStr) => {
 };
 
 const SalesEntry = () => {
-  const [customers, setCustomers] = useState([]); // Shop 1 & 2 customers fetched from backend
-  const [stock, setStock] = useState([]); // Stock fetched from backend
-  const [groupedStock, setGroupedStock] = useState([]); // Grouped stock from fetchCurrentStock
-  const [sales, setSales] = useState([]); // Sales fetched from backend
-  const [shop, setShop] = useState("Shop 1"); // Active shop
+  const [customers, setCustomers] = useState([]);
+  const [stock, setStock] = useState([]);
+  const [groupedStock, setGroupedStock] = useState([]);
+  const [sales, setSales] = useState([]); // Initialize as empty array
+  const [shop, setShop] = useState("Shop 1");
   const [newSale, setNewSale] = useState({
-    billNo: "", // Backend generates billNo
-    date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]), // Store as DD-MM-YYYY
+    billNo: "",
+    date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
     profileName: "",
     phoneNumber: "",
     paymentType: "Cash",
@@ -32,7 +32,7 @@ const SalesEntry = () => {
     qty: "",
     unit: "",
     pricePerQty: "",
-    category: "", // Added to track category for grouping
+    category: "",
   });
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [warning, setWarning] = useState("");
@@ -42,7 +42,7 @@ const SalesEntry = () => {
   const [advanceSearchTerm, setAdvanceSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // Added for API loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch stock, customers, and sales on shop change
   useEffect(() => {
@@ -50,23 +50,31 @@ const SalesEntry = () => {
       setIsLoading(true);
       try {
         setWarning("");
-        // Fetch stock
-        const stockData = await fetchStock(shop);
-        setStock(stockData);
-
-        // Fetch grouped stock for dropdown
-        const groupedStockData = await fetchCurrentStock(shop);
-        setGroupedStock(groupedStockData);
-
-        // Fetch customers
-        const customerData = await fetchCustomers(shop);
-        setCustomers(customerData);
-
-        // Fetch sales
-        const salesData = await fetchSales(shop);
-        setSales(salesData);
+        const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
+          fetchStock(shop).catch((err) => {
+            console.error("fetchStock error:", err);
+            return [];
+          }),
+          fetchCurrentStock(shop).catch((err) => {
+            console.error("fetchCurrentStock error:", err);
+            return [];
+          }),
+          fetchCustomers(shop).catch((err) => {
+            console.error("fetchCustomers error:", err);
+            return [];
+          }),
+          fetchSales(shop).catch((err) => {
+            console.error("fetchSales error:", err);
+            return [];
+          }),
+        ]);
+        setStock(Array.isArray(stockData) ? stockData : []);
+        setGroupedStock(Array.isArray(groupedStockData) ? groupedStockData : []);
+        setCustomers(Array.isArray(customerData) ? customerData : []);
+        setSales(Array.isArray(salesData) ? salesData : []);
       } catch (err) {
-        setWarning(err.message);
+        console.error("loadData error:", err);
+        setWarning("Failed to load data. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -80,10 +88,14 @@ const SalesEntry = () => {
       setIsLoading(true);
       try {
         setWarning("");
-        const salesData = await fetchSales(shop, filterDate, searchTerm);
-        setSales(salesData);
+        const salesData = await fetchSales(shop, filterDate, searchTerm).catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        });
+        setSales(Array.isArray(salesData) ? salesData : []);
       } catch (err) {
-        setWarning(err.message);
+        console.error("loadSales error:", err);
+        setWarning("Failed to load sales. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -169,7 +181,7 @@ const SalesEntry = () => {
       if (prev) {
         setNewSale((prevSale) => ({
           ...prevSale,
-          billNo: "", // Backend will generate
+          billNo: "",
         }));
       }
       return !prev;
@@ -253,19 +265,31 @@ const SalesEntry = () => {
     setIsLoading(true);
     try {
       setWarning("");
-      await deleteSale(shop, billNo, profileId, phoneNumber, items); // Use backend deleteSale
-      // Refresh stock, customers, and sales
+      await deleteSale(shop, billNo, profileId, phoneNumber, items);
       const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
-        fetchStock(shop),
-        fetchCurrentStock(shop),
-        fetchCustomers(shop),
-        fetchSales(shop, filterDate, searchTerm),
+        fetchStock(shop).catch((err) => {
+          console.error("fetchStock error:", err);
+          return [];
+        }),
+        fetchCurrentStock(shop).catch((err) => {
+          console.error("fetchCurrentStock error:", err);
+          return [];
+        }),
+        fetchCustomers(shop).catch((err) => {
+          console.error("fetchCustomers error:", err);
+          return [];
+        }),
+        fetchSales(shop, filterDate, searchTerm).catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        }),
       ]);
-      setStock(stockData);
-      setGroupedStock(groupedStockData);
-      setCustomers(customerData);
-      setSales(salesData);
+      setStock(Array.isArray(stockData) ? stockData : []);
+      setGroupedStock(Array.isArray(groupedStockData) ? groupedStockData : []);
+      setCustomers(Array.isArray(customerData) ? customerData : []);
+      setSales(Array.isArray(salesData) ? salesData : []);
     } catch (err) {
+      console.error("deleteSale error:", err);
       setWarning(err.message);
     } finally {
       setIsLoading(false);
@@ -294,22 +318,37 @@ const SalesEntry = () => {
         items: newSale.items,
         date: newSale.date,
       };
-      const response = await createSale(shop, saleData); // Use backend createSale
+      const response = await createSale(shop, saleData);
       const { bill, customer } = response;
 
       // Update local state
-      setStock(await fetchStock(shop));
-      setGroupedStock(await fetchCurrentStock(shop));
+      setStock(await fetchStock(shop).catch((err) => {
+        console.error("fetchStock error:", err);
+        return [];
+      }));
+      setGroupedStock(await fetchCurrentStock(shop).catch((err) => {
+        console.error("fetchCurrentStock error:", err);
+        return [];
+      }));
       setCustomers((prev) =>
-        prev.map((c) =>
-          c.phoneNumber === customer.phoneNumber ? customer : c
-        ).concat(customer.phoneNumber && !prev.some(c => c.phoneNumber === customer.phoneNumber) ? [customer] : [])
+        prev
+          .map((c) =>
+            c.phoneNumber === customer.phoneNumber ? customer : c
+          )
+          .concat(
+            customer.phoneNumber && !prev.some((c) => c.phoneNumber === customer.phoneNumber)
+              ? [customer]
+              : []
+          )
       );
-      setSales(await fetchSales(shop, filterDate, searchTerm));
+      setSales(await fetchSales(shop, filterDate, searchTerm).catch((err) => {
+        console.error("fetchSales error:", err);
+        return [];
+      }));
 
       // Reset form
       setNewSale({
-        billNo: "", // Backend will generate
+        billNo: "",
         date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
         profileName: "",
         phoneNumber: "",
@@ -317,8 +356,9 @@ const SalesEntry = () => {
         items: [],
       });
       setAdvanceSearchTerm("");
-      return bill; // Return bill for generate bill functions
+      return bill;
     } catch (err) {
+      console.error("createSale error:", err);
       setWarning(err.message);
       return false;
     } finally {
@@ -348,7 +388,7 @@ const SalesEntry = () => {
   };
 
   // Print bill
-  const handlePrintBill = (bill, paymentType, profileName, phoneNumber) => {
+  const handlePrintBill = (bill, paymentMethod, profileName, phoneNumber) => {
     const printWindow = window.open("", "_blank");
     let billContent = `
       <html>
@@ -439,19 +479,21 @@ const SalesEntry = () => {
     setSearchTerm(e.target.value);
   };
 
-  // Get all sales for display
-  const allSales = sales
-    .filter((sale) =>
-      filterDate
-        ? sale.date === filterDate
-        : true
-    )
-    .filter((sale) =>
-      searchTerm
-        ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sale.phoneNumber.includes(searchTerm)
-        : true
-    );
+  // Get all sales for display with guard clause
+  const allSales = Array.isArray(sales)
+    ? sales
+        .filter((sale) =>
+          filterDate
+            ? sale.date === filterDate
+            : true
+        )
+        .filter((sale) =>
+          searchTerm
+            ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              sale.phoneNumber.includes(searchTerm)
+            : true
+        )
+    : [];
 
   // Group sales by date
   const salesByDate = allSales.reduce((acc, sale) => {
@@ -473,12 +515,14 @@ const SalesEntry = () => {
 
   const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
 
-  // Filter advance profiles for datalist
+  // Filter advance profiles with guard clause
   const advanceProfiles = customers
     .flatMap((c) =>
-      c.profiles
-        .filter((p) => p.advance?.value && !p.deleteuser?.value)
-        .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
+      Array.isArray(c.profiles)
+        ? c.profiles
+            .filter((p) => p.advance?.value && !p.deleteuser?.value)
+            .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
+        : []
     );
 
   return (
@@ -491,7 +535,7 @@ const SalesEntry = () => {
           <select value={shop} onChange={(e) => {
             setShop(e.target.value);
             setNewSale({
-              billNo: "", // Backend will generate
+              billNo: "",
               date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
               profileName: "",
               phoneNumber: "",
