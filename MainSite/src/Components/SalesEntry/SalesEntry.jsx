@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { customersData, customersData2 } from "../customers";
-import { stockItems, stockItems2 } from "../stockItems";
+import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale } from "../api.js";
 import "./SalesEntry.css";
 
 // Function to format date to DD-MM-YYYY
@@ -15,13 +14,13 @@ const formatDateToDDMMYYYY = (dateStr) => {
 };
 
 const SalesEntry = () => {
-  const [customers, setCustomers] = useState(customersData); // Shop 1 customers
-  const [customers2, setCustomers2] = useState(customersData2); // Shop 2 customers
-  const [stock, setStock] = useState(stockItems); // Shop 1 stock
-  const [stock2, setStock2] = useState(stockItems2); // Shop 2 stock
+  const [customers, setCustomers] = useState([]); // Shop 1 & 2 customers fetched from backend
+  const [stock, setStock] = useState([]); // Stock fetched from backend
+  const [groupedStock, setGroupedStock] = useState([]); // Grouped stock from fetchCurrentStock
+  const [sales, setSales] = useState([]); // Sales fetched from backend
   const [shop, setShop] = useState("Shop 1"); // Active shop
   const [newSale, setNewSale] = useState({
-    billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
+    billNo: "", // Backend generates billNo
     date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]), // Store as DD-MM-YYYY
     profileName: "",
     phoneNumber: "",
@@ -43,37 +42,65 @@ const SalesEntry = () => {
   const [advanceSearchTerm, setAdvanceSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // Added for API loading state
 
-  // Group stock items by name, category, and unit
-  const getGroupedStock = () => {
-    const activeStock = shop === "Shop 1" ? stock : stock2;
-    const grouped = [];
-    const uniqueKeys = new Set();
+  // Fetch stock, customers, and sales on shop change
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        setWarning("");
+        // Fetch stock
+        const stockData = await fetchStock(shop);
+        setStock(stockData);
 
-    activeStock.forEach((item) => {
-      const key = `${item.name}|${item.category}|${item.unit}`;
-      if (!uniqueKeys.has(key)) {
-        uniqueKeys.add(key);
-        const sameItems = activeStock.filter(
-          (i) => i.name === item.name && i.category === item.category && i.unit === item.unit
-        );
-        const totalQuantity = sameItems.reduce((sum, i) => sum + i.quantity, 0);
-        const averagePrice =
-          sameItems.length > 0
-            ? (sameItems.reduce((sum, i) => sum + i.price, 0) / sameItems.length).toFixed(2)
-            : 0;
-        grouped.push({
-          id: item.id, // Use first item's ID
-          name: item.name,
-          category: item.category,
-          unit: item.unit,
-          quantity: totalQuantity,
-          price: parseFloat(averagePrice),
-        });
+        // Fetch grouped stock for dropdown
+        const groupedStockData = await fetchCurrentStock(shop);
+        setGroupedStock(groupedStockData);
+
+        // Fetch customers
+        const customerData = await fetchCustomers(shop);
+        setCustomers(customerData);
+
+        // Fetch sales
+        const salesData = await fetchSales(shop);
+        setSales(salesData);
+      } catch (err) {
+        setWarning(err.message);
+      } finally {
+        setIsLoading(false);
       }
-    });
+    };
+    loadData();
+  }, [shop]);
 
-    return grouped;
+  // Refresh sales when filterDate or searchTerm changes
+  useEffect(() => {
+    const loadSales = async () => {
+      setIsLoading(true);
+      try {
+        setWarning("");
+        const salesData = await fetchSales(shop, filterDate, searchTerm);
+        setSales(salesData);
+      } catch (err) {
+        setWarning(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadSales();
+  }, [shop, filterDate, searchTerm]);
+
+  // Group stock items by name, category, and unit (for dropdown)
+  const getGroupedStock = () => {
+    return groupedStock.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      unit: item.unit,
+      quantity: item.quantity,
+      price: item.price,
+    }));
   };
 
   // Handle input changes
@@ -120,13 +147,12 @@ const SalesEntry = () => {
   const handleItemChange = (e) => {
     const { name, value } = e.target;
     if (name === "product") {
-      const groupedStock = getGroupedStock();
       const selectedItem = groupedStock.find((item) => item.name === value);
       setCurrentItem((prev) => ({
         ...prev,
         product: value,
         unit: selectedItem ? selectedItem.unit : "",
-        pricePerQty: "",
+        pricePerQty: selectedItem ? selectedItem.price : "",
         category: selectedItem ? selectedItem.category : "",
       }));
     } else {
@@ -143,7 +169,7 @@ const SalesEntry = () => {
       if (prev) {
         setNewSale((prevSale) => ({
           ...prevSale,
-          billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
+          billNo: "", // Backend will generate
         }));
       }
       return !prev;
@@ -174,8 +200,6 @@ const SalesEntry = () => {
     const pricePerQty = parseFloat(currentItem.pricePerQty);
     const amount = qty * pricePerQty;
 
-    const activeStock = shop === "Shop 1" ? stock : stock2;
-    const groupedStock = getGroupedStock();
     const stockItem = groupedStock.find(
       (item) =>
         item.name === currentItem.product &&
@@ -214,324 +238,117 @@ const SalesEntry = () => {
 
   // Calculate average price for a product
   const getAveragePrice = (product, category, unit) => {
-    const activeStock = shop === "Shop 1" ? stock : stock2;
-    const sameItems = activeStock.filter(
+    const stockItem = groupedStock.find(
       (item) => item.name === product && item.category === category && item.unit === unit
     );
-    if (sameItems.length === 0) return 0;
-    const totalPrice = sameItems.reduce((sum, i) => sum + i.price, 0);
-    return (totalPrice / sameItems.length).toFixed(2);
+    return stockItem ? stockItem.price.toFixed(2) : "0.00";
   };
 
   // Delete a sale
-  const handleDeleteSale = (billNo, profileId, phoneNumber, items) => {
+  const handleDeleteSale = async (billNo, profileId, phoneNumber, items) => {
     if (!window.confirm("Are you sure you want to delete this sale?")) {
       return;
     }
 
-    const activeStock = shop === "Shop 1" ? stock : stock2;
-    const setActiveStock = shop === "Shop 1" ? setStock : setStock2;
-
-    // Restore stock quantities
-    items.forEach((item) => {
-      const stockItem = activeStock.find(
-        (s) => s.name === item.product && s.category === item.category && s.unit === item.unit
-      );
-      if (stockItem) {
-        setActiveStock(
-          activeStock.map((s) =>
-            s.id === stockItem.id ? { ...s, quantity: s.quantity + item.qty } : s
-          )
-        );
-      }
-    });
-
-    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
-
-    // Update customer profiles by removing the bill and adjusting advance/credit
-    setActiveCustomers(
-      activeCustomers.map((c) =>
-        c.phoneNumber === phoneNumber
-          ? {
-              ...c,
-              profiles: c.profiles.map((p) =>
-                p.profileId === profileId
-                  ? {
-                      ...p,
-                      bills: p.bills.filter((bill) => bill.billNo !== billNo),
-                      credit: p.credit
-                        ? p.credit -
-                          (p.bills.find((bill) => bill.billNo === billNo)?.creditAmount || 0)
-                        : 0,
-                      advance: p.advance?.value
-                        ? {
-                            ...p.advance,
-                            currentamount:
-                              (p.advance.currentamount || 0) +
-                              (p.bills.find((bill) => bill.billNo === billNo)?.totalAmount || 0),
-                          }
-                        : p.advance,
-                    }
-                  : p
-              ),
-            }
-          : c
-      )
-    );
+    setIsLoading(true);
+    try {
+      setWarning("");
+      await deleteSale(shop, billNo, profileId, phoneNumber, items); // Use backend deleteSale
+      // Refresh stock, customers, and sales
+      const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
+        fetchStock(shop),
+        fetchCurrentStock(shop),
+        fetchCustomers(shop),
+        fetchSales(shop, filterDate, searchTerm),
+      ]);
+      setStock(stockData);
+      setGroupedStock(groupedStockData);
+      setCustomers(customerData);
+      setSales(salesData);
+    } catch (err) {
+      setWarning(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Save sale
-  const saveSale = () => {
-    const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
+  const saveSale = async () => {
     if (!newSale.profileName || !newSale.phoneNumber) {
       setWarning("Please enter both profile name and phone number");
       return false;
     }
 
-    const activeCustomers = shop === "Shop 1" ? customers : customers2;
-    const setActiveCustomers = shop === "Shop 1" ? setCustomers : setCustomers2;
-    const activeStock = shop === "Shop 1" ? stock : stock2;
-    const setActiveStock = shop === "Shop 1" ? setStock : setStock2;
-
-    let customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
-    let profile = customer?.profiles.find(
-      (p) => p.name === newSale.profileName && !p.deleteuser?.value
-    );
-
-    // Validate advance payment
-    if (newSale.paymentType === "Advance" && (!profile || !profile.advance?.value)) {
-      setWarning("Selected profile does not have advance enabled");
+    if (newSale.items.length === 0) {
+      setWarning("Please add at least one item to the sale");
       return false;
     }
 
-    const newBill = {
-      billNo: newSale.billNo,
-      date: newSale.date, // Already in DD-MM-YYYY
-      items: newSale.items,
-      totalAmount,
-      advanceRemaining: null,
-    };
-
-    // Handle advance payment
-    if (newSale.paymentType === "Advance" && profile) {
-      const currentAdvance = profile.advance.currentamount || 0;
-      const newBalance = currentAdvance - totalAmount;
-      if (newBalance < 0) {
-        const addToCredit = window.confirm(
-          `Insufficient advance balance (₹${currentAdvance}). Add ₹${-newBalance} to credit?`
-        );
-        if (!addToCredit) {
-          setWarning("Advance balance insufficient");
-          return false;
-        }
-        setActiveCustomers(
-          activeCustomers.map((c) =>
-            c.phoneNumber === newSale.phoneNumber
-              ? {
-                  ...c,
-                  profiles: c.profiles.map((p) =>
-                    p.profileId === profile.profileId
-                      ? {
-                          ...p,
-                          advance: {
-                            ...p.advance,
-                            currentamount: 0,
-                          },
-                          credit: (p.credit || 0) - newBalance,
-                          bills: [...p.bills, { ...newBill, advanceRemaining: 0 }],
-                        }
-                      : p
-                  ),
-                }
-              : c
-          )
-        );
-      } else {
-        setActiveCustomers(
-          activeCustomers.map((c) =>
-            c.phoneNumber === newSale.phoneNumber
-              ? {
-                  ...c,
-                  profiles: c.profiles.map((p) =>
-                    p.profileId === profile.profileId
-                      ? {
-                          ...p,
-                          advance: {
-                            ...p.advance,
-                            currentamount: newBalance,
-                          },
-                          bills: [...p.bills, { ...newBill, advanceRemaining: newBalance }],
-                        }
-                      : p
-                  ),
-                }
-              : c
-          )
-        );
-      }
-    } else if (!customer) {
-      // Create new customer and profile if not exists
-      const newCustomer = {
+    setIsLoading(true);
+    try {
+      setWarning("");
+      const saleData = {
+        profileName: newSale.profileName,
         phoneNumber: newSale.phoneNumber,
-        profiles: [
-          {
-            profileId: `profile-${Date.now()}`,
-            name: newSale.profileName,
-            advance: { value: false, currentamount: 0, paymentMethod: newSale.paymentType },
-            advanceHistory: [],
-            credit: 0,
-            paymentMethod: newSale.paymentType,
-            bills:
-              newSale.paymentType === "Credit"
-                ? [{ ...newBill, creditAmount: totalAmount }]
-                : [newBill],
-            deleteuser: { value: false, date: "" },
-          },
-        ],
+        paymentType: newSale.paymentType,
+        items: newSale.items,
+        date: newSale.date,
       };
-      setActiveCustomers([...activeCustomers, newCustomer]);
-    } else if (!profile) {
-      const newProfile = {
-        profileId: `profile-${Date.now()}`,
-        name: newSale.profileName,
-        advance: { value: false, currentamount: 0, paymentMethod: newSale.paymentType },
-        advanceHistory: [],
-        credit: 0,
-        paymentMethod: newSale.paymentType,
-        bills:
-          newSale.paymentType === "Credit" ? [{ ...newBill, creditAmount: totalAmount }] : [newBill],
-        deleteuser: { value: false, date: "" },
-      };
-      setActiveCustomers(
-        activeCustomers.map((c) =>
-          c.phoneNumber === newSale.phoneNumber
-            ? { ...c, profiles: [...c.profiles, newProfile] }
-            : c
-        )
-      );
-    } else if (newSale.paymentType === "Credit") {
-      setActiveCustomers(
-        activeCustomers.map((c) =>
-          c.phoneNumber === newSale.phoneNumber
-            ? {
-                ...c,
-                profiles: c.profiles.map((p) =>
-                  p.profileId === profile.profileId
-                    ? {
-                        ...p,
-                        credit: (p.credit || 0) + totalAmount,
-                        bills: [...p.bills, { ...newBill, creditAmount: totalAmount }],
-                      }
-                    : p
-                ),
-              }
-            : c
-        )
-      );
-    } else {
-      setActiveCustomers(
-        activeCustomers.map((c) =>
-          c.phoneNumber === newSale.phoneNumber
-            ? {
-                ...c,
-                profiles: c.profiles.map((p) =>
-                  p.profileId === profile.profileId
-                    ? { ...p, bills: [...p.bills, newBill] }
-                    : p
-                ),
-              }
-            : c
-        )
-      );
-    }
+      const response = await createSale(shop, saleData); // Use backend createSale
+      const { bill, customer } = response;
 
-    // Update stock
-    newSale.items.forEach((item) => {
-      const stockItems = activeStock.filter(
-        (s) => s.name === item.product && s.category === item.category && s.unit === item.unit
+      // Update local state
+      setStock(await fetchStock(shop));
+      setGroupedStock(await fetchCurrentStock(shop));
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c.phoneNumber === customer.phoneNumber ? customer : c
+        ).concat(customer.phoneNumber && !prev.some(c => c.phoneNumber === customer.phoneNumber) ? [customer] : [])
       );
-      let remainingQty = item.qty;
-      stockItems.forEach((stockItem) => {
-        if (remainingQty > 0) {
-          const deductQty = Math.min(remainingQty, stockItem.quantity);
-          setActiveStock(
-            activeStock.map((s) =>
-              s.id === stockItem.id ? { ...s, quantity: s.quantity - deductQty } : s
-            )
-          );
-          remainingQty -= deductQty;
-        }
+      setSales(await fetchSales(shop, filterDate, searchTerm));
+
+      // Reset form
+      setNewSale({
+        billNo: "", // Backend will generate
+        date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
+        profileName: "",
+        phoneNumber: "",
+        paymentType: "Cash",
+        items: [],
       });
-    });
-
-    // Reset form
-    setNewSale({
-      billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
-      date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
-      profileName: "",
-      phoneNumber: "",
-      paymentType: "Cash",
-      items: [],
-    });
-    setAdvanceSearchTerm("");
-    setWarning("");
-    return true;
+      setAdvanceSearchTerm("");
+      return bill; // Return bill for generate bill functions
+    } catch (err) {
+      setWarning(err.message);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle Sale Entry
-  const handleSaleEntry = () => {
-    saveSale();
+  const handleSaleEntry = async () => {
+    await saveSale();
   };
 
   // Handle Generate Bill and Sale Entry
-  const handleGenerateBillAndSale = () => {
-    if (saveSale()) {
-      const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
-      const bill = {
-        billNo: newSale.billNo,
-        date: newSale.date, // Already in DD-MM-YYYY
-        items: newSale.items,
-        totalAmount,
-        advanceRemaining: null,
-      };
-      const activeCustomers = shop === "Shop 1" ? customers : customers2;
-      const customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
-      const profile = customer?.profiles.find(
-        (p) => p.name === newSale.profileName && !p.deleteuser?.value
-      );
-      if (profile?.advance?.value) {
-        bill.advanceRemaining = profile.advance.currentamount - totalAmount;
-      }
+  const handleGenerateBillAndSale = async () => {
+    const bill = await saveSale();
+    if (bill) {
       handlePrintBill(bill, newSale.paymentType, newSale.profileName, newSale.phoneNumber);
     }
   };
 
   // Handle Generate Bill
-  const handleGenerateBill = () => {
-    if (saveSale()) {
-      const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
-      const bill = {
-        billNo: newSale.billNo,
-        date: newSale.date, // Already in DD-MM-YYYY
-        items: newSale.items,
-        totalAmount,
-        advanceRemaining: null,
-      };
-      const activeCustomers = shop === "Shop 1" ? customers : customers2;
-      const customer = activeCustomers.find((c) => c.phoneNumber === newSale.phoneNumber);
-      const profile = customer?.profiles.find(
-        (p) => p.name === newSale.profileName && !p.deleteuser?.value
-      );
-      if (profile?.advance?.value) {
-        bill.advanceRemaining = profile.advance.currentamount - totalAmount;
-      }
+  const handleGenerateBill = async () => {
+    const bill = await saveSale();
+    if (bill) {
       handlePrintBill(bill, newSale.paymentType, newSale.profileName, newSale.phoneNumber);
     }
   };
 
   // Print bill
-  const handlePrintBill = (bill, paymentMethod, profileName, phoneNumber) => {
+  const handlePrintBill = (bill, paymentType, profileName, phoneNumber) => {
     const printWindow = window.open("", "_blank");
     let billContent = `
       <html>
@@ -553,7 +370,7 @@ const SalesEntry = () => {
           <p>Profile Name: ${profileName}</p>
           <p>Phone Number: ${phoneNumber}</p>
           <p>Date: ${bill.date}</p>
-          <p class="payment-method">Payment Method: ${paymentMethod}</p>
+          <p className="payment-method">Payment Method: ${paymentMethod}</p>
           <table>
             <thead>
               <tr>
@@ -622,21 +439,8 @@ const SalesEntry = () => {
     setSearchTerm(e.target.value);
   };
 
-  // Get all sales, grouped by date
-  const allSales = (shop === "Shop 1" ? customers : customers2)
-    .flatMap((c) =>
-      c.profiles
-        .filter((p) => !p.deleteuser?.value) // Exclude deleted profiles
-        .flatMap((p) =>
-          p.bills.map((bill) => ({
-            ...bill,
-            profileName: p.name,
-            phoneNumber: c.phoneNumber,
-            paymentType: p.advance?.paymentMethod || p.paymentMethod || newSale.paymentType,
-            profileId: p.profileId,
-          }))
-        )
-    )
+  // Get all sales for display
+  const allSales = sales
     .filter((sale) =>
       filterDate
         ? sale.date === filterDate
@@ -670,7 +474,7 @@ const SalesEntry = () => {
   const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
 
   // Filter advance profiles for datalist
-  const advanceProfiles = (shop === "Shop 1" ? customers : customers2)
+  const advanceProfiles = customers
     .flatMap((c) =>
       c.profiles
         .filter((p) => p.advance?.value && !p.deleteuser?.value)
@@ -679,13 +483,15 @@ const SalesEntry = () => {
 
   return (
     <div className="main-content">
+      {isLoading && <div className="loading-message">Loading...</div>}
+      {warning && <p className="warning-p">{warning}</p>}
       <div className="sales-form-container-p">
         <div className="form-group-p shop-selector-p">
           <label>Shop</label>
           <select value={shop} onChange={(e) => {
             setShop(e.target.value);
             setNewSale({
-              billNo: `B${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
+              billNo: "", // Backend will generate
               date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
               profileName: "",
               phoneNumber: "",
@@ -916,7 +722,7 @@ const SalesEntry = () => {
             <button
               className="add-item-btn-p"
               onClick={addItemToSale}
-              disabled={!currentItem.product || !currentItem.qty || !currentItem.unit || !currentItem.pricePerQty}
+              disabled={!currentItem.product || !currentItem.qty || !currentItem.unit || !currentItem.pricePerQty || isLoading}
               style={{ flex: "1" }}
             >
               <Plus size={16} /> Add Item
@@ -943,7 +749,7 @@ const SalesEntry = () => {
                     <td>₹{item.pricePerQty}</td>
                     <td>₹{item.amount}</td>
                     <td>
-                      <button className="delete-btn" onClick={() => removeItem(index)}>
+                      <button className="delete-btn" onClick={() => removeItem(index)} disabled={isLoading}>
                         <Trash2 size={16} />
                       </button>
                     </td>
@@ -960,26 +766,25 @@ const SalesEntry = () => {
             <button
               className="sale-entry-btn-p"
               onClick={handleSaleEntry}
-              disabled={newSale.items.length === 0 || !newSale.profileName || !newSale.phoneNumber}
+              disabled={newSale.items.length === 0 || !newSale.profileName || !newSale.phoneNumber || isLoading}
             >
               Sale Entry
             </button>
             <button
               className="generate-sale-btn-p"
               onClick={handleGenerateBillAndSale}
-              disabled={newSale.items.length === 0 || !newSale.profileName || !newSale.phoneNumber}
+              disabled={newSale.items.length === 0 || !newSale.profileName || !newSale.phoneNumber || isLoading}
             >
               Generate Bill & Sale Entry
             </button>
             <button
               className="generate-btn-p"
               onClick={handleGenerateBill}
-              disabled={newSale.items.length === 0 || !newSale.profileName || !newSale.phoneNumber}
+              disabled={newSale.items.length === 0 || !newSale.profileName || !newSale.phoneNumber || isLoading}
             >
               Generate Bill
             </button>
           </div>
-          {warning && <p className="warning-p">{warning}</p>}
         </div>
       </div>
 
@@ -1043,9 +848,7 @@ const SalesEntry = () => {
                   {salesByDate[date]
                     .sort((a, b) => a.billNo.localeCompare(b.billNo))
                     .map((sale) => (
-                      <tr
-                        key={sale.billNo}
-                      >
+                      <tr key={sale.billNo}>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           {sale.profileName}
                         </td>
@@ -1088,6 +891,7 @@ const SalesEntry = () => {
                                   sale.phoneNumber
                                 )
                               }
+                              disabled={isLoading}
                             >
                               Print Bill
                             </button>
@@ -1101,6 +905,7 @@ const SalesEntry = () => {
                                   sale.items
                                 )
                               }
+                              disabled={isLoading}
                             >
                               <Trash2 size={16} />
                             </button>

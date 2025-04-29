@@ -1,190 +1,162 @@
-// src/api.js
-import axios from 'axios';
-
-// Base URL for the API
-const API_BASE_URL = 'http://localhost:5000/api'; 
-
-// Helper function to get the stock endpoint for a specific shop
-const getStockUrl = (shop) => `${API_BASE_URL}/${shop}/stock`;
-
-// Get all stock items for a shop
-export const getStock = async (shop, category = '', search = '', view = 'current') => {
-  try {
-    const response = await axios.get(getStockUrl(shop), {
-      params: { category, search, view },
-    });
-    return response.data;
-  } catch (error) {
-    throw new Error(error.response?.data?.message || 'Failed to fetch stock items');
-  }
-};
-
-// Add a new stock item
-export const addStock = async (shop, stockItem) => {
-  try {
-    const response = await axios.post(getStockUrl(shop), stockItem);
-    return response.data;
-  } catch (error) {
-    throw new Error(error.response?.data?.message || 'Failed to add stock item');
-  }
-};
-
-// Update an existing stock item
-export const updateStock = async (shop, id, stockItem) => {
-  try {
-    const response = await axios.put(`${getStockUrl(shop)}/${id}`, stockItem);
-    return response.data;
-  } catch (error) {
-    throw new Error(error.response?.data?.message || 'Failed to update stock item');
-  }
-};
-
-// Delete stock items by name, category, and unit
-export const deleteStock = async (shop, { id, name, category, unit }) => {
-  try {
-    const response = await axios.delete(`${getStockUrl(shop)}/${id}`, {
-      data: { name, category, unit },
-    });
-    return response.data;
-  } catch (error) {
-    throw new Error(error.response?.data?.message || 'Failed to delete stock items');
-  }
-};
-
-
 const BASE_URL = 'http://localhost:5000/api';
 
-// Map shop names to API-compatible shop IDs
-const getShopId = (shopName) => {
-  return shopName === 'Shop 1' ? 'shop1' : 'shop2';
-};
-
-// Get all expenses with optional filters
-export const getExpenses = async (shop, filters = {}) => {
-  const shopId = getShopId(shop);
-  const queryParams = new URLSearchParams(filters).toString();
-  const url = `${BASE_URL}/${shopId}/expenses${queryParams ? `?${queryParams}` : ''}`;
-  
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch expenses');
+// Helper function to handle fetch requests
+async function request(method, url, data = null) {
+  try {
+    const options = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (data) {
+      options.body = JSON.stringify(data);
+    }
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Request failed');
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`Error in ${method} ${url}:`, error.message);
+    throw error;
   }
-  
-  return response.json();
+}
+
+// Stock Management APIs
+export const fetchStock = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/stock`);
 };
 
-// Add a new expense
-export const addExpense = async (shop, expenseData) => {
-  const shopId = getShopId(shop);
-  const response = await fetch(`${BASE_URL}/${shopId}/expenses`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(expenseData),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to add expense');
-  }
-  
-  return response.json();
+export const fetchCurrentStock = async (shop, category = '', search = '') => {
+  const params = new URLSearchParams();
+  if (category && category !== 'All') params.append('category', category);
+  if (search) params.append('search', search);
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/stock/current?${params}`);
 };
 
-// Update an existing expense
-export const updateExpense = async (shop, id, expenseData) => {
-  const shopId = getShopId(shop);
-  const response = await fetch(`${BASE_URL}/${shopId}/expenses/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(expenseData),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to update expense');
-  }
-  
-  return response.json();
+export const addStockItem = async (shop, item) => {
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/stock`, item);
 };
 
-// Delete an expense
+export const updateStockItem = async (shop, id, item) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/stock/${id}`, item);
+};
+
+export const deleteStockItems = async (shop, { name, category, unit }) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/stock`, { name, category, unit });
+};
+
+// Sales APIs
+export const createSale = async (shop, saleData) => {
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/sales`, saleData);
+};
+
+export const fetchSales = async (shop, date = '', search = '') => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  if (search) params.append('search', search);
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/sales?${params}`);
+};
+
+export const deleteSale = async (shop, billNo, profileId, phoneNumber, items) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/sales/${billNo}`, { profileId, phoneNumber, items });
+};
+
+// Expense APIs
+export const fetchExpenses = async (shop, date = '', paidTo = '') => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  if (paidTo) params.append('paidTo', paidTo);
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/expenses?${params}`);
+};
+
+export const addExpense = async (shop, expense) => {
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/expenses`, expense);
+};
+
+export const updateExpense = async (shop, id, expense) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/expenses/${id}`, expense);
+};
+
 export const deleteExpense = async (shop, id) => {
-  const shopId = getShopId(shop);
-  const response = await fetch(`${BASE_URL}/${shopId}/expenses/${id}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to delete expense');
-  }
-  
-  return response.json();
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/expenses/${id}`);
 };
 
-const apiCall = async (method, endpoint, data = null) => {
-  const options = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  };
-  if (data) {
-    options.body = JSON.stringify(data);
-  }
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-  const result = await response.json();
-  if (!response.ok) {
-    throw new Error(result.message || 'API request failed');
-  }
-  return result;
+// Customer APIs
+export const fetchCustomers = async (shop, search = '', deleted = false) => {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (deleted) params.append('deleted', deleted);
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/customers?${params}`);
 };
 
-// Get all customers for a shop
-export const getCustomers = async (shop, search = '', showDeleted = false) => {
-  const query = new URLSearchParams({ search, showDeleted }).toString();
-  return apiCall('GET', `/${shop}/customers?${query}`);
-};
-
-// Get customer by phone number
-export const getCustomerByPhone = async (shop, phoneNumber) => {
-  return apiCall('GET', `/${shop}/customers/${phoneNumber}`);
-};
-
-// Create a new customer
 export const createCustomer = async (shop, customerData) => {
-  return apiCall('POST', `/${shop}/customers`, customerData);
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/customers`, customerData);
 };
 
-// Update a profile
-export const updateProfile = async (shop, phoneNumber, profileId, profileData) => {
-  return apiCall('PUT', `/${shop}/customers/${phoneNumber}/profiles/${profileId}`, profileData);
+export const fetchCustomerByPhone = async (shop, phoneNumber) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}`);
 };
 
-// Soft delete a profile
-export const softDeleteProfile = async (shop, phoneNumber, profileId) => {
-  return apiCall('DELETE', `/${shop}/customers/${phoneNumber}/profiles/${profileId}`);
+export const updateCustomerProfile = async (shop, phoneNumber, profileId, profileData) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}`, profileData);
 };
 
-// Restore a soft-deleted profile
-export const restoreProfile = async (shop, phoneNumber, profileId) => {
-  return apiCall('POST', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/restore`);
+export const softDeleteCustomerProfile = async (shop, phoneNumber, profileId) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}`);
 };
 
-// Permanently delete a profile
-export const permanentDeleteProfile = async (shop, phoneNumber, profileId) => {
-  return apiCall('DELETE', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/permanent`);
+export const restoreCustomerProfile = async (shop, phoneNumber, profileId) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}/restore`);
 };
 
-// Add advance payment
+export const permanentDeleteCustomerProfile = async (shop, phoneNumber, profileId) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/customers/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}/permanent`);
+};
+
+// Advance Payment APIs
 export const addAdvancePayment = async (shop, phoneNumber, profileId, advanceData) => {
-  return apiCall('POST', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/advance`, advanceData);
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/advance/${encodeURIComponent(phoneNumber)}/${encodeURIComponent(profileId)}`, advanceData);
 };
 
-// Get advance details for a profile
-export const getAdvanceDetails = async (shop, phoneNumber, profileId) => {
-  return apiCall('GET', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/advance`);
+export const updateAdvanceProfile = async (shop, phoneNumber, profileId, profileData) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/advance/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}`, profileData);
+};
+
+export const deleteAdvanceProfile = async (shop, phoneNumber, profileId) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/advance/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}`);
+};
+
+// Dashboard APIs
+export const fetchLowStock = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/low-stock`);
+};
+
+export const fetchRecentSales = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/recent-sales`);
+};
+
+export const fetchRecentPurchases = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/recent-purchases`);
+};
+
+export const fetchProfitTrend = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/profit-trend`);
+};
+
+export const fetchSummary = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/summary`);
+};
+
+// Credit Sales APIs
+export const fetchCreditSales = async (shop) => {
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/credits`);
+};
+
+export const addCreditSale = async (shop, saleData) => {
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/credits`, saleData);
+};
+
+export const updateCreditSale = async (shop, id, updateData) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, updateData);
 };

@@ -1,67 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { Search, Plus, Download, AlertCircle, CheckCircle } from "lucide-react";
 import AddCreditSale from "../Components/CreditSales/AddCreditSale";
 import CreditDetailsModal from "../Components/CreditSales/CreditDetailsModal";
+import { fetchCreditSales, updateCreditSale } from "../Components/api"; // Adjust path to your api.js
 import "./CreditSales.css";
 
-const CreditSalesDashboard = () => {
-  const [creditSales, setCreditSales] = useState([
-    {
-      id: 1,
-      customerName: "Amit Sharma",
-      phone: "9876543210",
-      totalCredit: 25000,
-      lastTransaction: "2025-04-20",
-      status: "Open",
-      items: [
-        { product: "Cement (Ambuja)", qty: 50, unit: "Bag", pricePerUnit: 400, date: "2025-04-20" },
-        { product: "Sand", qty: 2, unit: "Truck", pricePerUnit: 5000, date: "2025-04-20" },
-      ],
-    },
-    {
-      id: 2,
-      customerName: "Rajesh Patel",
-      phone: "8765432109",
-      totalCredit: 15000,
-      lastTransaction: "2025-04-18",
-      status: "Partially Paid",
-      items: [
-        { product: "Steel Rod (Tata)", qty: 100, unit: "Kg", pricePerUnit: 150, date: "2025-04-18" },
-      ],
-      payments: [{ amount: 5000, date: "2025-04-19", mode: "Cash" }],
-    },
-    {
-      id: 3,
-      customerName: "Vikram Singh",
-      phone: "7654321098",
-      totalCredit: 10000,
-      lastTransaction: "2025-03-15",
-      status: "Manually Closed",
-      items: [
-        { product: "Bricks", qty: 1000, unit: "Piece", pricePerUnit: 10, date: "2025-03-15" },
-      ],
-      payments: [{ amount: 8000, date: "2025-03-20", mode: "UPI", note: "Settled at ₹8000" }],
-    },
-    {
-      id: 4,
-      customerName: "Suresh Kumar",
-      phone: "6543210987",
-      totalCredit: 60000,
-      lastTransaction: "2025-02-10",
-      status: "Open",
-      items: [
-        { product: "Cement (UltraTech)", qty: 100, unit: "Bag", pricePerUnit: 450, date: "2025-02-10" },
-        { product: "Steel Rod (Tata)", qty: 200, unit: "Kg", pricePerUnit: 150, date: "2025-02-10" },
-      ],
-    },
-  ]);
+const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
+  const [creditSales, setCreditSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [amountFilter, setAmountFilter] = useState("All");
   const [timeFilter, setTimeFilter] = useState("All");
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const getStartOfMonth = (monthsBack) => {
     const date = new Date();
@@ -70,66 +24,77 @@ const CreditSalesDashboard = () => {
     return date;
   };
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchCreditSales(shop);
+      setCreditSales(data);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [shop]);
+
   const filteredSales = creditSales.filter((sale) => {
     const matchesSearch =
       sale.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.phone.includes(searchTerm);
+      sale.phoneNumber.includes(searchTerm);
     const matchesStatus = statusFilter === "All" || sale.status === statusFilter;
     const matchesAmount =
       amountFilter === "All" ||
-      (amountFilter === ">10000" && sale.totalCredit > 10000) ||
+      (amountFilter === ">10000" && sale.totalAmount > 10000) ||
       (amountFilter === ">2months" &&
-        (new Date() - new Date(sale.lastTransaction)) / (1000 * 60 * 60 * 24) > 60);
+        (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60);
     const matchesTime =
       timeFilter === "All" ||
       (timeFilter === "This Month" &&
-        new Date(sale.lastTransaction) >= getStartOfMonth(0)) ||
+        new Date(sale.lastTransactionDate) >= getStartOfMonth(0)) ||
       (timeFilter === "Last Month" &&
-        new Date(sale.lastTransaction) >= getStartOfMonth(1) &&
-        new Date(sale.lastTransaction) < getStartOfMonth(0)) ||
+        new Date(sale.lastTransactionDate) >= getStartOfMonth(1) &&
+        new Date(sale.lastTransactionDate) < getStartOfMonth(0)) ||
       (timeFilter === "Last 2 Months" &&
-        new Date(sale.lastTransaction) >= getStartOfMonth(2));
+        new Date(sale.lastTransactionDate) >= getStartOfMonth(2));
     return matchesSearch && matchesStatus && matchesAmount && matchesTime;
   });
 
   const summary = {
     customers: new Set(
       creditSales
-        .filter((sale) => sale.status !== "Closed" && sale.status !== "Manually Closed")
+        .filter((sale) => sale.status !== "Cleared")
         .map((sale) => sale.customerName)
     ).size,
     totalCredit: creditSales
-      .filter((sale) => sale.status !== "Closed" && sale.status !== "Manually Closed")
-      .reduce((sum, sale) => sum + sale.totalCredit, 0),
+      .filter((sale) => sale.status !== "Cleared")
+      .reduce((sum, sale) => sum + sale.totalAmount, 0),
   };
 
   const handleAddCredit = (newSale) => {
-    setCreditSales([...creditSales, { ...newSale, id: Date.now() }]);
+    setCreditSales([...creditSales, newSale]);
     setShowAddForm(false);
   };
 
-  const handleUpdateCredit = (updatedSale) => {
-    setCreditSales(creditSales.map((sale) => (sale.id === updatedSale.id ? updatedSale : sale)));
+  const handleUpdateCredit = async (updatedSale) => {
+    setCreditSales(creditSales.map((sale) => (sale._id === updatedSale._id ? updatedSale : sale)));
     setSelectedCredit(null);
   };
 
-  const handleQuickClose = (sale) => {
-    if (window.confirm(`Mark ₹${sale.totalCredit.toFixed(2)} for ${sale.customerName} as fully paid?`)) {
-      const updatedSale = {
-        ...sale,
-        totalCredit: 0,
-        status: "Closed",
-        payments: [
-          ...(sale.payments || []),
-          {
-            amount: sale.totalCredit,
-            date: new Date().toISOString().split("T")[0],
-            mode: "Cash",
-            note: "Quick close",
-          },
-        ],
-      };
-      handleUpdateCredit(updatedSale);
+  const handleQuickClose = async (sale) => {
+    if (window.confirm(`Mark ₹${sale.totalAmount.toFixed(2)} for ${sale.customerName} as fully paid?`)) {
+      setLoading(true);
+      try {
+        const updatedData = await updateCreditSale(shop, sale._id, { status: "Cleared" });
+        handleUpdateCredit(updatedData);
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -154,6 +119,7 @@ const CreditSalesDashboard = () => {
           <table>
             <thead>
               <tr>
+                <th>Bill Number</th>
                 <th>Customer</th>
                 <th>Phone</th>
                 <th>Total Credit (₹)</th>
@@ -166,10 +132,11 @@ const CreditSalesDashboard = () => {
                 .map(
                   (sale) => `
                 <tr>
+                  <td>${sale.billNumber}</td>
                   <td>${sale.customerName}</td>
-                  <td>${sale.phone}</td>
-                  <td>₹${sale.totalCredit.toFixed(2)}</td>
-                  <td>${format(new Date(sale.lastTransaction), "dd MMMM yyyy")}</td>
+                  <td>${sale.phoneNumber}</td>
+                  <td>₹${sale.totalAmount.toFixed(2)}</td>
+                  <td>${format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")}</td>
                   <td>${sale.status}</td>
                 </tr>
               `
@@ -197,15 +164,16 @@ const CreditSalesDashboard = () => {
       <div className="summary-card">
         <div className="summary-item">
           <h3>Active Credit Customers</h3>
-          <p>{summary.customers}</p>
+          <p>{loading ? "Loading..." : summary.customers}</p>
         </div>
         <div className="summary-item">
           <h3>Total Outstanding (₹)</h3>
-          <p>₹{summary.totalCredit.toFixed(2)}</p>
+          <p>{loading ? "Loading..." : `₹${summary.totalCredit.toFixed(2)}`}</p>
         </div>
       </div>
       <div className="form-container">
         <h2>Credit Sales Dashboard</h2>
+        {error && <div className="warning">{error}</div>}
         <div className="table-actions">
           <div className="search-container">
             <div className="search-group">
@@ -217,6 +185,7 @@ const CreditSalesDashboard = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Customer name or phone"
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -225,12 +194,11 @@ const CreditSalesDashboard = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                disabled={loading}
               >
                 <option>All</option>
                 <option>Open</option>
-                <option>Partially Paid</option>
-                <option>Closed</option>
-                <option>Manually Closed</option>
+                <option>Cleared</option>
               </select>
             </div>
             <div className="search-group">
@@ -238,6 +206,7 @@ const CreditSalesDashboard = () => {
               <select
                 value={amountFilter}
                 onChange={(e) => setAmountFilter(e.target.value)}
+                disabled={loading}
               >
                 <option value="All">All</option>
                 <option value=">10000">Credit &gt; ₹10,000</option>
@@ -249,6 +218,7 @@ const CreditSalesDashboard = () => {
               <select
                 value={timeFilter}
                 onChange={(e) => setTimeFilter(e.target.value)}
+                disabled={loading}
               >
                 <option value="All">All Time</option>
                 <option value="This Month">This Month</option>
@@ -258,13 +228,13 @@ const CreditSalesDashboard = () => {
             </div>
           </div>
           <div>
-            <button className="submit-btn" onClick={() => setShowAddForm(true)}>
+            <button className="submit-btn" onClick={() => setShowAddForm(true)} disabled={loading}>
               <Plus size={16} /> Add Credit Sale
             </button>
             <button
               className="print-btn"
               onClick={handlePrint}
-              disabled={filteredSales.length === 0}
+              disabled={filteredSales.length === 0 || loading}
             >
               <Download size={16} /> Export PDF
             </button>
@@ -275,10 +245,7 @@ const CreditSalesDashboard = () => {
         <AddCreditSale
           onAdd={handleAddCredit}
           onCancel={() => setShowAddForm(false)}
-          existingCustomers={creditSales.map((sale) => ({
-            name: sale.customerName,
-            phone: sale.phone,
-          }))}
+          shop={shop}
         />
       )}
       {selectedCredit && (
@@ -286,13 +253,16 @@ const CreditSalesDashboard = () => {
           creditSale={selectedCredit}
           onUpdate={handleUpdateCredit}
           onClose={() => setSelectedCredit(null)}
+          shop={shop}
         />
       )}
       <div className="table-container">
         <h2>Credit Sales List</h2>
+        {loading && <div>Loading...</div>}
         <table className="expense-table">
           <thead>
             <tr>
+              <th>Bill Number</th>
               <th>Customer</th>
               <th>Phone</th>
               <th>Total Credit (₹)</th>
@@ -302,25 +272,26 @@ const CreditSalesDashboard = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredSales.length === 0 ? (
+            {filteredSales.length === 0 && !loading ? (
               <tr>
-                <td colSpan="6">No credit sales found.</td>
+                <td colSpan="7">No credit sales found.</td>
               </tr>
             ) : (
               filteredSales.map((sale) => (
-                <tr key={sale.id}>
+                <tr key={sale._id}>
+                  <td>{sale.billNumber}</td>
                   <td>
                     {sale.customerName}
-                    {(isHighCredit(sale.totalCredit) || isOverdue(sale.lastTransaction)) && (
+                    {(isHighCredit(sale.totalAmount) || isOverdue(sale.lastTransactionDate)) && (
                       <span className="alert-badge">
                         <AlertCircle size={14} />
                       </span>
                     )}
                   </td>
-                  <td>{sale.phone}</td>
-                  <td>₹{sale.totalCredit.toFixed(2)}</td>
-                  <td className={isOverdue(sale.lastTransaction) ? "overdue" : ""}>
-                    {format(new Date(sale.lastTransaction), "dd MMMM yyyy")}
+                  <td>{sale.phoneNumber}</td>
+                  <td>₹{sale.totalAmount.toFixed(2)}</td>
+                  <td className={isOverdue(sale.lastTransactionDate) ? "overdue" : ""}>
+                    {format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")}
                   </td>
                   <td>{sale.status}</td>
                   <td>
@@ -328,14 +299,16 @@ const CreditSalesDashboard = () => {
                       className="edit-btn"
                       onClick={() => setSelectedCredit(sale)}
                       title="View Details"
+                      disabled={loading}
                     >
                       View
                     </button>
-                    {sale.status !== "Closed" && sale.status !== "Manually Closed" && (
+                    {sale.status !== "Cleared" && (
                       <button
                         className="edit-btn"
                         onClick={() => handleQuickClose(sale)}
                         title="Quick Close"
+                        disabled={loading}
                       >
                         <CheckCircle size={16} />
                       </button>

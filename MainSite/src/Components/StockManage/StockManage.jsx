@@ -1,12 +1,11 @@
-// src/StockManage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import { getStock, addStock, updateStock, deleteStock } from '../api.js';
+import { fetchStock, fetchCurrentStock, addStockItem, updateStockItem, deleteStockItems } from '../api.js'; // Updated imports
 import './StockManage.css';
 
 const StockManage = () => {
   const [items, setItems] = useState([]);
-  const [shop, setShop] = useState('shop1');
+  const [shop, setShop] = useState('Shop 1'); // Updated to match backend: "Shop 1" instead of "shop1"
   const [categories] = useState([
     'Cement',
     'Sand',
@@ -35,6 +34,7 @@ const StockManage = () => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showAveragePrices, setShowAveragePrices] = useState(false);
+  const [groupedItems, setGroupedItems] = useState([]); // Added for average prices from fetchCurrentStock
 
   const processItems = useCallback(
     (itemsToProcess) => {
@@ -58,54 +58,18 @@ const StockManage = () => {
         (a, b) => new Date(b.addedDate) - new Date(a.addedDate)
       );
 
-      // Group items for average price popup (case-insensitive)
-      const groupedItems = [];
-      const uniqueKeys = new Set();
-
-      itemsToProcess.forEach((item) => {
-        const category = item.category || 'Uncategorized';
-        const key = `${item.name.toLowerCase()}|${category.toLowerCase()}|${item.unit.toLowerCase()}`;
-        if (!uniqueKeys.has(key)) {
-          uniqueKeys.add(key);
-          const sameItems = itemsToProcess.filter(
-            (i) =>
-              i.name.toLowerCase() === item.name.toLowerCase() &&
-              (i.category || 'Uncategorized').toLowerCase() === category.toLowerCase() &&
-              i.unit.toLowerCase() === item.unit.toLowerCase()
-          );
-          const totalQuantity = sameItems.reduce(
-            (sum, i) => sum + (i.quantity || 0),
-            0
-          );
-          const totalValue = sameItems.reduce(
-            (sum, i) => sum + (i.quantity || 0) * (i.price || 0),
-            0
-          );
-          const averagePrice =
-            totalQuantity > 0 ? (totalValue / totalQuantity).toFixed(2) : '0.00';
-          groupedItems.push({
-            id: `${item.name}-${category}-${item.unit}-${Date.now()}`,
-            name: item.name, // Preserve original case for display
-            category: category,
-            unit: item.unit,
-            quantity: totalQuantity,
-            price: parseFloat(averagePrice),
-          });
-        }
-      });
-
-      return { filtered, groupedItems };
+      return { filtered };
     },
     [filterCategory, searchTerm]
   );
 
   useEffect(() => {
-    const fetchStock = async () => {
+    const fetchStockData = async () => {
       setIsLoading(true);
       try {
         setError(null);
-        const data = await getStock(shop);
-        console.log('getStock response:', data);
+        const data = await fetchStock(shop); // Updated to use fetchStock
+        console.log('fetchStock response:', data);
         setItems(data);
         const { filtered } = processItems(data);
         setFilteredItems(filtered);
@@ -115,13 +79,30 @@ const StockManage = () => {
         setIsLoading(false);
       }
     };
-    fetchStock();
+    fetchStockData();
   }, [shop, processItems]);
 
   useEffect(() => {
     const { filtered } = processItems(items);
     setFilteredItems(filtered);
   }, [filterCategory, searchTerm, items, processItems]);
+
+  // Fetch grouped items for average prices when popup is opened
+  useEffect(() => {
+    if (showAveragePrices) {
+      const fetchGroupedStock = async () => {
+        try {
+          setError(null);
+          const data = await fetchCurrentStock(shop, filterCategory, searchTerm); // Use fetchCurrentStock
+          console.log('fetchCurrentStock response:', data);
+          setGroupedItems(data);
+        } catch (err) {
+          setError(err.message);
+        }
+      };
+      fetchGroupedStock();
+    }
+  }, [shop, filterCategory, searchTerm, showAveragePrices]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -157,7 +138,7 @@ const StockManage = () => {
       setError(null);
       setIsLoading(true);
       if (editingItem) {
-        const updatedItem = await updateStock(shop, editingItem.id, newItem);
+        const updatedItem = await updateStockItem(shop, editingItem.id, newItem); // Updated to use updateStockItem
         const updatedItems = items.map((item) =>
           item.id === updatedItem.id ? updatedItem : item
         );
@@ -166,7 +147,7 @@ const StockManage = () => {
         setFilteredItems(filtered);
         setEditingItem(null);
       } else {
-        const addedItem = await addStock(shop, newItem);
+        const addedItem = await addStockItem(shop, newItem); // Updated to use addStockItem
         const updatedItems = [...items, addedItem];
         setItems(updatedItems);
         const { filtered } = processItems(updatedItems);
@@ -208,15 +189,14 @@ const StockManage = () => {
     try {
       setError(null);
       setIsLoading(true);
-      await deleteStock(shop, {
-        id: item.id,
+      await deleteStockItems(shop, {
         name: item.name,
-        category: item.category,
+        category: item.category || 'Uncategorized',
         unit: item.unit,
-      });
+      }); // Updated to use deleteStockItems with correct payload
       const updatedItems = items.filter(
         (i) =>
-          !(i.id === item.id &&
+          !(
             i.name.toLowerCase() === item.name.toLowerCase() &&
             (i.category || 'Uncategorized').toLowerCase() === (item.category || 'Uncategorized').toLowerCase() &&
             i.unit.toLowerCase() === item.unit.toLowerCase()
@@ -254,13 +234,13 @@ const StockManage = () => {
         <div className="form-group shop-selector">
           <label>Shop</label>
           <select value={shop} onChange={(e) => setShop(e.target.value)}>
-            <option value="shop1">Shop 1</option>
-            <option value="shop2">Shop 2</option>
+            <option value="Shop 1">Shop 1</option>
+            <option value="Shop 2">Shop 2</option>
           </select>
         </div>
         <h2>
           {editingItem ? 'Edit Stock Item' : 'Add New Stock'} -{' '}
-          {shop === 'shop1' ? 'Shop 1' : 'Shop 2'}
+          {shop === 'Shop 1' ? 'Shop 1' : 'Shop 2'}
         </h2>
         <div className="stock-form">
           <div className="form-group">
@@ -475,7 +455,7 @@ const StockManage = () => {
                 </tr>
               </thead>
               <tbody>
-                {processItems(items).groupedItems.map((item) => (
+                {groupedItems.map((item) => (
                   <tr key={item.id}>
                     <td>{item.name}</td>
                     <td>₹{item.price.toFixed(2)}/{item.unit}</td>
