@@ -149,14 +149,40 @@ export const fetchSummary = async (shop) => {
 };
 
 // Credit Sales APIs
-export const fetchCreditSales = async (shop) => {
-  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/credits`);
+export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '') => {
+  const params = new URLSearchParams();
+  params.append('page', page);
+  params.append('limit', limit);
+  params.append('sortBy', sortBy);
+  params.append('sortOrder', sortOrder);
+  if (search) params.append('search', search);
+  return request('GET', `${BASE_URL}/${encodeURIComponent(shop)}/credits?${params}`);
 };
 
 export const addCreditSale = async (shop, saleData) => {
   return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/credits`, saleData);
 };
 
-export const updateCreditSale = async (shop, id, updateData) => {
+export const addCreditPayment = async (shop, id, paymentData) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, { payment: paymentData });
+};
+
+export const closeCreditSale = async (shop, id, status = 'Cleared', paymentData = null) => {
+  const updateData = { status };
+  if (paymentData) {
+    updateData.payment = paymentData;
+  }
   return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, updateData);
+};
+
+export const addCreditRefund = async (shop, id, refundData) => {
+  return request('POST', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/refund`, refundData);
+};
+
+export const updateCreditPayment = async (shop, id, paymentId, paymentData) => {
+  return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`, paymentData);
+};
+
+export const deleteCreditPayment = async (shop, id, paymentId) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`);
 };

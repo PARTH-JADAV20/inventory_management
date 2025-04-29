@@ -1,0 +1,232 @@
+.modal-overlay-dax {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content-dax {
+    background: #1e1e2d;
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 900px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    color: #ffffff;
+    position: relative;
+}
+
+.modal-header-dax {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header-dax h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.close-btn-dax {
+    background: none;
+    border: none;
+    color: #a1a5b7;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.close-btn-dax:hover {
+    color: #ffffff;
+}
+
+.credit-details-dax {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.detail-row-dax {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    background: #2b2b40;
+    border-radius: 4px;
+}
+
+.detail-row-dax span:first-child {
+    color: #a1a5b7;
+}
+
+.status-open-dax {
+    color: #ff6b35;
+}
+
+.status-cleared-dax {
+    color: #4caf50;
+}
+
+.items-table-dax,
+.payment-history-table-dax {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.items-table-dax th,
+.payment-history-table-dax th {
+    background: #2b2b40;
+    color: #a1a5b7;
+    padding: 10px;
+    text-align: left;
+}
+
+.items-table-dax td,
+.payment-history-table-dax td {
+    background: #1e1e2d;
+    padding: 10px;
+    border: 1px solid #3a3a5a;
+}
+
+.items-table-dax tr:nth-child(even),
+.payment-history-table-dax tr:nth-child(even) {
+    background: #25253a;
+}
+
+.items-table-dax tr:hover,
+.payment-history-table-dax tr:hover {
+    background: #3a3a5a;
+}
+
+.payment-section-dax,
+.edit-payment-section-dax {
+    margin-top: 20px;
+}
+
+.payment-form-dax {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.form-group-dax {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group-dax label {
+    font-size: 14px;
+    color: #a1a5b7;
+}
+
+.form-group-dax input,
+.form-group-dax select {
+    padding: 10px;
+    border: 1px solid #3a3a5a;
+    border-radius: 4px;
+    background: #2b2b40;
+    color: #ffffff;
+    font-size: 14px;
+}
+
+.form-group-dax input:disabled,
+.form-group-dax select:disabled {
+    background: #3a3a5a;
+    cursor: not-allowed;
+}
+
+.form-buttons-dax {
+    display: flex;
+    gap: 10px;
+}
+
+.submit-btn-dax,
+.manual-close-btn-dax,
+.cancel-btn-dax,
+.edit-btn-dax,
+.delete-btn-dax {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.submit-btn-dax {
+    background: #4caf50;
+    color: #ffffff;
+}
+
+.submit-btn-dax:hover:not(:disabled) {
+    background: #45a049;
+}
+
+.manual-close-btn-dax {
+    background: #ff6b35;
+    color: #ffffff;
+}
+
+.manual-close-btn-dax:hover:not(:disabled) {
+    background: #e55a2e;
+}
+
+.cancel-btn-dax {
+    background: #ff4444;
+    color: #ffffff;
+}
+
+.cancel-btn-dax:hover:not(:disabled) {
+    background: #e53935;
+}
+
+.edit-btn-dax {
+    background: #0288d1;
+    color: #ffffff;
+    padding: 5px 10px;
+}
+
+.edit-btn-dax:hover:not(:disabled) {
+    background: #0277bd;
+}
+
+.delete-btn-dax {
+    background: #d32f2f;
+    color: #ffffff;
+    padding: 5px 10px;
+}
+
+.delete-btn-dax:hover:not(:disabled) {
+    background: #b71c1c;
+}
+
+.warning-message-dax {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ff4444;
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+@media (max-width: 768px) {
+    .modal-content-dax {
+        width: 95%;
+    }
+    .credit-details-dax {
+        grid-template-columns: 1fr;
+    }
+    .payment-form-dax {
+        grid-template-columns: 1fr;
+    }
+}
