@@ -126,3 +126,65 @@ export const deleteExpense = async (shop, id) => {
   
   return response.json();
 };
+
+const apiCall = async (method, endpoint, data = null) => {
+  const options = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (data) {
+    options.body = JSON.stringify(data);
+  }
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.message || 'API request failed');
+  }
+  return result;
+};
+
+// Get all customers for a shop
+export const getCustomers = async (shop, search = '', showDeleted = false) => {
+  const query = new URLSearchParams({ search, showDeleted }).toString();
+  return apiCall('GET', `/${shop}/customers?${query}`);
+};
+
+// Get customer by phone number
+export const getCustomerByPhone = async (shop, phoneNumber) => {
+  return apiCall('GET', `/${shop}/customers/${phoneNumber}`);
+};
+
+// Create a new customer
+export const createCustomer = async (shop, customerData) => {
+  return apiCall('POST', `/${shop}/customers`, customerData);
+};
+
+// Update a profile
+export const updateProfile = async (shop, phoneNumber, profileId, profileData) => {
+  return apiCall('PUT', `/${shop}/customers/${phoneNumber}/profiles/${profileId}`, profileData);
+};
+
+// Soft delete a profile
+export const softDeleteProfile = async (shop, phoneNumber, profileId) => {
+  return apiCall('DELETE', `/${shop}/customers/${phoneNumber}/profiles/${profileId}`);
+};
+
+// Restore a soft-deleted profile
+export const restoreProfile = async (shop, phoneNumber, profileId) => {
+  return apiCall('POST', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/restore`);
+};
+
+// Permanently delete a profile
+export const permanentDeleteProfile = async (shop, phoneNumber, profileId) => {
+  return apiCall('DELETE', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/permanent`);
+};
+
+// Add advance payment
+export const addAdvancePayment = async (shop, phoneNumber, profileId, advanceData) => {
+  return apiCall('POST', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/advance`, advanceData);
+};
+
+// Get advance details for a profile
+export const getAdvanceDetails = async (shop, phoneNumber, profileId) => {
+  return apiCall('GET', `/${shop}/customers/${phoneNumber}/profiles/${profileId}/advance`);
+};

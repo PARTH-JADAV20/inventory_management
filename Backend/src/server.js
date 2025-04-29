@@ -8,6 +8,8 @@ const customerRoutes = require('./routes/customerRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
+const creditSaleRoutes = require('./routes/creditSaleRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Initialize Express
 const app = express();
@@ -18,30 +20,13 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-
-// CORS Configurations
-app.use(cors({ origin: '*' }));
-
-// const corsOptions = {
-//   origin: [
-//     'http://localhost:3000',
-//     'http://localhost:5173',
-//     'http://localhost:5174',
-//     'http://127.0.0.1:3000',
-//     'http://127.0.0.1:5000',
-//     'http://127.0.0.1:5173'
-//   ],
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization'],
-//   credentials: true
-// };
-
-
 // Routes
 app.use('/api/:shop/customers', customerRoutes);
 app.use('/api/:shop/stock', stockRoutes);
 app.use('/api/:shop/sales', salesRoutes);
 app.use('/api/:shop/expenses', expenseRoutes);
+app.use('/api/:shop/credits', creditSaleRoutes);
+app.use('/api/:shop/dashboard', dashboardRoutes);
 
 // Shop validation middleware
 app.use((req, res, next) => {

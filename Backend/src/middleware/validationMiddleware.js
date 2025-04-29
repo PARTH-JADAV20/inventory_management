@@ -1,5 +1,12 @@
 const Joi = require('joi');
 
+// Advance transaction validation schema
+const advanceTransactionSchema = Joi.object({
+  transactionType: Joi.string().valid('Deposit', 'Refund').required(),
+  amount: Joi.number().required(),
+  date: Joi.date().required()
+});
+
 // Customer validation schema
 const customerSchema = Joi.object({
   phoneNumber: Joi.string().required(),
@@ -17,6 +24,7 @@ const customerSchema = Joi.object({
         showinadvance: true,
         paymentMethod: 'Cash'
       }),
+      advanceHistory: Joi.array().items(advanceTransactionSchema).default([]),
       paymentMethod: Joi.string().default('Cash'),
       credit: Joi.number().default(0),
       deleteuser: Joi.object({
@@ -116,6 +124,29 @@ const expenseFilterSchema = Joi.object({
   return value;
 }, 'Filter validation');
 
+// Credit sale validation schema
+const creditSaleSchema = Joi.object({
+  customerName: Joi.string().required(),
+  phoneNumber: Joi.string().required(),
+  items: Joi.array().items(
+    Joi.object({
+      product: Joi.string().required(),
+      qty: Joi.number().min(0.01).required(),
+      unit: Joi.string().required(),
+      pricePerUnit: Joi.number().min(0.01).required(),
+      amount: Joi.number().min(0.01).required(),
+      date: Joi.date().required()
+    })
+  ).required(),
+  totalAmount: Joi.number().min(0.01).required()
+});
+
+// Dashboard filter validation schema
+const dashboardFilterSchema = Joi.object({
+  shop: Joi.string().valid('All Shops', 'Shop A', 'Shop B').required(),
+  timePeriod: Joi.string().valid('Today', 'This Week', 'This Month').required()
+});
+
 // Middleware to validate request body
 const validateRequest = (schema) => {
   return (req, res, next) => {
@@ -146,5 +177,7 @@ module.exports = {
   validateStock: validateRequest(stockSchema),
   validateStockDelete: validateRequest(stockDeleteSchema),
   validateExpense: validateRequest(expenseSchema),
-  validateExpenseFilter: validateQuery(expenseFilterSchema)
+  validateExpenseFilter: validateQuery(expenseFilterSchema),
+  validateCreditSale: validateRequest(creditSaleSchema),
+  validateDashboardFilter: validateQuery(dashboardFilterSchema),
 };
