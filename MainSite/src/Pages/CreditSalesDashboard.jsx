@@ -1,13 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { Search, Plus, Download, AlertCircle, CheckCircle } from "lucide-react";
+import { Search, Plus, Download, AlertCircle } from "lucide-react";
 import AddCreditSale from "../Components/CreditSales/AddCreditSale";
 import CreditDetailsModal from "../Components/CreditSales/CreditDetailsModal";
-import { fetchCreditSales, updateCreditSale } from "../Components/api"; // Adjust path to your api.js
+import { fetchCreditSales, closeCreditSale, fetchCurrentStock } from "../Components/api";
 import "./CreditSales.css";
+
+// Custom debounce function
+const debounce = (func, wait) => {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
 
 const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   const [creditSales, setCreditSales] = useState([]);
+  const [stock, setStock] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [amountFilter, setAmountFilter] = useState("All");
@@ -16,39 +26,73 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   const [selectedCredit, setSelectedCredit] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sortBy, setSortBy] = useState("lastTransactionDate");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   const getStartOfMonth = (monthsBack) => {
     const date = new Date();
     date.setMonth(date.getMonth() - monthsBack);
     date.setDate(1);
+    date.setHours(0, 0, 0, 0);
     return date;
   };
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchCreditSales(shop);
-      setCreditSales(data);
-      setError("");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+  const fetchData = useCallback(
+    async (search = "") => {
+      setLoading(true);
+      try {
+        const [salesResponse, stockData] = await Promise.all([
+          fetchCreditSales(shop, page, limit, sortBy, sortOrder, search.trim() || undefined),
+          fetchCurrentStock(shop),
+        ]);
+        // Log response for debugging
+        console.log("fetchCreditSales response:", salesResponse);
+        // Ensure salesResponse.data is an array; fallback to empty array if not
+        const salesData = Array.isArray(salesResponse.data) ? salesResponse.data : [];
+        setCreditSales(salesData);
+        setTotalPages(salesResponse.totalPages || 1);
+        setStock(Array.isArray(stockData) ? stockData : []);
+        setError("");
+      } catch (err) {
+        console.error("fetchData error:", err);
+        setError(err.message || "Failed to fetch data");
+        setCreditSales([]); // Ensure creditSales is an array on error
+      } finally {
+        setLoading(false);
+      }
+    },
+    [shop, page, limit, sortBy, sortOrder]
+  );
+
+  // Debounced search handler
+  const debouncedFetchData = useCallback(
+    debounce((search) => {
+      fetchData(search);
+    }, 500),
+    [fetchData]
+  );
+
+  // Initial data fetch on mount and when dependencies change
+  useEffect(() => {
+    fetchData(""); // Explicitly fetch all data on initial load
+  }, [fetchData]);
+
+  // Handle search input changes
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedFetchData(value);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [shop]);
-
   const filteredSales = creditSales.filter((sale) => {
-    const matchesSearch =
-      sale.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.phoneNumber.includes(searchTerm);
     const matchesStatus = statusFilter === "All" || sale.status === statusFilter;
     const matchesAmount =
       amountFilter === "All" ||
-      (amountFilter === ">10000" && sale.totalAmount > 10000) ||
+      (amountFilter === ">10000" && (sale.totalAmount || 0) > 10000) ||
+      (amountFilter === ">50000" && (sale.totalAmount || 0) > 50000) ||
       (amountFilter === ">2months" &&
         (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60);
     const matchesTime =
@@ -58,9 +102,9 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
       (timeFilter === "Last Month" &&
         new Date(sale.lastTransactionDate) >= getStartOfMonth(1) &&
         new Date(sale.lastTransactionDate) < getStartOfMonth(0)) ||
-      (timeFilter === "Last 2 Months" &&
-        new Date(sale.lastTransactionDate) >= getStartOfMonth(2));
-    return matchesSearch && matchesStatus && matchesAmount && matchesTime;
+      (timeFilter === "Last 3 Months" &&
+        new Date(sale.lastTransactionDate) >= getStartOfMonth(3));
+    return matchesStatus && matchesAmount && matchesTime;
   });
 
   const summary = {
@@ -71,11 +115,27 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
     ).size,
     totalCredit: creditSales
       .filter((sale) => sale.status !== "Cleared")
-      .reduce((sum, sale) => sum + sale.totalAmount, 0),
+      .reduce((sum, sale) => sum + (sale.totalAmount || 0), 0),
+    totalPaid: creditSales
+      .filter((sale) => sale.status !== "Cleared")
+      .reduce((sum, sale) => sum + (sale.paidAmount || 0), 0),
+    overdue: creditSales
+      .filter(
+        (sale) =>
+          sale.status !== "Cleared" &&
+          (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60
+      )
+      .reduce((sum, sale) => sum + (sale.totalAmount || 0), 0),
   };
 
-  const handleAddCredit = (newSale) => {
-    setCreditSales([...creditSales, newSale]);
+  const handleAddCredit = async (newSale) => {
+    setCreditSales([newSale, ...creditSales]);
+    try {
+      const updatedStock = await fetchCurrentStock(shop);
+      setStock(Array.isArray(updatedStock) ? updatedStock : []);
+    } catch (err) {
+      setError(err.message || "Failed to update stock");
+    }
     setShowAddForm(false);
   };
 
@@ -85,13 +145,17 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   };
 
   const handleQuickClose = async (sale) => {
-    if (window.confirm(`Mark ₹${sale.totalAmount.toFixed(2)} for ${sale.customerName} as fully paid?`)) {
+    if (
+      window.confirm(
+        `Mark ₹${(sale.totalAmount || 0).toFixed(2)} for ${sale.customerName} as fully paid?`
+      )
+    ) {
       setLoading(true);
       try {
-        const updatedData = await updateCreditSale(shop, sale._id, { status: "Cleared" });
-        handleUpdateCredit(updatedData);
+        const updatedSale = await closeCreditSale(shop, sale._id, "Cleared");
+        handleUpdateCredit(updatedSale);
       } catch (error) {
-        setError(error.message);
+        setError(error.message || "Failed to close bill");
       } finally {
         setLoading(false);
       }
@@ -103,26 +167,41 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
     const printContent = `
       <html>
         <head>
-          <title>Credit Sales Report</title>
+          <title>Credit Sales Report - ${shop}</title>
           <style>
-            body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+            body { font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333; }
             h2 { color: #ff6b35; }
+            .summary-dax { margin-bottom: 20px; }
+            .summary-dax p { margin: 5px 0; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
-            th { background-color: #2b2b40; color: #a1a5b7; }
-            td { background-color: #1e1e2d; color: #ffffff; }
-            .overdue { color: #ff4444; }
+            th, td { border: 1px solid #ccc; padding: 12px; text-align: left; }
+            th { background-color: #2b2b40; color: #ffffff; }
+            td { background-color: #f9f9f9; }
+            .overdue-dax { color: #ff4444; font-weight: bold; }
+            .status-cleared-dax { color: #4caf50; }
+            .status-open-dax { color: #ff6b35; }
+            @media print {
+              button { display: none; }
+            }
           </style>
         </head>
         <body>
-          <h2>Credit Sales Report</h2>
+          <h2>Credit Sales Report - ${shop}</h2>
+          <div class="summary-dax">
+            <p><strong>Active Credit Customers:</strong> ${summary.customers}</p>
+            <p><strong>Total Outstanding:</strong> ₹${summary.totalCredit.toFixed(2)}</p>
+            <p><strong>Total Paid:</strong> ₹${summary.totalPaid.toFixed(2)}</p>
+            <p><strong>Overdue (> 2 Months):</strong> ₹${summary.overdue.toFixed(2)}</p>
+          </div>
           <table>
             <thead>
               <tr>
                 <th>Bill Number</th>
                 <th>Customer</th>
                 <th>Phone</th>
-                <th>Total Credit (₹)</th>
+                <th>Original Amount (₹)</th>
+                <th>Paid Amount (₹)</th>
+                <th>Remaining (₹)</th>
                 <th>Last Transaction</th>
                 <th>Status</th>
               </tr>
@@ -130,16 +209,23 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
             <tbody>
               ${filteredSales
                 .map(
-                  (sale) => `
-                <tr>
-                  <td>${sale.billNumber}</td>
-                  <td>${sale.customerName}</td>
-                  <td>${sale.phoneNumber}</td>
-                  <td>₹${sale.totalAmount.toFixed(2)}</td>
-                  <td>${format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")}</td>
-                  <td>${sale.status}</td>
-                </tr>
-              `
+                  (sale) => {
+                    const lastTransactionDate = sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
+                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+                      : "N/A";
+                    return `
+                    <tr>
+                      <td>${sale.billNumber}</td>
+                      <td>${sale.customerName}</td>
+                      <td>${sale.phoneNumber}</td>
+                      <td>₹${((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
+                      <td>₹${(sale.paidAmount || 0).toFixed(2)}</td>
+                      <td>₹${(sale.totalAmount || 0).toFixed(2)}</td>
+                      <td class="${isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}">${lastTransactionDate}</td>
+                      <td class="status-${sale.status.toLowerCase()}-dax">${sale.status}</td>
+                    </tr>
+                  `;
+                  }
                 )
                 .join("")}
             </tbody>
@@ -152,100 +238,269 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
     printWindow.print();
   };
 
+  const handleExportCSV = () => {
+    const headers = [
+      "Bill Number",
+      "Customer",
+      "Phone",
+      "Original Amount (₹)",
+      "Paid Amount (₹)",
+      "Remaining (₹)",
+      "Last Transaction",
+      "Status",
+    ];
+    const rows = filteredSales.map((sale) => [
+      sale.billNumber,
+      sale.customerName,
+      sale.phoneNumber,
+      ((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2),
+      (sale.paidAmount || 0).toFixed(2),
+      (sale.totalAmount || 0).toFixed(2),
+      sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
+        ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+        : "N/A",
+      sale.status,
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(",")),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `credit_sales_${shop}_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+  };
+
   const isOverdue = (date) => {
+    if (!date || isNaN(new Date(date).getTime())) return false;
     const daysDiff = (new Date() - new Date(date)) / (1000 * 60 * 60 * 24);
     return daysDiff > 60;
   };
 
-  const isHighCredit = (amount) => amount > 50000;
+  const isHighCredit = (amount) => (amount || 0) > 50000;
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("desc");
+    }
+    setPage(1); // Reset to first page on sort
+  };
 
   return (
-    <div className="main-content">
-      <div className="summary-card">
-        <div className="summary-item">
+    <div className="credit-sales-dashboard-dax">
+      <h1>Credit Sales Dashboard - {shop}</h1>
+      <div className="summary-cards-dax">
+        <div className="summary-card-dax">
           <h3>Active Credit Customers</h3>
           <p>{loading ? "Loading..." : summary.customers}</p>
         </div>
-        <div className="summary-item">
+        <div className="summary-card-dax">
           <h3>Total Outstanding (₹)</h3>
           <p>{loading ? "Loading..." : `₹${summary.totalCredit.toFixed(2)}`}</p>
         </div>
-      </div>
-      <div className="form-container">
-        <h2>Credit Sales Dashboard</h2>
-        {error && <div className="warning">{error}</div>}
-        <div className="table-actions">
-          <div className="search-container">
-            <div className="search-group">
-              <label>Search:</label>
-              <div className="search-input-wrapper">
-                <Search size={16} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Customer name or phone"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div className="search-group">
-              <label>Status:</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                disabled={loading}
-              >
-                <option>All</option>
-                <option>Open</option>
-                <option>Cleared</option>
-              </select>
-            </div>
-            <div className="search-group">
-              <label>Amount/Time:</label>
-              <select
-                value={amountFilter}
-                onChange={(e) => setAmountFilter(e.target.value)}
-                disabled={loading}
-              >
-                <option value="All">All</option>
-                <option value=">10000">Credit &gt; ₹10,000</option>
-                <option value=">2months">Overdue &gt; 2 Months</option>
-              </select>
-            </div>
-            <div className="search-group">
-              <label>Period:</label>
-              <select
-                value={timeFilter}
-                onChange={(e) => setTimeFilter(e.target.value)}
-                disabled={loading}
-              >
-                <option value="All">All Time</option>
-                <option value="This Month">This Month</option>
-                <option value="Last Month">Last Month</option>
-                <option value="Last 2 Months">Last 2 Months</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <button className="submit-btn" onClick={() => setShowAddForm(true)} disabled={loading}>
-              <Plus size={16} /> Add Credit Sale
-            </button>
-            <button
-              className="print-btn"
-              onClick={handlePrint}
-              disabled={filteredSales.length === 0 || loading}
-            >
-              <Download size={16} /> Export PDF
-            </button>
-          </div>
+        <div className="summary-card-dax">
+          <h3>Total Paid (₹)</h3>
+          <p>{loading ? "Loading..." : `₹${summary.totalPaid.toFixed(2)}`}</p>
+        </div>
+        <div className="summary-card-dax">
+          <h3>Overdue (&gt; 2 Months)</h3>
+          <p>{loading ? "Loading..." : `₹${summary.overdue.toFixed(2)}`}</p>
         </div>
       </div>
+      {error && (
+        <div className="error-message-dax">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+      <div className="filters-and-actions-dax">
+        <div className="filters-dax">
+          <div className="filter-group-dax">
+            <label>Search:</label>
+            <div className="search-input-wrapper-dax">
+              <Search size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                placeholder="Bill, customer, or phone"
+                disabled={loading}
+              />
+            </div>
+          </div>
+          <div className="filter-group-dax">
+            <label>Status:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              disabled={loading}
+            >
+              <option>All</option>
+              <option>Open</option>
+              <option>Cleared</option>
+            </select>
+          </div>
+          <div className="filter-group-dax">
+            <label>Amount/Time:</label>
+            <select
+              value={amountFilter}
+              onChange={(e) => setAmountFilter(e.target.value)}
+              disabled={loading}
+            >
+              <option value="All">All</option>
+              <option value=">10000">Credit &gt; ₹10,000</option>
+              <option value=">50000">Credit &gt; ₹50,000</option>
+              <option value=">2months">Overdue &t; 2 Months</option>
+            </select>
+          </div>
+          <div className="filter-group-dax">
+            <label>Period:</label>
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+              disabled={loading}
+            >
+              <option value="All">All Time</option>
+              <option value="This Month">This Month</option>
+              <option value="Last Month">Last Month</option>
+              <option value="Last 3 Months">Last 3 Months</option>
+            </select>
+          </div>
+        </div>
+        <div className="actions-dax">
+          <button
+            className="add-btn-dax"
+            onClick={() => setShowAddForm(true)}
+            disabled={loading}
+          >
+            <Plus size={16} /> Add Credit Sale
+          </button>
+          <button
+            className="print-btn-dax"
+            onClick={handlePrint}
+            disabled={filteredSales.length === 0 || loading}
+          >
+            <Download size={16} /> Print Report
+          </button>
+          <button
+            className="export-btn-dax"
+            onClick={handleExportCSV}
+            disabled={filteredSales.length === 0 || loading}
+          >
+            <Download size={16} /> Export CSV
+          </button>
+        </div>
+      </div>
+      <div className="pagination-dax">
+        <button
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={page === 1 || loading}
+          className="pagination-btn-dax"
+        >
+          Previous
+        </button>
+        <span>
+          Page {page} of {totalPages}
+        </span>
+        <button
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          disabled={page === totalPages || loading}
+          className="pagination-btn-dax"
+        >
+          Next
+        </button>
+      </div>
+      {loading ? (
+        <div className="loading-dax">Loading...</div>
+      ) : filteredSales.length === 0 ? (
+        <div className="no-data-dax">No credit sales found</div>
+      ) : (
+        <div className="table-container-dax">
+          <table className="credit-sales-table-dax">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort("billNumber")}>
+                  Bill Number {sortBy === "billNumber" && (sortOrder === "asc" ? "↑" : "↓")}
+                </th>
+                <th onClick={() => handleSort("customerName")}>
+                  Customer {sortBy === "customerName" && (sortOrder === "asc" ? "↑" : "↓")}
+                </th>
+                <th onClick={() => handleSort("phoneNumber")}>
+                  Phone {sortBy === "phoneNumber" && (sortOrder === "asc" ? "↑" : "↓")}
+                </th>
+                <th onClick={() => handleSort("totalAmount")}>
+                  Original Amount (₹) {sortBy === "totalAmount" && (sortOrder === "asc" ? "↑" : "↓")}
+                </th>
+                <th>Paid Amount (₹)</th>
+                <th>Remaining (₹)</th>
+                <th onClick={() => handleSort("lastTransactionDate")}>
+                  Last Transaction{" "}
+                  {sortBy === "lastTransactionDate" && (sortOrder === "asc" ? "↑" : "↓")}
+                </th>
+                <th onClick={() => handleSort("status")}>
+                  Status {sortBy === "status" && (sortOrder === "asc" ? "↑" : "↓")}
+                </th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSales.map((sale) => (
+                <tr
+                  key={sale._id}
+                  className={isHighCredit(sale.totalAmount) ? "high-credit-dax" : ""}
+                >
+                  <td>{sale.billNumber}</td>
+                  <td>{sale.customerName}</td>
+                  <td>{sale.phoneNumber}</td>
+                  <td>₹{((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
+                  <td>₹{(sale.paidAmount || 0).toFixed(2)}</td>
+                  <td>₹{(sale.totalAmount || 0).toFixed(2)}</td>
+                  <td
+                    className={isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}
+                  >
+                    {sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
+                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+                      : "N/A"}
+                  </td>
+                  <td className={`status-${sale.status}-dax`}>
+                    {sale.status}
+                  </td>
+                  <td>
+                    <div className="action-buttons-dax">
+                      <button
+                        className="view-btn-dax"
+                        onClick={() => setSelectedCredit(sale)}
+                        disabled={loading}
+                      >
+                        View Details
+                      </button>
+                      {sale.status !== "Cleared" && (
+                        <button
+                          className="quick-close-btn-dax"
+                          onClick={() => handleQuickClose(sale)}
+                          disabled={loading}
+                        >
+                          Quick Close
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {showAddForm && (
         <AddCreditSale
           onAdd={handleAddCredit}
           onCancel={() => setShowAddForm(false)}
           shop={shop}
+          stock={stock}
         />
       )}
       {selectedCredit && (
@@ -256,70 +511,6 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
           shop={shop}
         />
       )}
-      <div className="table-container">
-        <h2>Credit Sales List</h2>
-        {loading && <div>Loading...</div>}
-        <table className="expense-table">
-          <thead>
-            <tr>
-              <th>Bill Number</th>
-              <th>Customer</th>
-              <th>Phone</th>
-              <th>Total Credit (₹)</th>
-              <th>Last Transaction</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSales.length === 0 && !loading ? (
-              <tr>
-                <td colSpan="7">No credit sales found.</td>
-              </tr>
-            ) : (
-              filteredSales.map((sale) => (
-                <tr key={sale._id}>
-                  <td>{sale.billNumber}</td>
-                  <td>
-                    {sale.customerName}
-                    {(isHighCredit(sale.totalAmount) || isOverdue(sale.lastTransactionDate)) && (
-                      <span className="alert-badge">
-                        <AlertCircle size={14} />
-                      </span>
-                    )}
-                  </td>
-                  <td>{sale.phoneNumber}</td>
-                  <td>₹{sale.totalAmount.toFixed(2)}</td>
-                  <td className={isOverdue(sale.lastTransactionDate) ? "overdue" : ""}>
-                    {format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")}
-                  </td>
-                  <td>{sale.status}</td>
-                  <td>
-                    <button
-                      className="edit-btn"
-                      onClick={() => setSelectedCredit(sale)}
-                      title="View Details"
-                      disabled={loading}
-                    >
-                      View
-                    </button>
-                    {sale.status !== "Cleared" && (
-                      <button
-                        className="edit-btn"
-                        onClick={() => handleQuickClose(sale)}
-                        title="Quick Close"
-                        disabled={loading}
-                      >
-                        <CheckCircle size={16} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 };

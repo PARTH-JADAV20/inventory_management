@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { Calendar } from "lucide-react";
+import { Calendar, AlertCircle } from "lucide-react";
+import { fetchCustomers, addCreditSale } from "../api.js";
+import "./AddCreditSale.css";
 
-const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
+const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
   const today = new Date();
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -20,32 +22,22 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = "http://localhost:5000";
-
-  const products = [
-    "Cement (Ambuja)",
-    "Cement (UltraTech)",
-    "Steel Rod (Tata)",
-    "Sand",
-    "Bricks",
-  ];
   const units = ["Kg", "Bag", "Litre", "Piece", "Truck"];
 
   useEffect(() => {
     if (isExistingCustomer) {
       setLoading(true);
-      fetch(`${API_URL}/api/${shop}/customers`)
-        .then((res) => res.json())
+      fetchCustomers(shop, customerSearch)
         .then((data) => {
           setCustomers(data);
           setLoading(false);
         })
-        .catch(() => {
-          setWarning("Failed to fetch customers");
+        .catch((err) => {
+          setWarning(err.message || "Failed to fetch customers");
           setLoading(false);
         });
     }
-  }, [isExistingCustomer, shop]);
+  }, [isExistingCustomer, shop, customerSearch]);
 
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
@@ -60,6 +52,16 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...items];
     updatedItems[index][field] = value;
+    if (field === "product" && !updatedItems[index].isManualProduct) {
+      const selectedStock = stock.find((s) => s.name === value);
+      if (selectedStock) {
+        updatedItems[index].unit = selectedStock.unit;
+        updatedItems[index].pricePerUnit = selectedStock.price.toString();
+      } else {
+        updatedItems[index].unit = "";
+        updatedItems[index].pricePerUnit = "";
+      }
+    }
     setItems(updatedItems);
   };
 
@@ -67,6 +69,8 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
     const updatedItems = [...items];
     updatedItems[index].isManualProduct = !updatedItems[index].isManualProduct;
     updatedItems[index].product = "";
+    updatedItems[index].unit = "";
+    updatedItems[index].pricePerUnit = "";
     setItems(updatedItems);
   };
 
@@ -113,6 +117,13 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
         setWarning("Invalid date");
         return;
       }
+      if (!item.isManualProduct) {
+        const stockItem = stock.find((s) => s.name === item.product && s.unit === item.unit);
+        if (!stockItem || stockItem.quantity < qty) {
+          setWarning(`Insufficient stock for ${item.product} (${item.unit})`);
+          return;
+        }
+      }
     }
     const totalAmount = items.reduce(
       (sum, item) => sum + parseFloat(item.qty) * parseFloat(item.pricePerUnit),
@@ -134,20 +145,15 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
     };
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/${shop}/credits`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(saleData),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to add credit sale");
-      }
-      const newSale = await res.json();
+      const newSale = await addCreditSale(shop, saleData);
       onAdd(newSale);
       setWarning("");
+      setFormData({ customerName: "", phone: "" });
+      setItems([{ product: "", qty: "", unit: "", pricePerUnit: "", date: today, isManualProduct: false }]);
+      setSelectedCustomer(null);
+      setIsExistingCustomer(false);
     } catch (error) {
-      setWarning(error.message);
+      setWarning(error.message || "Failed to add credit sale");
     } finally {
       setLoading(false);
     }
@@ -160,23 +166,24 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
   );
 
   return (
-    <div className="form-container">
+    <div className="add-credit-sale-container-dax">
       <h2>Add Credit Sale</h2>
-      <form className="expense-form" onSubmit={handleSubmit}>
-        <div className="customer-details-row">
-          <div className="form-group">
+      <form className="add-credit-sale-form-dax" onSubmit={handleSubmit}>
+        <div className="customer-details-section-dax">
+          <div className="form-group-dax">
             <label>Customer Type</label>
-            <div className="checkbox-container">
+            <div className="checkbox-container-dax">
               <input
                 type="checkbox"
                 checked={isExistingCustomer}
                 onChange={(e) => setIsExistingCustomer(e.target.checked)}
+                disabled={loading}
               />
-              Use Existing Customer
+              <span>Use Existing Customer</span>
             </div>
           </div>
           {isExistingCustomer ? (
-            <div className="form-group search-group">
+            <div className="form-group-dax search-group-dax">
               <label>Search Customer</label>
               <input
                 type="text"
@@ -184,13 +191,14 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                 onChange={(e) => setCustomerSearch(e.target.value)}
                 placeholder="Search by name or phone"
                 disabled={loading}
+                className="search-input-dax"
               />
               {customerSearch && !loading && filteredCustomers.length > 0 && (
-                <div className="customer-dropdown">
+                <div className="customer-dropdown-dax">
                   {filteredCustomers.map((customer) => (
                     <div
                       key={customer.phoneNumber}
-                      className="customer-option"
+                      className="customer-option-dax"
                       onClick={() => handleCustomerSelect(customer)}
                     >
                       {customer.name} ({customer.phoneNumber})
@@ -198,10 +206,13 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                   ))}
                 </div>
               )}
+              {customerSearch && !loading && filteredCustomers.length === 0 && (
+                <div className="no-results-dax">No customers found</div>
+              )}
             </div>
           ) : (
-            <>
-              <div className="form-group">
+            <div className="new-customer-fields-dax">
+              <div className="form-group-dax">
                 <label>Customer Name</label>
                 <input
                   type="text"
@@ -213,7 +224,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                   disabled={loading}
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group-dax">
                 <label>Phone</label>
                 <input
                   type="text"
@@ -225,30 +236,30 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                   disabled={loading}
                 />
               </div>
-            </>
+            </div>
           )}
         </div>
 
         {(selectedCustomer || formData.customerName) && (
-          <div className="selected-customer-header">
+          <div className="selected-customer-header-dax">
             <h3>Adding items for: {selectedCustomer ? selectedCustomer.name : formData.customerName}</h3>
           </div>
         )}
 
-        <div className="items-section">
-          <label className="items-label">Items</label>
+        <div className="items-section-dax">
+          <label className="items-label-dax">Items</label>
           {items.map((item, index) => (
-            <div key={index} className={items.length <= 2 ? "item-group-horizontal" : "item-group-vertical"}>
-              <div className="form-group">
+            <div key={index} className="item-row-dax">
+              <div className="form-group-dax">
                 <label>Product</label>
-                <div className="checkbox-container">
+                <div className="checkbox-container-dax">
                   <input
                     type="checkbox"
                     checked={item.isManualProduct}
                     onChange={() => handleToggleManualProduct(index)}
                     disabled={loading}
                   />
-                  Manual Product
+                  <span>Manual Product</span>
                 </div>
                 {item.isManualProduct ? (
                   <input
@@ -267,15 +278,15 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                     disabled={loading}
                   >
                     <option value="">Select Product</option>
-                    {products.map((prod) => (
-                      <option key={prod} value={prod}>
-                        {prod}
+                    {stock.map((prod) => (
+                      <option key={`${prod.name}|${prod.unit}`} value={prod.name}>
+                        {prod.name} (Qty: {prod.quantity} {prod.unit})
                       </option>
                     ))}
                   </select>
                 )}
               </div>
-              <div className="form-group">
+              <div className="form-group-dax">
                 <label>Quantity</label>
                 <input
                   type="number"
@@ -288,13 +299,13 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                   disabled={loading}
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group-dax">
                 <label>Unit</label>
                 <select
                   value={item.unit}
                   onChange={(e) => handleItemChange(index, "unit", e.target.value)}
                   required
-                  disabled={loading}
+                  disabled={loading || !item.isManualProduct}
                 >
                   <option value="">Select Unit</option>
                   {units.map((unit) => (
@@ -304,7 +315,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                   ))}
                 </select>
               </div>
-              <div className="form-group">
+              <div className="form-group-dax">
                 <label>Price per Unit (₹)</label>
                 <input
                   type="number"
@@ -317,25 +328,25 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
                   disabled={loading}
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group-dax">
                 <label>Date</label>
-                <div className="date-picker-wrapper">
+                <div className="date-picker-wrapper-dax">
                   <DatePicker
                     selected={item.date}
                     onChange={(date) => handleItemChange(index, "date", date)}
                     dateFormat="dd MMMM yyyy"
-                    className="date-input"
+                    className="date-input-dax"
                     placeholderText="Select date"
                     required
                     disabled={loading}
                   />
-                  <Calendar size={16} className="calendar-icon" />
+                  <Calendar size={16} className="calendar-icon-dax" />
                 </div>
               </div>
               {items.length > 1 && (
                 <button
                   type="button"
-                  className="cancel-btn remove-item-btn"
+                  className="remove-item-btn-dax"
                   onClick={() => handleRemoveItem(index)}
                   disabled={loading}
                 >
@@ -344,19 +355,29 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "shop1" }) => {
               )}
             </div>
           ))}
-          <button type="button" className="submit-btn add-item-btn" onClick={handleAddItem} disabled={loading}>
+          <button
+            type="button"
+            className="add-item-btn-dax"
+            onClick={handleAddItem}
+            disabled={loading}
+          >
             Add Another Item
           </button>
         </div>
-        <div className="form-buttons">
-          <button type="submit" className="submit-btn" disabled={loading}>
+        <div className="form-buttons-dax">
+          <button type="submit" className="submit-btn-dax" disabled={loading}>
             {loading ? "Adding..." : "Add Credit Sale"}
           </button>
-          <button type="button" className="cancel-btn" onClick={onCancel} disabled={loading}>
+          <button type="button" className="cancel-btn-dax" onClick={onCancel} disabled={loading}>
             Cancel
           </button>
         </div>
-        {warning && <div className="warning">{warning}</div>}
+        {warning && (
+          <div className="warning-message-dax">
+            <AlertCircle size={16} />
+            <span>{warning}</span>
+          </div>
+        )}
       </form>
     </div>
   );
