@@ -4,19 +4,18 @@ import { fetchCustomers as apiGetCustomers, updateCustomerProfile, softDeleteCus
 import "./Customers.css";
 
 const Customers = () => {
-  const [customers, setCustomers] = useState([]); // Customers for active shop
-  const [deletedProfiles, setDeletedProfiles] = useState([]); // Deleted profiles for active shop
-  const [shop, setShop] = useState("Shop 1"); // Active shop
+  const [customers, setCustomers] = useState([]);
+  const [deletedProfiles, setDeletedProfiles] = useState([]);
+  const [shop, setShop] = useState("Shop 1");
   const [searchTerm, setSearchTerm] = useState("");
   const [editedProfile, setEditedProfile] = useState(null);
   const [selectedBills, setSelectedBills] = useState(null);
   const [selectedAdvanceDetails, setSelectedAdvanceDetails] = useState(null);
-  const [showDeleted, setShowDeleted] = useState(false); // Toggle deleted profiles section
+  const [showDeleted, setShowDeleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
 
-  // Derive common name from profiles
   const getCommonName = (profiles) => {
     if (!profiles || !Array.isArray(profiles) || profiles.length === 0) {
       return "Unknown";
@@ -25,7 +24,6 @@ const Customers = () => {
     return names[0] || "Unknown";
   };
 
-  // Calculate total purchased (sum of bill totalAmounts)
   const calculateTotalPurchased = (bills) => {
     if (!bills || !Array.isArray(bills)) {
       return 0;
@@ -33,26 +31,16 @@ const Customers = () => {
     return bills.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
   };
 
-  // Fetch customers and deleted profiles
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      // Fetch active customers
       const activeData = await apiGetCustomers(shopApiName, searchTerm, false);
       const updatedCustomers = activeData.map((customer) => ({
         ...customer,
-        profiles: Array.isArray(customer.profiles)
-          ? customer.profiles
-            .map((profile) => ({
-              ...profile,
-              creationTime: parseInt(profile.profileId.split("-")[1]),
-            }))
-            .sort((a, b) => a.creationTime - b.creationTime)
-          : []
+        profiles: Array.isArray(customer.profiles) ? customer.profiles : [] // No sorting
       }));
       setCustomers(updatedCustomers);
 
-      // Fetch deleted profiles
       const deletedData = await apiGetCustomers(shopApiName, searchTerm, true);
       const deletedProfiles = deletedData
         .flatMap((c) => {
@@ -70,7 +58,7 @@ const Customers = () => {
           const deletionDate = new Date(p.deleteuser.date);
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          return deletionDate > thirtyDaysAgo; // Keep profiles deleted within 30 days
+          return deletionDate > thirtyDaysAgo;
         });
       setDeletedProfiles(deletedProfiles);
 
@@ -81,12 +69,10 @@ const Customers = () => {
     setLoading(false);
   };
 
-  // Fetch customers on shop change or search term update
   useEffect(() => {
     fetchCustomers();
   }, [shop, searchTerm]);
 
-  // Auto-remove deleted profiles after 30 days
   useEffect(() => {
     const checkDeletedProfiles = async () => {
       const thirtyDaysAgo = new Date();
@@ -106,16 +92,14 @@ const Customers = () => {
         }
       }
 
-      // Refresh customers and deleted profiles
       await fetchCustomers();
     };
 
     checkDeletedProfiles();
-    const interval = setInterval(checkDeletedProfiles, 24 * 60 * 60 * 1000); // Check daily
+    const interval = setInterval(checkDeletedProfiles, 24 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, [shop]);
 
-  // Filter customers based on search term
   const filteredCustomers = customers.filter(
     (customer) =>
       (getCommonName(customer.profiles)
@@ -126,7 +110,6 @@ const Customers = () => {
       customer.profiles.some((p) => !p.deleteuser?.value)
   );
 
-  // Filter deleted profiles based on search term
   const filteredDeletedProfiles = deletedProfiles.filter(
     (profile) =>
       (profile.commonName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -134,13 +117,11 @@ const Customers = () => {
       profile.deleteuser?.value
   );
 
-  // Summary statistics
   const totalCustomers = customers.length;
   const advanceCustomers = customers.filter((c) =>
     Array.isArray(c.profiles) && c.profiles.some((p) => p.advance?.value)
   ).length;
 
-  // Handle edit
   const handleEdit = (profile, phoneNumber, commonName) => {
     const customer = customers.find((c) => c.phoneNumber === phoneNumber);
     setEditedProfile({
@@ -153,7 +134,6 @@ const Customers = () => {
     });
   };
 
-  // Handle save edit
   const handleSaveEdit = async () => {
     setLoading(true);
     try {
@@ -164,7 +144,6 @@ const Customers = () => {
         return;
       }
 
-      // Validate name is present
       if (!editedProfile.name || editedProfile.name.trim() === "") {
         setError("Name is required");
         alert("Name is required");
@@ -172,26 +151,23 @@ const Customers = () => {
       }
 
       const updateData = {
-        name: editedProfile.name, // Always include name
+        name: editedProfile.name,
         advance: editedProfile.advance
           ? { ...editedProfile.advance, paymentMethod: editedProfile.paymentMethod }
           : undefined,
       };
 
-      // Include newPhoneNumber if phone number has changed
       if (editedProfile.phoneNumber !== editedProfile.originalPhoneNumber) {
-        updateData.newPhoneNumber = editedProfile.phoneNumber; // Send newPhoneNumber
+        updateData.newPhoneNumber = editedProfile.phoneNumber;
       }
 
-      // Update the current profile
       await updateCustomerProfile(
         shopApiName,
-        editedProfile.originalPhoneNumber, // Use original phoneNumber
+        editedProfile.originalPhoneNumber,
         editedProfile.profileId,
         updateData
       );
 
-      // Update contractor name if changed
       if (Array.isArray(customer.profiles) && customer.profiles.length > 0) {
         const firstProfile = customer.profiles[0];
         if (
@@ -216,7 +192,6 @@ const Customers = () => {
     setLoading(false);
   };
 
-  // Handle delete profile
   const handleDeleteProfile = async (profileId, phoneNumber) => {
     if (!window.confirm(`Are you sure you want to delete this profile?`)) return;
     setLoading(true);
@@ -231,7 +206,6 @@ const Customers = () => {
     setLoading(false);
   };
 
-  // Handle restore profile
   const handleRestoreProfile = async (profileId, phoneNumber) => {
     setLoading(true);
     try {
@@ -245,7 +219,6 @@ const Customers = () => {
     setLoading(false);
   };
 
-  // Handle permanent delete
   const handlePermanentDelete = async (profileId, phoneNumber) => {
     if (!window.confirm(`Are you sure you want to permanently delete this profile?`)) return;
     setLoading(true);
@@ -260,13 +233,11 @@ const Customers = () => {
     setLoading(false);
   };
 
-  // Handle input change for editing
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setEditedProfile({ ...editedProfile, [name]: value });
   };
 
-  // Handle show bills
   const handleShowBills = (bills, profileName, phoneNumber) => {
     setSelectedBills({
       bills: Array.isArray(bills) ? bills : [],
@@ -276,12 +247,10 @@ const Customers = () => {
     setSelectedAdvanceDetails(null);
   };
 
-  // Handle close bills modal
   const handleCloseBillsModal = () => {
     setSelectedBills(null);
   };
 
-  // Handle advance details popup
   const handleShowAdvanceDetails = (profile, phoneNumber) => {
     const totalDeposits = profile.advanceHistory && Array.isArray(profile.advanceHistory)
       ? profile.advanceHistory
@@ -301,7 +270,6 @@ const Customers = () => {
     });
   };
 
-  // Handle close advance modal
   const handleCloseAdvanceModal = () => {
     setSelectedAdvanceDetails(null);
   };
@@ -315,7 +283,6 @@ const Customers = () => {
     return `${day}-${month}-${year}`;
   };
 
-  // Handle print bill
   const handlePrintBill = (bill, profileName, phoneNumber) => {
     const customer = customers.find((c) => c.phoneNumber === phoneNumber);
     const profile = customer && Array.isArray(customer.profiles)
@@ -383,7 +350,7 @@ const Customers = () => {
 
   return (
     <div className="main-content">
-      {loading && <div className="loading">Loading...</div>}
+      {loading && <div className="loading-message">Loading...</div>}
       {error && <div className="error">{error}</div>}
       <div className="customers-header-p2">
         <div className="shop-selector-p2">
@@ -513,7 +480,7 @@ const Customers = () => {
                                   <option value="Cheque">Cheque</option>
                                 </select>
                               ) : (
-                                profile.advance?.paymentMethod
+                                profile.advance?.value ? (profile.advance.paymentMethod || "N/A") : (profile.bills?.[0]?.paymentMethod || "N/A")
                               )}
                             </td>
                             <td>
@@ -536,7 +503,6 @@ const Customers = () => {
                                 onClick={() =>
                                   handleShowBills(
                                     profile.bills || [],
-                                    profile.advance?.paymentMethod ,
                                     profile.name,
                                     customer.phoneNumber
                                   )
@@ -627,7 +593,6 @@ const Customers = () => {
         </div>
       )}
 
-      {/* Advance Details Modal */}
       {selectedAdvanceDetails && (
         <div className="modal-overlay">
           <div className="modal-content advance-modal-content-p2">
@@ -686,7 +651,6 @@ const Customers = () => {
         </div>
       )}
 
-      {/* Bill Modal */}
       {selectedBills && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -702,7 +666,7 @@ const Customers = () => {
                 <div key={bill.billNo} className="bill-details">
                   <h3>Bill No: {bill.billNo}</h3>
                   <p>Date: {bill.date || "N/A"}</p>
-                  <p>Payment Type: {selectedBills.paymentMethod ?? "N/A"}</p>
+                  <p>Payment Type: {bill.paymentMethod ?? "N/A"}</p>
                   <table className="bill-table">
                     <thead>
                       <tr>
@@ -725,7 +689,7 @@ const Customers = () => {
                         <td colSpan={3}>Total Amount</td>
                         <td>₹{bill.totalAmount}</td>
                       </tr>
-                      {selectedBills.bills.length > 0 && selectedBills.bills[0].advanceRemaining !== undefined && (
+                      {bill.advanceRemaining !== undefined && (
                         <tr className="total">
                           <td colSpan={3}>Advance Remaining</td>
                           <td>₹{bill.advanceRemaining}</td>
@@ -738,7 +702,6 @@ const Customers = () => {
                     onClick={() =>
                       handlePrintBill(
                         bill,
-                        selectedBills.paymentMethod,
                         selectedBills.profileName,
                         selectedBills.phoneNumber
                       )

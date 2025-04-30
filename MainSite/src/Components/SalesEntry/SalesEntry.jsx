@@ -3,7 +3,6 @@ import { Plus, Trash2 } from "lucide-react";
 import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber } from "../api.js";
 import "./SalesEntry.css";
 
-// Function to format date to DD-MM-YYYY
 const formatDateToDDMMYYYY = (dateStr) => {
   if (!dateStr) return "";
   const date = new Date(dateStr);
@@ -39,11 +38,18 @@ const SalesEntry = () => {
   const [isDateEditable, setIsDateEditable] = useState(false);
   const [isItemSearchManual, setIsItemSearchManual] = useState(false);
   const [advanceSearchTerm, setAdvanceSearchTerm] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+  const getCurrentISTDate = () => {
+    const now = new Date();
+    const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
+    const istDate = new Date(now.getTime() + (istOffsetMinutes * 60 * 1000));
+    return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD (e.g., 2025-04-30)
+  };
+  const [filterDate, setFilterDate] = useState(formatDateToDDMMYYYY(getCurrentISTDate()));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch next bill number when shop changes
+  
+
   useEffect(() => {
     const loadBillNumber = async () => {
       try {
@@ -58,7 +64,6 @@ const SalesEntry = () => {
     loadBillNumber();
   }, [shop]);
 
-  // Fetch stock, customers, and sales on shop change
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -97,7 +102,6 @@ const SalesEntry = () => {
     loadData();
   }, [shop]);
 
-  // Refresh sales when filterDate or searchTerm changes
   useEffect(() => {
     const loadSales = async () => {
       setIsLoading(true);
@@ -119,7 +123,6 @@ const SalesEntry = () => {
     loadSales();
   }, [shop, filterDate, searchTerm]);
 
-  // Group stock items by name, category, and unit (for dropdown)
   const getGroupedStock = () => {
     return groupedStock.map((item) => ({
       id: item.id,
@@ -131,7 +134,6 @@ const SalesEntry = () => {
     }));
   };
 
-  // Handle input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === "date") {
@@ -144,7 +146,6 @@ const SalesEntry = () => {
     }
   };
 
-  // Handle payment type change
   const handlePaymentTypeChange = (e) => {
     const paymentType = e.target.value;
     setNewSale((prev) => ({ ...prev, paymentType }));
@@ -153,7 +154,6 @@ const SalesEntry = () => {
     }
   };
 
-  // Handle advance profile selection
   const handleAdvanceProfileSelect = (e) => {
     const value = e.target.value;
     const match = value.match(/^(.*?)\s*\((.*?)\)$/);
@@ -171,7 +171,6 @@ const SalesEntry = () => {
     }
   };
 
-  // Handle item input changes
   const handleItemChange = (e) => {
     const { name, value } = e.target;
     if (name === "product") {
@@ -184,14 +183,10 @@ const SalesEntry = () => {
         category: selectedItem ? selectedItem.category : "",
       }));
     } else {
-      setCurrentItem((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      setCurrentItem((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  // Toggle date editability and reset if unchecked
   const toggleDateEditable = () => {
     setIsDateEditable((prev) => {
       if (prev) {
@@ -204,7 +199,6 @@ const SalesEntry = () => {
     });
   };
 
-  // Add item to sale
   const addItemToSale = () => {
     if (!currentItem.product || !currentItem.qty || !currentItem.unit || !currentItem.pricePerQty) {
       alert("Please fill all item fields, including unit and price");
@@ -240,7 +234,6 @@ const SalesEntry = () => {
     setIsCustomUnit(false);
   };
 
-  // Remove item from sale
   const removeItem = (index) => {
     setNewSale((prev) => {
       const updatedItems = prev.items.filter((_, i) => i !== index);
@@ -251,7 +244,6 @@ const SalesEntry = () => {
     });
   };
 
-  // Calculate average price for a product
   const getAveragePrice = (product, category, unit) => {
     const stockItem = groupedStock.find(
       (item) => item.name === product && item.category === category && item.unit === unit
@@ -259,7 +251,6 @@ const SalesEntry = () => {
     return stockItem ? stockItem.price.toFixed(2) : "0.00";
   };
 
-  // Delete a sale
   const handleDeleteSale = async (billNo, profileId, phoneNumber, items) => {
     if (!window.confirm("Are you sure you want to delete this sale?")) {
       return;
@@ -270,7 +261,6 @@ const SalesEntry = () => {
       setWarning("");
       const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
 
-      // Enrich items with category from groupedStock
       const enrichedItems = items.map(item => {
         const stockItem = groupedStock.find(
           s => s.name === item.product && s.unit === item.unit
@@ -284,7 +274,6 @@ const SalesEntry = () => {
       const response = await deleteSale(shopApiName, billNo, profileId, phoneNumber, enrichedItems);
       const { updatedCustomer } = response;
 
-      // Update local state
       const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
         fetchStock(shopApiName).catch((err) => {
           console.error("fetchStock error:", err);
@@ -328,7 +317,6 @@ const SalesEntry = () => {
     }
   };
 
-  // Save sale
   const saveSale = async () => {
     if (!newSale.profileName || !newSale.phoneNumber) {
       setWarning("Please enter both profile name and phone number");
@@ -344,15 +332,18 @@ const SalesEntry = () => {
     try {
       setWarning("");
       const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
-      // Determine paymentMethod based on customer profile
       let paymentMethod = newSale.paymentType;
       const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
+      let profileExists = false;
+
       if (customer) {
         const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
         if (profile && newSale.paymentType === 'Advance' && profile.advance?.value) {
-          paymentMethod = newSale.paymentType; // Ensure 'Advance' is sent
+          paymentMethod = 'Advance'; // Send 'Advance' to use profile.advance.paymentMethod
+          profileExists = true;
         } else if (profile) {
-          paymentMethod = profile.paymentMethod || newSale.paymentType;
+          paymentMethod = newSale.paymentType; // Use selected paymentType
+          profileExists = true;
         }
       }
 
@@ -363,10 +354,28 @@ const SalesEntry = () => {
         items: newSale.items,
         date: newSale.date,
       };
+
+      if (!profileExists) {
+        // Create new profile with blank top-level paymentMethod
+        saleData.newProfile = {
+          name: newSale.profileName,
+          advance: newSale.paymentType === 'Advance' ? {
+            value: true,
+            currentamount: 0,
+            showinadvance: true,
+            paymentMethod: newSale.paymentType // Will be overridden by backend for Advance
+          } : undefined,
+          paymentMethod: "",
+          credit: newSale.paymentType === 'Credit' ? newSale.items.reduce((sum, item) => sum + item.amount, 0) : 0,
+          advanceHistory: [],
+          bills: [],
+          deleteuser: { value: false, date: "" },
+        };
+      }
+
       const response = await createSale(shopApiName, saleData);
       const { bill, customer: updatedCustomer } = response;
 
-      // Update local state
       setStock(await fetchStock(shopApiName).catch((err) => {
         console.error("fetchStock error:", err);
         return [];
@@ -391,10 +400,8 @@ const SalesEntry = () => {
         return [];
       }));
 
-      // Fetch new bill number
       const { billNo } = await fetchNextBillNumber(shopApiName);
 
-      // Reset form
       setNewSale({
         billNo,
         date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
@@ -414,29 +421,26 @@ const SalesEntry = () => {
       setIsLoading(false);
     }
   };
-  // Handle Sale Entry
+
   const handleSaleEntry = async () => {
     await saveSale();
   };
 
-  // Handle Generate Bill and Sale Entry
   const handleGenerateBillAndSale = async () => {
     const bill = await saveSale();
     if (bill) {
-      handlePrintBill(bill, bill.paymentMethod, newSale.profileName, newSale.phoneNumber);
+      handlePrintBill(bill, bill.profileName, bill.phoneNumber);
     }
   };
 
-  // Handle Generate Bill
   const handleGenerateBill = async () => {
     const bill = await saveSale();
     if (bill) {
-      handlePrintBill(bill, bill.paymentMethod, newSale.profileName, newSale.phoneNumber);
+      handlePrintBill(bill, bill.profileName, bill.phoneNumber);
     }
   };
 
-  // Print bill
-  const handlePrintBill = (bill, paymentMethod, profileName, phoneNumber) => {
+  const handlePrintBill = (bill, profileName, phoneNumber) => {
     const printWindow = window.open("", "_blank");
     let billContent = `
       <html>
@@ -458,7 +462,7 @@ const SalesEntry = () => {
           <p>Profile Name: ${profileName}</p>
           <p>Phone Number: ${phoneNumber}</p>
           <p>Date: ${bill.date}</p>
-          <p class="payment-method">Payment Method: ${paymentMethod}</p>
+          <p class="payment-method">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
           <table>
             <thead>
               <tr>
@@ -487,7 +491,7 @@ const SalesEntry = () => {
               </tr>
     `;
 
-    if (bill.paymentMethod === 'Advance' && bill.advanceRemaining !== undefined) {
+    if (bill.advanceRemaining !== undefined) {
       billContent += `
               <tr class="total">
                 <td colspan="3">Advance Remaining</td>
@@ -517,17 +521,14 @@ const SalesEntry = () => {
     printWindow.print();
   };
 
-  // Handle date filter change
   const handleDateFilterChange = (e) => {
     setFilterDate(formatDateToDDMMYYYY(e.target.value));
   };
 
-  // Handle search term change
   const handleSearchTermChange = (e) => {
     setSearchTerm(e.target.value);
   };
 
-  // Get all sales for display with guard clause
   const allSales = Array.isArray(sales)
     ? sales
       .filter((sale) =>
@@ -543,7 +544,6 @@ const SalesEntry = () => {
       )
     : [];
 
-  // Group sales by date
   const salesByDate = allSales.reduce((acc, sale) => {
     if (!acc[sale.date]) {
       acc[sale.date] = [];
@@ -552,7 +552,6 @@ const SalesEntry = () => {
     return acc;
   }, {});
 
-  // Sort dates in descending order (recent sales first)
   const sortedDates = Object.keys(salesByDate).sort(
     (a, b) => {
       const [dayA, monthA, yearA] = a.split("-").map(Number);
@@ -563,7 +562,6 @@ const SalesEntry = () => {
 
   const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
 
-  // Filter advance profiles with guard clause
   const advanceProfiles = customers
     .flatMap((c) =>
       Array.isArray(c.profiles)
@@ -576,7 +574,6 @@ const SalesEntry = () => {
   return (
     <div className="main-content">
       {isLoading && <div className="loading-message">Loading...</div>}
-      {warning && <p className="warning-p">{warning}</p>}
       <div className="sales-form-container-p">
         <div className="form-group-p shop-selector-p">
           <label>Shop</label>
@@ -716,7 +713,7 @@ const SalesEntry = () => {
                   <datalist id="stock-items">
                     {getGroupedStock().map((item) => (
                       <option key={`${item.name}|${item.category}|${item.unit}`} value={item.name}>
-                        {item.name} (Qty: ${item.quantity} ${item.unit})
+                        {item.name} (Qty: {item.quantity} {item.unit})
                       </option>
                     ))}
                   </datalist>
@@ -870,7 +867,7 @@ const SalesEntry = () => {
       </div>
 
       <div className="recent-sales-container-p">
-        <h2>All Sales</h2>
+        <h2>Today Sales</h2>
         <div className="sales-filter-row-p">
           <label>Date:</label>
           <input
@@ -951,7 +948,7 @@ const SalesEntry = () => {
                           ₹{sale.totalAmount}
                         </td>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
-                          {sale.paymentMethod}
+                          {sale.paymentMethod ?? "N/A"}
                         </td>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           <div style={{ display: "flex", gap: "8px" }}>
@@ -968,7 +965,6 @@ const SalesEntry = () => {
                                     creditAmount: sale.creditAmount,
                                     paymentMethod: sale.paymentMethod,
                                   },
-                                  sale.paymentMethod,
                                   sale.profileName,
                                   sale.phoneNumber
                                 )
