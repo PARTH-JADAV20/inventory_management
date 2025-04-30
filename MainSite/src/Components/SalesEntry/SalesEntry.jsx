@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber } from "../api.js";
+import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber, addCreditSale } from "../api.js";
 import "./SalesEntry.css";
 
 const formatDateToDDMMYYYY = (dateStr) => {
@@ -42,13 +42,11 @@ const SalesEntry = () => {
     const now = new Date();
     const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
     const istDate = new Date(now.getTime() + (istOffsetMinutes * 60 * 1000));
-    return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD (e.g., 2025-04-30)
+    return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD
   };
   const [filterDate, setFilterDate] = useState(formatDateToDDMMYYYY(getCurrentISTDate()));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  
 
   useEffect(() => {
     const loadBillNumber = async () => {
@@ -124,13 +122,32 @@ const SalesEntry = () => {
   }, [shop, filterDate, searchTerm]);
 
   const getGroupedStock = () => {
-    return groupedStock.map((item) => ({
+    const mergedStock = groupedStock.reduce((acc, item) => {
+      const key = `${item.name.toLowerCase()}|${item.category.toLowerCase()}|${item.unit.toLowerCase()}`;
+      if (!acc[key]) {
+        acc[key] = {
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          unit: item.unit,
+          quantity: 0,
+          totalPrice: 0,
+          count: 0,
+        };
+      }
+      acc[key].quantity += item.quantity;
+      acc[key].totalPrice += item.price * item.quantity;
+      acc[key].count += item.quantity;
+      return acc;
+    }, {});
+
+    return Object.values(mergedStock).map((item) => ({
       id: item.id,
       name: item.name,
       category: item.category,
       unit: item.unit,
       quantity: item.quantity,
-      price: item.price,
+      price: item.count > 0 ? item.totalPrice / item.count : 0,
     }));
   };
 
@@ -174,12 +191,12 @@ const SalesEntry = () => {
   const handleItemChange = (e) => {
     const { name, value } = e.target;
     if (name === "product") {
-      const selectedItem = groupedStock.find((item) => item.name === value);
+      const selectedItem = getGroupedStock().find((item) => item.name.toLowerCase() === value.toLowerCase());
       setCurrentItem((prev) => ({
         ...prev,
         product: value,
         unit: selectedItem ? selectedItem.unit : "",
-        pricePerQty: selectedItem ? selectedItem.price : "",
+        pricePerQty: selectedItem ? Number(selectedItem.price).toFixed(2) : "",
         category: selectedItem ? selectedItem.category : "",
       }));
     } else {
@@ -209,11 +226,11 @@ const SalesEntry = () => {
     const pricePerQty = parseFloat(currentItem.pricePerQty);
     const amount = qty * pricePerQty;
 
-    const stockItem = groupedStock.find(
+    const stockItem = getGroupedStock().find(
       (item) =>
-        item.name === currentItem.product &&
-        item.category === currentItem.category &&
-        item.unit === currentItem.unit
+        item.name.toLowerCase() === currentItem.product.toLowerCase() &&
+        item.category.toLowerCase() === currentItem.category.toLowerCase() &&
+        item.unit.toLowerCase() === currentItem.unit.toLowerCase()
     );
 
     if (!stockItem || stockItem.quantity < qty) {
@@ -245,8 +262,11 @@ const SalesEntry = () => {
   };
 
   const getAveragePrice = (product, category, unit) => {
-    const stockItem = groupedStock.find(
-      (item) => item.name === product && item.category === category && item.unit === unit
+    const stockItem = getGroupedStock().find(
+      (item) =>
+        item.name.toLowerCase() === product.toLowerCase() &&
+        item.category.toLowerCase() === category.toLowerCase() &&
+        item.unit.toLowerCase() === unit.toLowerCase()
     );
     return stockItem ? stockItem.price.toFixed(2) : "0.00";
   };
@@ -335,6 +355,7 @@ const SalesEntry = () => {
       let paymentMethod = newSale.paymentType;
       const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
       let profileExists = false;
+      let bill = null;
 
       if (customer) {
         const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
@@ -347,6 +368,7 @@ const SalesEntry = () => {
         }
       }
 
+      const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
       const saleData = {
         profileName: newSale.profileName,
         phoneNumber: newSale.phoneNumber,
@@ -355,50 +377,108 @@ const SalesEntry = () => {
         date: newSale.date,
       };
 
-      if (!profileExists) {
-        // Create new profile with blank top-level paymentMethod
-        saleData.newProfile = {
-          name: newSale.profileName,
-          advance: newSale.paymentType === 'Advance' ? {
-            value: true,
-            currentamount: 0,
-            showinadvance: true,
-            paymentMethod: newSale.paymentType // Will be overridden by backend for Advance
-          } : undefined,
-          paymentMethod: "",
-          credit: newSale.paymentType === 'Credit' ? newSale.items.reduce((sum, item) => sum + item.amount, 0) : 0,
-          advanceHistory: [],
-          bills: [],
-          deleteuser: { value: false, date: "" },
+      if (newSale.paymentType === 'Credit') {
+        // Prepare credit sale data
+        const creditSaleData = {
+          customerName: newSale.profileName,
+          phoneNumber: newSale.phoneNumber,
+          items: newSale.items.map(item => ({
+            product: item.product,
+            qty: item.qty,
+            unit: item.unit,
+            pricePerUnit: item.pricePerQty,
+            amount: item.amount,
+            date: newSale.date.split('-').reverse().join('-'), // Convert DD-MM-YYYY to YYYY-MM-DD
+          })),
+          totalAmount,
         };
+
+        // Call addCreditSale API
+        const response = await addCreditSale(shopApiName, creditSaleData);
+        const { creditSale, customer: updatedCustomer } = response;
+
+        bill = {
+          billNo: creditSale.billNumber,
+          date: newSale.date,
+          items: newSale.items,
+          totalAmount,
+          creditAmount: totalAmount,
+          paymentMethod: 'Credit',
+          shop: shopApiName,
+        };
+
+        // Update state
+        setStock(await fetchStock(shopApiName).catch((err) => {
+          console.error("fetchStock error:", err);
+          return [];
+        }));
+        setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
+          console.error("fetchCurrentStock error:", err);
+          return [];
+        }));
+        setCustomers((prev) =>
+          prev
+            .map((c) =>
+              c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+            )
+            .concat(
+              updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+                ? [updatedCustomer]
+                : []
+            )
+        );
+        setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        }));
+      } else {
+        // Handle non-credit sales
+        if (!profileExists) {
+          saleData.newProfile = {
+            name: newSale.profileName,
+            advance: newSale.paymentType === 'Advance' ? {
+              value: true,
+              currentamount: 0,
+              showinadvance: true,
+              paymentMethod: newSale.paymentType
+            } : undefined,
+            paymentMethod: newSale.paymentType !== 'Advance' ? newSale.paymentType : "",
+            credit: newSale.paymentType === 'Credit' ? totalAmount : 0,
+            advanceHistory: [],
+            bills: [],
+            deleteuser: { value: false, date: "" },
+          };
+        }
+
+        const response = await createSale(shopApiName, saleData);
+        const { bill: createdBill, customer: updatedCustomer } = response;
+        bill = createdBill;
+
+        // Update state
+        setStock(await fetchStock(shopApiName).catch((err) => {
+          console.error("fetchStock error:", err);
+          return [];
+        }));
+        setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
+          console.error("fetchCurrentStock error:", err);
+          return [];
+        }));
+        setCustomers((prev) =>
+          prev
+            .map((c) =>
+              c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+            )
+            .concat(
+              updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+                ? [updatedCustomer]
+                : []
+            )
+        );
+        setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        }));
       }
-
-      const response = await createSale(shopApiName, saleData);
-      const { bill, customer: updatedCustomer } = response;
-
-      setStock(await fetchStock(shopApiName).catch((err) => {
-        console.error("fetchStock error:", err);
-        return [];
-      }));
-      setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
-        console.error("fetchCurrentStock error:", err);
-        return [];
-      }));
-      setCustomers((prev) =>
-        prev
-          .map((c) =>
-            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
-          )
-          .concat(
-            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
-              ? [updatedCustomer]
-              : []
-          )
-      );
-      setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
-        console.error("fetchSales error:", err);
-        return [];
-      }));
 
       const { billNo } = await fetchNextBillNumber(shopApiName);
 
@@ -474,8 +554,8 @@ const SalesEntry = () => {
             </thead>
             <tbody>
               ${bill.items
-        .map(
-          (item) => `
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.product}</td>
                   <td>${item.qty}</td>
@@ -483,8 +563,8 @@ const SalesEntry = () => {
                   <td>₹${item.amount}</td>
                 </tr>
               `
-        )
-        .join("")}
+                )
+                .join("")}
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount}</td>
@@ -539,7 +619,7 @@ const SalesEntry = () => {
       .filter((sale) =>
         searchTerm
           ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sale.phoneNumber.includes(searchTerm)
+            sale.phoneNumber.includes(searchTerm)
           : true
       )
     : [];
@@ -566,14 +646,15 @@ const SalesEntry = () => {
     .flatMap((c) =>
       Array.isArray(c.profiles)
         ? c.profiles
-          .filter((p) => p.advance?.value && !p.deleteuser?.value)
-          .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
+            .filter((p) => p.advance?.value && !p.deleteuser?.value)
+            .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
         : []
     );
 
   return (
     <div className="main-content">
       {isLoading && <div className="loading-message">Loading...</div>}
+      {warning}
       <div className="sales-form-container-p">
         <div className="form-group-p shop-selector-p">
           <label>Shop</label>
