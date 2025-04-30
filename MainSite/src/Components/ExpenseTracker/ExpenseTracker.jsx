@@ -275,7 +275,7 @@ const ExpenseTracker = () => {
   return (
     <div className="main-content">
       {error && <div className="error-message">{error}</div>}
-      {loading && <div className="loading">Loading...</div>}
+      {loading && <div className="loading-message">Loading...</div>}
       <div className="form-container">
         <h2>{editingExpense ? "Edit Expense" : "Add Expenses"}</h2>
         <div className="shop-selector">

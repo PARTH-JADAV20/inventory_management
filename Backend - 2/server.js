@@ -233,10 +233,13 @@ app.put('/api/:shop/stock/:id', async (req, res) => {
 app.delete('/api/:shop/stock', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { name, category, unit } = req.body;
+    const { id } = req.body; // Expect id in the payload
     const Stock = getStockModel(shop);
-    await Stock.deleteMany({ name, category, unit });
-    res.json({ message: 'Items deleted' });
+    const result = await Stock.deleteOne({ id: id }); // Delete single item by _id
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json({ message: 'Item deleted' });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -287,10 +290,10 @@ app.post('/api/:shop/sales', async (req, res) => {
         profiles: [{
           profileId: uuidv4(),
           name: profileName,
-          advance: { value: false, currentamount: 0, paymentMethod: finalPaymentMethod, showinadvance: false },
+          advance: { value: false, currentamount: 0, paymentMethod: "", showinadvance: false },
           advanceHistory: [],
           credit: paymentMethod === 'Credit' ? totalAmount : 0,
-          paymentMethod: finalPaymentMethod,
+          paymentMethod: "",
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
