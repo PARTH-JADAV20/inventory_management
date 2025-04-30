@@ -88,21 +88,75 @@ const StockManage = () => {
   }, [filterCategory, searchTerm, items, processItems]);
 
   // Fetch grouped items for average prices when popup is opened
+  const processGroupedItems = useCallback(
+    (itemsToProcess) => {
+      let filtered = [...itemsToProcess];
+
+      if (filterCategory !== 'All') {
+        filtered = filtered.filter(
+          (item) => (item.category || 'Uncategorized').toLowerCase() === filterCategory.toLowerCase()
+        );
+      }
+
+      if (searchTerm) {
+        filtered = filtered.filter((item) =>
+          item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      return filtered;
+    },
+    [filterCategory, searchTerm]
+  );
+
+  // Group items case-insensitively by name, category, unit
+  const groupItemsCaseInsensitive = (items) => {
+    const grouped = {};
+
+    items.forEach((item) => {
+      // Normalize keys to lowercase for grouping
+      const key = `${item.name.toLowerCase()}|${(item.category || 'Uncategorized').toLowerCase()}|${item.unit.toLowerCase()}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          id: item.id, // Use the first item's ID
+          name: item.name, // Preserve original case for display
+          category: item.category || 'Uncategorized', // Preserve original case
+          unit: item.unit, // Preserve original case
+          quantity: 0,
+          totalPrice: 0,
+          count: 0,
+        };
+      }
+      grouped[key].quantity += parseFloat(item.quantity) || 0;
+      grouped[key].totalPrice += (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0);
+      grouped[key].count += 1;
+    });
+
+    // Convert grouped object to array with average price
+    return Object.values(grouped).map((group) => ({
+      ...group,
+      price: group.count > 0 ? group.totalPrice / group.quantity : 0, // Weighted average price
+    }));
+  };
+
+  // Update useEffect for fetching and grouping stock
   useEffect(() => {
     if (showAveragePrices) {
       const fetchGroupedStock = async () => {
         try {
           setError(null);
-          const data = await fetchCurrentStock(shop, filterCategory, searchTerm); // Use fetchCurrentStock
-          console.log('fetchCurrentStock response:', data);
-          setGroupedItems(data);
+          const data = await fetchStock(shop); // Fetch raw stock data
+          console.log('fetchStock response:', data);
+          const grouped = groupItemsCaseInsensitive(data); // Group case-insensitively
+          const processedItems = processGroupedItems(grouped); // Apply filters
+          setGroupedItems(processedItems);
         } catch (err) {
           setError(err.message);
         }
       };
       fetchGroupedStock();
     }
-  }, [shop, filterCategory, searchTerm, showAveragePrices]);
+  }, [shop, filterCategory, searchTerm, showAveragePrices, processGroupedItems]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -190,18 +244,9 @@ const StockManage = () => {
       setError(null);
       setIsLoading(true);
       await deleteStockItems(shop, {
-        name: item.name,
-        category: item.category || 'Uncategorized',
-        unit: item.unit,
-      }); // Updated to use deleteStockItems with correct payload
-      const updatedItems = items.filter(
-        (i) =>
-          !(
-            i.name.toLowerCase() === item.name.toLowerCase() &&
-            (i.category || 'Uncategorized').toLowerCase() === (item.category || 'Uncategorized').toLowerCase() &&
-            i.unit.toLowerCase() === item.unit.toLowerCase()
-          )
-      );
+        id: item.id, 
+      });
+      const updatedItems = items.filter((i) => i.id !== item.id); 
       setItems(updatedItems);
       const { filtered } = processItems(updatedItems);
       setFilteredItems(filtered);
@@ -278,7 +323,7 @@ const StockManage = () => {
               <input
                 type="number"
                 name="quantity"
-                placeholder="Amount"
+                placeholder="Qty"
                 value={newItem.quantity}
                 onChange={handleInputChange}
               />
@@ -456,7 +501,7 @@ const StockManage = () => {
               </thead>
               <tbody>
                 {groupedItems.map((item) => (
-                  <tr key={item.id}>
+                  <tr key={`${item.id}-${item.category}-${item.unit}`}>
                     <td>{item.name}</td>
                     <td>₹{item.price.toFixed(2)}/{item.unit}</td>
                   </tr>

@@ -42,8 +42,8 @@ export const updateStockItem = async (shop, id, item) => {
   return request('PUT', `${BASE_URL}/${encodeURIComponent(shop)}/stock/${id}`, item);
 };
 
-export const deleteStockItems = async (shop, { name, category, unit }) => {
-  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/stock`, { name, category, unit });
+export const deleteStockItems = async (shop, { id }) => {
+  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/stock`, { id });
 };
 
 // Sales APIs

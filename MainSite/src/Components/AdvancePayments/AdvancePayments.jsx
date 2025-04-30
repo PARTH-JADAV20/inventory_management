@@ -25,6 +25,20 @@ const AdvancePayments = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const formatDateToDDMMYYYY = (dateStr) => {
+    if (!dateStr) return "N/A";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date)) return "N/A";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    } catch {
+      return "N/A";
+    }
+  };
+
   const getCommonName = (profiles) => {
     const names = (profiles || []).map((p) => (p.name || "Unknown").replace(/ \[.*\]$/, ""));
     return names[0] || "Unknown";
@@ -346,7 +360,7 @@ const AdvancePayments = () => {
           <h2>Bill No: ${bill.billNo || "N/A"}</h2>
           <p>Profile Name: ${profileName || "N/A"}</p>
           <p>Phone Number: ${phoneNumber || "N/A"}</p>
-          <p>Date: ${bill.date ? new Date(bill.date).toLocaleDateString() : "N/A"}</p>
+          <p>Date: ${bill.date}</p>
           <p class="payment-type">Payment Method: ${bill.paymentMethod || "N/A"}</p>
           <table>
             <thead>
@@ -402,7 +416,7 @@ const AdvancePayments = () => {
 
   return (
     <div className="main-content">
-      {loading && <div className="loading">Loading...</div>}
+      {loading && <div className="loading-message">Loading...</div>}
       {error && <div className="error">{error}</div>}
       <div className="advance-payment-form-container">
         <div className="form-group shop-selector">
@@ -503,7 +517,7 @@ const AdvancePayments = () => {
             <input
               type="number"
               name="advanceAmount"
-              placeholder="Enter amount (negative for refund)"
+              placeholder="Enter amount"
               value={newPayment.advanceAmount}
               onChange={handleInputChange}
             />
@@ -676,7 +690,7 @@ const AdvancePayments = () => {
                 (selectedBills.bills || []).map((bill) => (
                   <div key={bill.billNo || Math.random()} className="bill-details">
                     <h3>Bill No: {bill.billNo || "N/A"}</h3>
-                    <p>Date: {bill.date ? new Date(bill.date).toLocaleDateString() : "N/A"}</p>
+                    <p>Date: {bill.date}</p>
                     <p>Payment Method: {bill.paymentMethod || "N/A"}</p>
                     <table className="bill-table">
                       <thead>
@@ -733,7 +747,7 @@ const AdvancePayments = () => {
                 <tbody>
                   {(selectedHistory.history || []).map((h, i) => (
                     <tr key={i}>
-                      <td>{h.date ? new Date(h.date).toLocaleDateString() : "N/A"}</td>
+                      <td>{formatDateToDDMMYYYY(h.date)}</td>
                       <td>{h.transactionType || "N/A"}</td>
                       <td>₹{h.amount || 0}</td>
                     </tr>
