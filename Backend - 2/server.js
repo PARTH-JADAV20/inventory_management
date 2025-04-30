@@ -233,13 +233,10 @@ app.put('/api/:shop/stock/:id', async (req, res) => {
 app.delete('/api/:shop/stock', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { id } = req.body; // Expect id in the payload
+    const { name, category, unit } = req.body;
     const Stock = getStockModel(shop);
-    const result = await Stock.deleteOne({ id: id }); // Delete single item by _id
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
-    res.json({ message: 'Item deleted' });
+    await Stock.deleteMany({ name, category, unit });
+    res.json({ message: 'Items deleted' });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -290,10 +287,10 @@ app.post('/api/:shop/sales', async (req, res) => {
         profiles: [{
           profileId: uuidv4(),
           name: profileName,
-          advance: { value: false, currentamount: 0, paymentMethod: "", showinadvance: false },
+          advance: { value: false, currentamount: 0, paymentMethod: finalPaymentMethod, showinadvance: false },
           advanceHistory: [],
           credit: paymentMethod === 'Credit' ? totalAmount : 0,
-          paymentMethod: "",
+          paymentMethod: finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
@@ -447,11 +444,10 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
 
     // Restore stock
     for (const item of items) {
-      // Fetch category from existing stock if item.category is missing
       let category = item.category;
       if (!category) {
         const stockItem = await Stock.findOne({ name: item.product, unit: item.unit });
-        category = stockItem ? stockItem.category : 'Unknown'; // Default to 'Unknown' if no stock found
+        category = stockItem ? stockItem.category : 'Unknown';
       }
 
       const stockItems = await Stock.find({ name: item.product, category, unit: item.unit });
@@ -470,7 +466,7 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
           name: item.product,
           quantity: qtyToRestore,
           unit: item.unit,
-          category, // Use resolved category
+          category,
           price: item.pricePerQty,
           addedDate: new Date().toISOString().split('T')[0],
         });
@@ -514,7 +510,7 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
   }
 });
 
-// Expense Routes
+// Expense Routes (Unchanged)
 app.get('/api/:shop/expenses', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -778,8 +774,6 @@ app.delete('/api/:shop/customers/:phoneNumber/profiles/:profileId/permanent', as
   }
 });
 
-
-// New soft delete route for customer profiles
 app.put('/api/:shop/customers/:phoneNumber/profiles/:profileId/softdelete', async (req, res) => {
   try {
     const { shop, phoneNumber, profileId } = req.params;
@@ -799,8 +793,7 @@ app.put('/api/:shop/customers/:phoneNumber/profiles/:profileId/softdelete', asyn
   }
 });
 
-// Advance Payment Routes
-
+// Advance Payment Routes (Unchanged)
 app.post('/api/:shop/advance/:phoneNumber/:profileId', async (req, res) => {
   try {
     const { shop, phoneNumber, profileId } = req.params;
@@ -892,7 +885,7 @@ app.delete('/api/:shop/advance/:phoneNumber/profiles/:profileId', async (req, re
   }
 });
 
-// Credit Sales Routes
+// Credit Sales Routes (Updated)
 app.get('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -915,17 +908,19 @@ app.get('/api/:shop/credits', async (req, res) => {
     const creditSales = await CreditSale.find(query)
       .sort(sortOptions)
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean(); // Use lean for faster queries
 
     res.json({
-      creditSales,
+      data: creditSales, // Consistent response structure
       total,
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / limit),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Fetch credit sales error:', err);
+    res.status(500).json({ error: 'Failed to fetch credit sales: ' + err.message });
   }
 });
 
@@ -937,13 +932,27 @@ app.post('/api/:shop/credits', async (req, res) => {
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
 
+    // Validate input
+    if (!customerName || !phoneNumber || !items || !Array.isArray(items) || !totalAmount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     // Validate stock
     for (const item of items) {
+      if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date) {
+        return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
+      }
       const stockItems = await Stock.find({ name: item.product, unit: item.unit });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
       if (totalQty < item.qty) {
-        return res.status(400).json({ error: `Insufficient stock for ${item.product}` });
+        return res.status(400).json({ error: `Insufficient stock for ${item.product} (${item.unit})` });
       }
+    }
+
+    // Verify totalAmount
+    const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0);
+    if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
+      return res.status(400).json({ error: 'Total amount does not match item amounts' });
     }
 
     // Generate bill number
@@ -972,7 +981,7 @@ app.post('/api/:shop/credits', async (req, res) => {
         profiles: [{
           profileId: uuidv4(),
           name: customerName,
-          advance: { value: false, currentamount: 0 },
+          advance: { value: false, currentamount: 0, showinadvance: false },
           advanceHistory: [],
           credit: totalAmount,
           paymentMethod: 'Credit',
@@ -1001,7 +1010,7 @@ app.post('/api/:shop/credits', async (req, res) => {
         profile = {
           profileId: uuidv4(),
           name: customerName,
-          advance: { value: false, currentamount: 0 },
+          advance: { value: false, currentamount: 0, showinadvance: false },
           advanceHistory: [],
           credit: totalAmount,
           paymentMethod: 'Credit',
@@ -1048,7 +1057,7 @@ app.post('/api/:shop/credits', async (req, res) => {
     // Update stock
     for (const item of items) {
       let qtyToDeduct = item.qty;
-      const stockItems = await Stock.find({ name: item.product, unit: item.unit });
+      const stockItems = await Stock.find({ name: item.product, unit: item.unit }).sort({ addedDate: 1 }); // FIFO
       for (const stockItem of stockItems) {
         if (qtyToDeduct <= 0) break;
         const deduct = Math.min(qtyToDeduct, stockItem.quantity);
@@ -1060,10 +1069,14 @@ app.post('/api/:shop/credits', async (req, res) => {
           await stockItem.save();
         }
       }
+      if (qtyToDeduct > 0) {
+        throw new Error(`Failed to deduct stock for ${item.product} (${item.unit})`);
+      }
     }
 
     res.status(201).json({ creditSale, customer });
   } catch (err) {
+    console.error('Create credit sale error:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -1100,34 +1113,35 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
       }
     }
 
-    // Handle status update (e.g., manual settlement or full close)
+    // Handle status update
     if (status) {
       if (status === 'Cleared' && payment && payment.mode === 'Manual') {
         // Manual settlement
-        if (payment.amount < 0) {
+        if (!payment.amount || payment.amount < 0) {
           return res.status(400).json({ error: 'Invalid settlement amount' });
         }
-        creditSale.paidAmount = payment.amount;
+        creditSale.paidAmount = creditSale.paidAmount + payment.amount;
         creditSale.totalAmount = 0;
         creditSale.status = 'Cleared';
         creditSale.lastTransactionDate = currentDate;
         creditSale.paymentHistory.push({
           amount: payment.amount,
           mode: 'Manual',
-          note: payment.note || '',
+          note: payment.note || 'Manual settlement',
           date: currentDate,
         });
       } else if (status === 'Cleared') {
         // Full payment close
-        creditSale.paidAmount += creditSale.totalAmount;
+        const remaining = creditSale.totalAmount;
+        creditSale.paidAmount += remaining;
         creditSale.totalAmount = 0;
         creditSale.status = 'Cleared';
         creditSale.lastTransactionDate = currentDate;
         if (payment) {
           creditSale.paymentHistory.push({
-            amount: payment.amount || creditSale.paidAmount,
+            amount: payment.amount || remaining,
             mode: payment.mode || 'Cash',
-            note: payment.note || '',
+            note: payment.note || 'Full payment',
             date: currentDate,
           });
         }
@@ -1153,7 +1167,8 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
 
     res.json(creditSale);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Update credit sale error:', err);
+    res.status(400).json({ error: 'Failed to update credit sale: ' + err.message });
   }
 });
 
@@ -1179,10 +1194,10 @@ app.post('/api/:shop/credits/:id/refund', async (req, res) => {
 
     // Process refund
     creditSale.paidAmount -= amount;
-    creditSale.totalAmount += amount; // Increase remaining balance
+    creditSale.totalAmount += amount;
     creditSale.lastTransactionDate = currentDate;
     creditSale.paymentHistory.push({
-      amount: -amount, // Negative for refund
+      amount: -amount,
       mode: 'Refund',
       note: note || 'Customer refund',
       date: currentDate,
@@ -1212,7 +1227,8 @@ app.post('/api/:shop/credits/:id/refund', async (req, res) => {
 
     res.json(creditSale);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Credit refund error:', err);
+    res.status(400).json({ error: 'Failed to process refund: ' + err.message });
   }
 });
 
@@ -1233,7 +1249,8 @@ app.put('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
     if (!amount || amount < 0) {
       return res.status(400).json({ error: 'Invalid payment amount' });
     }
-    if (payment.amount >= 0 && amount > creditSale.totalAmount + payment.amount) {
+    const maxPayment = creditSale.totalAmount + (payment.amount >= 0 ? payment.amount : 0);
+    if (amount > maxPayment) {
       return res.status(400).json({ error: 'Updated payment amount exceeds remaining balance' });
     }
 
@@ -1242,16 +1259,16 @@ app.put('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
     // Adjust paidAmount and totalAmount
     if (payment.amount >= 0) {
       // Original was a payment
-      creditSale.paidAmount -= payment.amount; // Remove old payment
-      creditSale.totalAmount += payment.amount; // Restore balance
-      creditSale.paidAmount += amount; // Add new payment
-      creditSale.totalAmount -= amount; // Reduce balance
+      creditSale.paidAmount -= payment.amount;
+      creditSale.totalAmount += payment.amount;
+      creditSale.paidAmount += amount;
+      creditSale.totalAmount -= amount;
     } else {
       // Original was a refund
-      creditSale.paidAmount -= payment.amount; // Undo refund (add back)
-      creditSale.totalAmount += payment.amount; // Undo refund (reduce balance)
-      creditSale.paidAmount -= amount; // Apply new refund
-      creditSale.totalAmount += amount; // Increase balance
+      creditSale.paidAmount -= payment.amount; // Undo refund
+      creditSale.totalAmount += payment.amount;
+      creditSale.paidAmount -= amount;
+      creditSale.totalAmount += amount;
     }
 
     // Update payment entry
@@ -1288,7 +1305,8 @@ app.put('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
 
     res.json(creditSale);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Update credit payment error:', err);
+    res.status(400).json({ error: 'Failed to update payment: ' + err.message });
   }
 });
 
@@ -1308,13 +1326,11 @@ app.delete('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
 
     // Adjust paidAmount and totalAmount
     if (payment.amount >= 0) {
-      // Payment: remove it
       creditSale.paidAmount -= payment.amount;
       creditSale.totalAmount += payment.amount;
     } else {
-      // Refund: undo it
-      creditSale.paidAmount -= payment.amount; // Add back (negative amount)
-      creditSale.totalAmount += payment.amount; // Reduce balance (negative amount)
+      creditSale.paidAmount -= payment.amount;
+      creditSale.totalAmount += payment.amount;
     }
 
     // Remove payment entry
@@ -1348,7 +1364,8 @@ app.delete('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
 
     res.json(creditSale);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Delete credit payment error:', err);
+    res.status(400).json({ error: 'Failed to delete payment: ' + err.message });
   }
 });
 

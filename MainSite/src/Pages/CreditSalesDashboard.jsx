@@ -91,8 +91,8 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
     const matchesStatus = statusFilter === "All" || sale.status === statusFilter;
     const matchesAmount =
       amountFilter === "All" ||
-      (amountFilter === ">10000" && sale.totalAmount > 10000) ||
-      (amountFilter === ">50000" && sale.totalAmount > 50000) ||
+      (amountFilter === ">10000" && (sale.totalAmount || 0) > 10000) ||
+      (amountFilter === ">50000" && (sale.totalAmount || 0) > 50000) ||
       (amountFilter === ">2months" &&
         (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60);
     const matchesTime =
@@ -115,7 +115,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
     ).size,
     totalCredit: creditSales
       .filter((sale) => sale.status !== "Cleared")
-      .reduce((sum, sale) => sum + sale.totalAmount, 0),
+      .reduce((sum, sale) => sum + (sale.totalAmount || 0), 0),
     totalPaid: creditSales
       .filter((sale) => sale.status !== "Cleared")
       .reduce((sum, sale) => sum + (sale.paidAmount || 0), 0),
@@ -125,7 +125,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
           sale.status !== "Cleared" &&
           (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60
       )
-      .reduce((sum, sale) => sum + sale.totalAmount, 0),
+      .reduce((sum, sale) => sum + (sale.totalAmount || 0), 0),
   };
 
   const handleAddCredit = async (newSale) => {
@@ -147,7 +147,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   const handleQuickClose = async (sale) => {
     if (
       window.confirm(
-        `Mark ₹${sale.totalAmount.toFixed(2)} for ${sale.customerName} as fully paid?`
+        `Mark ₹${(sale.totalAmount || 0).toFixed(2)} for ${sale.customerName} as fully paid?`
       )
     ) {
       setLoading(true);
@@ -209,20 +209,23 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
             <tbody>
               ${filteredSales
                 .map(
-                  (sale) => `
-                <tr>
-                  <td>${sale.billNumber}</td>
-                  <td>${sale.customerName}</td>
-                  <td>${sale.phoneNumber}</td>
-                  <td>₹${(sale.totalAmount + (sale.paidAmount || 0)).toFixed(2)}</td>
-                  <td>₹${(sale.paidAmount || 0).toFixed(2)}</td>
-                  <td>₹${sale.totalAmount.toFixed(2)}</td>
-                  <td class="${
-                    isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""
-                  }">${format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")}</td>
-                  <td class="status-${sale.status.toLowerCase()}-dax">${sale.status}</td>
-                </tr>
-              `
+                  (sale) => {
+                    const lastTransactionDate = sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
+                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+                      : "N/A";
+                    return `
+                    <tr>
+                      <td>${sale.billNumber}</td>
+                      <td>${sale.customerName}</td>
+                      <td>${sale.phoneNumber}</td>
+                      <td>₹${((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
+                      <td>₹${(sale.paidAmount || 0).toFixed(2)}</td>
+                      <td>₹${(sale.totalAmount || 0).toFixed(2)}</td>
+                      <td class="${isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}">${lastTransactionDate}</td>
+                      <td class="status-${sale.status.toLowerCase()}-dax">${sale.status}</td>
+                    </tr>
+                  `;
+                  }
                 )
                 .join("")}
             </tbody>
@@ -250,10 +253,12 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
       sale.billNumber,
       sale.customerName,
       sale.phoneNumber,
-      (sale.totalAmount + (sale.paidAmount || 0)).toFixed(2),
+      ((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2),
       (sale.paidAmount || 0).toFixed(2),
-      sale.totalAmount.toFixed(2),
-      format(new Date(sale.lastTransactionDate), "dd MMMM yyyy"),
+      (sale.totalAmount || 0).toFixed(2),
+      sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
+        ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+        : "N/A",
       sale.status,
     ]);
     const csvContent = [
@@ -268,11 +273,12 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   };
 
   const isOverdue = (date) => {
+    if (!date || isNaN(new Date(date).getTime())) return false;
     const daysDiff = (new Date() - new Date(date)) / (1000 * 60 * 60 * 24);
     return daysDiff > 60;
   };
 
-  const isHighCredit = (amount) => amount > 50000;
+  const isHighCredit = (amount) => (amount || 0) > 50000;
 
   const handleSort = (field) => {
     if (sortBy === field) {
@@ -348,7 +354,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
               <option value="All">All</option>
               <option value=">10000">Credit &gt; ₹10,000</option>
               <option value=">50000">Credit &gt; ₹50,000</option>
-              <option value=">2months">Overdue &gt; 2 Months</option>
+              <option value=">2months">Overdue &t; 2 Months</option>
             </select>
           </div>
           <div className="filter-group-dax">
@@ -450,15 +456,17 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                   <td>{sale.billNumber}</td>
                   <td>{sale.customerName}</td>
                   <td>{sale.phoneNumber}</td>
-                  <td>₹{(sale.totalAmount + (sale.paidAmount || 0)).toFixed(2)}</td>
+                  <td>₹{((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
                   <td>₹{(sale.paidAmount || 0).toFixed(2)}</td>
-                  <td>₹{sale.totalAmount.toFixed(2)}</td>
+                  <td>₹{(sale.totalAmount || 0).toFixed(2)}</td>
                   <td
                     className={isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}
                   >
-                    {format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")}
+                    {sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
+                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+                      : "N/A"}
                   </td>
-                  <td className={`status-${sale.status.toLowerCase()}-dax`}>
+                  <td className={`status-${sale.status}-dax`}>
                     {sale.status}
                   </td>
                   <td>
