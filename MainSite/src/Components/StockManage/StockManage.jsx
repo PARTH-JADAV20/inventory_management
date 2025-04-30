@@ -7,15 +7,16 @@ const StockManage = () => {
   const [items, setItems] = useState([]);
   const [shop, setShop] = useState('Shop 1'); // Updated to match backend: "Shop 1" instead of "shop1"
   const [categories] = useState([
-    'Cement',
-    'Sand',
-    'Aggregate',
-    'Steel',
-    'Bricks',
-    'Paint',
-    'Plumbing',
-    'Electrical',
-    'Wood',
+    "Cement",
+    "Iron",
+    "Pipes",
+    "Tools",
+    "Iron sheets",
+    "Cement sheets",
+    "Colour sheets ",
+    "White cement",
+    "Liquids",
+    "Wire",
   ]);
   const [filterCategory, setFilterCategory] = useState('All');
   const [isCustomCategory, setIsCustomCategory] = useState(false);
@@ -244,9 +245,9 @@ const StockManage = () => {
       setError(null);
       setIsLoading(true);
       await deleteStockItems(shop, {
-        id: item.id, 
+        id: item.id,
       });
-      const updatedItems = items.filter((i) => i.id !== item.id); 
+      const updatedItems = items.filter((i) => i.id !== item.id);
       setItems(updatedItems);
       const { filtered } = processItems(updatedItems);
       setFilteredItems(filtered);

@@ -671,7 +671,6 @@ const SalesEntry = () => {
             setCurrentItem({ product: "", qty: "", unit: "", pricePerQty: "", category: "" });
             setAdvanceSearchTerm("");
             setSearchTerm("");
-            setFilterDate("");
             setIsCustomUnit(false);
             setIsDateEditable(false);
             setIsItemSearchManual(false);
