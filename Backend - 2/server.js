@@ -308,7 +308,7 @@ app.post('/api/:shop/sales', async (req, res) => {
         profile = {
           profileId: uuidv4(),
           name: profileName,
-          advance: { value: false, currentamount: 0, paymentMethod: finalPaymentMethod, showinadvance: false },
+          advance: { value: false, currentamount: 0, paymentMethod: "", showinadvance: false },
           advanceHistory: [],
           credit: paymentMethod === 'Credit' ? totalAmount : 0,
           paymentMethod: finalPaymentMethod,
