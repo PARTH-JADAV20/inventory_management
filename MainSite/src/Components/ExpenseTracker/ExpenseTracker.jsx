@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { parse, format } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
-import { fetchExpenses, addExpense, updateExpense, deleteExpense } from "../api"; // Adjust path to your api.js
+import { fetchExpenses, addExpense, updateExpense, deleteExpense } from "../api";
 import "./ExpenseTracker.css";
 
 const ExpenseTracker = () => {
-  const today = format(new Date(), "dd-MM-yyyy"); // e.g., "27-04-2025"
+  const today = format(new Date(), "dd-MM-yyyy");
   const [shop, setShop] = useState("Shop 1");
   const [expenses, setExpenses] = useState([]);
   const [formData, setFormData] = useState({
@@ -40,28 +40,34 @@ const ExpenseTracker = () => {
     "Miscellaneous",
   ];
 
-  // Fetch expenses when shop, search filters, or selected month changes
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
         setError(null);
         const data = await fetchExpenses(shop, searchDate ? parseDateForAPI(searchDate) : '', searchPaidTo);
-        setExpenses(data.expenses || []);
+        setExpenses(data || []);
       } catch (err) {
-        setError(err.message);
+        setError(`Error fetching expenses: ${err.message}`);
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [shop, searchDate, searchPaidTo, selectedMonth]);
+  }, [shop, searchDate, searchPaidTo]);
 
-  // Handle form input changes
+  const handleShopChange = (e) => {
+    setShop(e.target.value);
+    setExpenses([]);
+    setSearchDate("");
+    setSearchPaidTo("");
+    setSelectedMonth(format(new Date(), "yyyy-MM"));
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === "date" && value) {
-      // Convert yyyy-MM-dd (from date picker) to dd-MM-yyyy
       const parsed = parse(value, "yyyy-MM-dd", new Date());
       if (!isNaN(parsed)) {
         setFormData({ ...formData, date: format(parsed, "dd-MM-yyyy") });
@@ -71,7 +77,6 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Handle checkbox changes
   const handleCheckboxChange = (e) => {
     const { name, checked } = e.target;
     if (name === "isManualDate") {
@@ -83,7 +88,6 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Parse date from "dd-MM-yyyy" to "yyyy-MM-dd" for API
   const parseDateForAPI = (dateStr) => {
     try {
       const parsed = parse(dateStr, "dd-MM-yyyy", new Date());
@@ -94,7 +98,6 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Handle form submission (Add or Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (
@@ -149,14 +152,13 @@ const ExpenseTracker = () => {
       });
       setIsManualDate(false);
     } catch (err) {
-      setError(err.message);
+      setError(`Error saving expense: ${err.message}`);
       alert(`Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle edit expense
   const handleEdit = (expense) => {
     setEditingExpense(expense);
     setFormData({
@@ -171,7 +173,6 @@ const ExpenseTracker = () => {
     setIsManualCategory(!categories.includes(expense.category));
   };
 
-  // Handle delete expense
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this expense?")) return;
     try {
@@ -180,14 +181,13 @@ const ExpenseTracker = () => {
       await deleteExpense(shop, id);
       setExpenses((prev) => prev.filter((exp) => exp.id !== id));
     } catch (err) {
-      setError(err.message);
+      setError(`Error deleting expense: ${err.message}`);
       alert(`Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle print
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     const printContent = `
@@ -241,7 +241,6 @@ const ExpenseTracker = () => {
     printWindow.print();
   };
 
-  // Calculate monthly total expenses
   const calculateMonthlyTotal = () => {
     const [year, month] = selectedMonth.split('-');
     const startOfMonth = new Date(year, month - 1, 1);
@@ -251,10 +250,9 @@ const ExpenseTracker = () => {
         const expDate = new Date(exp.date);
         return expDate >= startOfMonth && expDate <= endOfMonth;
       })
-      .reduce((total, exp) => total + exp.amount, 0);
+      .reduce((total, exp) => total + (exp.amount || 0), 0);
   };
 
-  // Filter expenses client-side for display
   const filteredExpenses = expenses.filter((exp) => {
     const matchesDate = searchDate
       ? format(new Date(exp.date), "dd-MM-yyyy") === searchDate
@@ -268,7 +266,6 @@ const ExpenseTracker = () => {
     return matchesDate && matchesPaidTo && matchesMonth;
   });
 
-  // Convert dd-MM-yyyy to yyyy-MM-dd for date picker value
   const formatDateForPicker = (dateStr) => {
     if (!dateStr) return "";
     const parsed = parse(dateStr, "dd-MM-yyyy", new Date());
@@ -283,16 +280,17 @@ const ExpenseTracker = () => {
         <h2>{editingExpense ? "Edit Expense" : "Add Expenses"}</h2>
         <div className="shop-selector">
           <label>Shop:</label>
-          <select value={shop} onChange={(e) => setShop(e.target.value)} disabled={loading}>
+          <select value={shop} onChange={handleShopChange} disabled={loading}>
             <option value="Shop 1">Shop 1</option>
             <option value="Shop 2">Shop 2</option>
           </select>
         </div>
         <form className="expense-form" onSubmit={handleSubmit}>
+          {/* Rest of the form remains unchanged */}
           <div className="form-group">
             <label className="checkbox-label">
               <div>Date</div>
-              <div className="checkbox-container">
+              <div className="checkbox-container-p">
                 <input
                   type="checkbox"
                   name="isManualDate"
@@ -319,7 +317,7 @@ const ExpenseTracker = () => {
           <div className="form-group">
             <label className="checkbox-label">
               <div>Category</div>
-              <div className="checkbox-container">
+              <div className="checkbox-container-p">
                 <input
                   type="checkbox"
                   name="isManualCategory"
@@ -396,7 +394,7 @@ const ExpenseTracker = () => {
               name="paidTo"
               value={formData.paidTo}
               onChange={handleInputChange}
-              placeholder="Enter recipient"
+              placeholder="Enter receiver"
               required
               disabled={loading}
             />
@@ -466,7 +464,7 @@ const ExpenseTracker = () => {
         <h2>Expense List - {shop}</h2>
         <div className="table-actions">
           <div className="search-container">
-            <div className="search-group">
+            <div className="search-group-p">
               <label>Date:</label>
               <input
                 type="date"
@@ -478,13 +476,13 @@ const ExpenseTracker = () => {
                 disabled={loading}
               />
             </div>
-            <div className="search-group">
+            <div className="search-group-p">
               <label>Paid To:</label>
               <input
                 type="text"
                 value={searchPaidTo}
                 onChange={(e) => setSearchPaidTo(e.target.value)}
-                placeholder="Search by recipient"
+                placeholder="Search by receiver"
                 disabled={loading}
               />
             </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Pencil, Save, Trash2, MoreVertical, Receipt, History } from "lucide-react";
-import * as apiService from "../api";  // Import everything from api as a namespace
+import * as apiService from "../api";
 import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
@@ -13,7 +13,7 @@ const AdvancePayments = () => {
     profileId: "",
     advanceAmount: "",
     newProfileName: "",
-    paymentType: "Cash",
+    paymentMethod: "Cash",
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBills, setSelectedBills] = useState(null);
@@ -25,19 +25,15 @@ const AdvancePayments = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const shopApiName = shop === "Shop 1" ? "shop1" : "shop2";
-
   const getCommonName = (profiles) => {
     const names = (profiles || []).map((p) => (p.name || "Unknown").replace(/ \[.*\]$/, ""));
     return names[0] || "Unknown";
   };
 
-  // Changed function name to avoid conflict with imported API function
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      // Use the imported API function through the namespace
-      const data = await apiService.fetchCustomers(shopApiName, searchTerm, false);
+      const data = await apiService.fetchCustomers(shop, searchTerm, false);
       console.log("Fetched customers:", data);
       setCustomers(data || []);
       setError(null);
@@ -65,18 +61,27 @@ const AdvancePayments = () => {
       }
     } else if (name === "phoneNumber" && isExistingCustomer) {
       try {
-        const customer = await apiService.fetchCustomerByPhone(shopApiName, value);
+        const customer = await apiService.fetchCustomerByPhone(shop, value);
         setNewPayment({
           ...newPayment,
           phoneNumber: value,
           customerName: customer ? getCommonName(customer.profiles) : "",
           profileId: "",
           newProfileName: "",
+          paymentMethod: "Cash",
         });
       } catch (err) {
         console.error("Error fetching customer by phone:", err);
-        setNewPayment({ ...newPayment, phoneNumber: value, customerName: "", profileId: "", newProfileName: "" });
+        setNewPayment({ ...newPayment, phoneNumber: value, customerName: "", profileId: "", newProfileName: "", paymentMethod: "Cash" });
       }
+    } else if (name === "profileId") {
+      const customer = customers.find((c) => c.phoneNumber === newPayment.phoneNumber);
+      const profile = customer?.profiles.find((p) => p.profileId === value);
+      setNewPayment({
+        ...newPayment,
+        profileId: value,
+        paymentMethod: profile?.advance?.paymentMethod || "Cash",
+      });
     } else {
       setNewPayment({ ...newPayment, [name]: value });
     }
@@ -91,7 +96,7 @@ const AdvancePayments = () => {
       profileId: "",
       advanceAmount: "",
       newProfileName: "",
-      paymentType: "Cash",
+      paymentMethod: "Cash",
     });
   };
 
@@ -102,7 +107,7 @@ const AdvancePayments = () => {
       !newPayment.phoneNumber ||
       (!newPayment.profileId && !isExistingCustomer) ||
       !newPayment.advanceAmount ||
-      !newPayment.paymentType
+      !newPayment.paymentMethod
     ) {
       alert("Please fill all required fields");
       return;
@@ -121,7 +126,14 @@ const AdvancePayments = () => {
 
     setLoading(true);
     try {
-      const existingCustomer = customers.find((c) => c.phoneNumber === newPayment.phoneNumber);
+      let existingCustomer = null;
+      try {
+        existingCustomer = await apiService.fetchCustomerByPhone(shop, newPayment.phoneNumber);
+      } catch (err) {
+        if (err.message !== "Customer not found") {
+          throw err;
+        }
+      }
 
       if (!isExistingCustomer && existingCustomer) {
         alert("Phone number exists. Use Existing Customer option.");
@@ -129,14 +141,28 @@ const AdvancePayments = () => {
       }
 
       if (existingCustomer && newPayment.profileId.startsWith("new-profile")) {
-        // Check for exact duplicate profile names (case-sensitive)
         if (existingCustomer.profiles.some((p) => p.name === newPayment.newProfileName)) {
           alert("Profile name already exists for this customer");
           return;
         }
-      }
-
-      if (existingCustomer && !newPayment.profileId.startsWith("new-profile")) {
+        const profileData = {
+          name: newPayment.newProfileName,
+          advance: { value: true, currentamount: advanceAmount, showinadvance: true, paymentMethod: newPayment.paymentMethod },
+          paymentMethod: "",
+          credit: 0,
+          advanceHistory: [
+            {
+              transactionType: "Deposit",
+              amount: advanceAmount,
+              date: newPayment.date,
+            },
+          ],
+          bills: [],
+          deleteuser: { value: false, date: "" },
+        };
+        console.log("Appending new profile to existing customer:", profileData);
+        await apiService.appendCustomerProfile(shop, newPayment.phoneNumber, profileData);
+      } else if (existingCustomer && !newPayment.profileId.startsWith("new-profile")) {
         const profile = existingCustomer.profiles.find((p) => p.profileId === newPayment.profileId);
         if (!profile) {
           alert("Selected profile not found");
@@ -149,12 +175,12 @@ const AdvancePayments = () => {
         console.log("addAdvancePayment request:", {
           date: newPayment.date,
           amount: advanceAmount,
-          paymentType: newPayment.paymentType,
+          paymentMethod: newPayment.paymentMethod,
         });
-        await apiService.addAdvancePayment(shopApiName, newPayment.phoneNumber, newPayment.profileId, {
+        await apiService.addAdvancePayment(shop, newPayment.phoneNumber, newPayment.profileId, {
           date: newPayment.date,
           amount: advanceAmount,
-          paymentType: newPayment.paymentType,
+          paymentMethod: newPayment.paymentMethod,
         });
       } else {
         if (advanceAmount < 0) {
@@ -163,8 +189,8 @@ const AdvancePayments = () => {
         }
         const profileData = {
           name: newPayment.profileId.startsWith("new-profile") ? newPayment.newProfileName : newPayment.customerName,
-          advance: { value: true, currentamount: advanceAmount, showinadvance: true, paymentType: newPayment.paymentType },
-          paymentType: newPayment.paymentType,
+          advance: { value: true, currentamount: advanceAmount, showinadvance: true, paymentMethod: newPayment.paymentMethod },
+          paymentMethod: "",
           credit: 0,
           advanceHistory: [
             {
@@ -173,13 +199,15 @@ const AdvancePayments = () => {
               date: newPayment.date,
             },
           ],
+          bills: [],
+          deleteuser: { value: false, date: "" },
         };
         const customerData = {
           phoneNumber: newPayment.phoneNumber,
           profiles: [profileData],
         };
         console.log("createCustomer request:", customerData);
-        await apiService.createCustomer(shopApiName, customerData);
+        await apiService.createCustomer(shop, customerData);
       }
 
       await loadCustomers();
@@ -190,7 +218,7 @@ const AdvancePayments = () => {
         profileId: "",
         advanceAmount: "",
         newProfileName: "",
-        paymentType: "Cash",
+        paymentMethod: "Cash",
       });
       setIsExistingCustomer(false);
       setError(null);
@@ -209,26 +237,33 @@ const AdvancePayments = () => {
       setEditedProfile(null);
     } else {
       setEditingProfile({ profileId: profile.profileId, phoneNumber });
-      setEditedProfile({ ...profile, paymentType: profile.advance?.paymentType || "Cash" });
+      setEditedProfile({
+        ...profile,
+        name: profile.name,
+        advance: { ...profile.advance, paymentMethod: profile.advance?.paymentMethod || "Cash" },
+      });
     }
     setDropdownOpen(null);
   };
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditedProfile({ ...editedProfile, [name]: value });
+    if (name === "paymentMethod") {
+      setEditedProfile({
+        ...editedProfile,
+        advance: { ...editedProfile.advance, paymentMethod: value },
+      });
+    } else {
+      setEditedProfile({ ...editedProfile, [name]: value });
+    }
   };
 
   const handleSaveEdit = async () => {
     setLoading(true);
     try {
-      console.log("updateCustomerProfile request:", {
+      await apiService.updateAdvanceProfile(shop, editingProfile.phoneNumber, editedProfile.profileId, {
         name: editedProfile.name,
-        advance: { ...editedProfile.advance, paymentType: editedProfile.paymentType },
-      });
-      await apiService.updateCustomerProfile(shopApiName, editingProfile.phoneNumber, editedProfile.profileId, {
-        name: editedProfile.name,
-        advance: { ...editedProfile.advance, paymentType: editedProfile.paymentType },
+        paymentMethod: editedProfile.advance.paymentMethod,
       });
       await loadCustomers();
       setEditingProfile(null);
@@ -244,15 +279,15 @@ const AdvancePayments = () => {
   };
 
   const handleDeleteProfile = async (profile, phoneNumber) => {
-    if (window.confirm("Are you sure you want to delete this profile?")) {
+    if (window.confirm("Are you sure you want to hide this profile from advance payments?")) {
       setLoading(true);
       try {
-        await apiService.softDeleteCustomerProfile(shopApiName, phoneNumber, profile.profileId);
+        await apiService.deleteAdvanceProfile(shop, phoneNumber, profile.profileId);
         await loadCustomers();
         setError(null);
       } catch (err) {
-        console.error("Error deleting profile:", err);
-        setError(`Failed to delete profile: ${err.message}`);
+        console.error("Error hiding profile:", err);
+        setError(`Failed to hide profile: ${err.message}`);
         alert(`Error: ${err.message}`);
       } finally {
         setLoading(false);
@@ -263,16 +298,13 @@ const AdvancePayments = () => {
 
   const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
 
-  // Modified filtering logic to be less restrictive
   const filteredCustomers = (customers || []).filter(
     (c) => {
-      // First check if customer has a name or phone number that matches the search
-      const nameOrPhoneMatches = (getCommonName(c.profiles).toLowerCase().includes(searchTerm) || 
-                                 (c.phoneNumber || "").includes(searchTerm));
-      
-      // Then check if any profile has advance.value=true (relaxed the showinadvance condition)
-      const hasAdvanceProfiles = (c.profiles || []).some(p => p.advance?.value);
-      
+      const nameOrPhoneMatches = (
+        getCommonName(c.profiles).toLowerCase().includes(searchTerm) ||
+        (c.phoneNumber || "").includes(searchTerm)
+      );
+      const hasAdvanceProfiles = (c.profiles || []).some(p => p.advance?.value && p.advance?.showinadvance);
       return nameOrPhoneMatches && hasAdvanceProfiles;
     }
   );
@@ -315,12 +347,13 @@ const AdvancePayments = () => {
           <p>Profile Name: ${profileName || "N/A"}</p>
           <p>Phone Number: ${phoneNumber || "N/A"}</p>
           <p>Date: ${bill.date ? new Date(bill.date).toLocaleDateString() : "N/A"}</p>
-          <p class="payment-type">Payment Type: ${bill.paymentType || "N/A"}</p>
+          <p class="payment-type">Payment Method: ${bill.paymentMethod || "N/A"}</p>
           <table>
             <thead>
               <tr>
                 <th>Product</th>
                 <th>Qty</th>
+                <th>Unit</th>
                 <th>Price/Qty</th>
                 <th>Amount</th>
               </tr>
@@ -330,17 +363,18 @@ const AdvancePayments = () => {
                 <tr>
                   <td>${item.product || "N/A"}</td>
                   <td>${item.qty || 0}</td>
+                  <td>${item.unit || "N/A"}</td>
                   <td>₹${item.pricePerQty || 0}</td>
                   <td>₹${item.amount || 0}</td>
                 </tr>
               `).join("")}
               <tr class="total">
-                <td colspan="3">Total Amount</td>
+                <td colspan="4">Total Amount</td>
                 <td>₹${bill.totalAmount || 0}</td>
               </tr>
               ${bill.advanceRemaining !== undefined ? `
                 <tr class="total">
-                  <td colspan="3">Advance Remaining</td>
+                  <td colspan="4">Advance Remaining</td>
                   <td>₹${bill.advanceRemaining}</td>
                 </tr>
               ` : ""}
@@ -360,10 +394,9 @@ const AdvancePayments = () => {
   const filteredCustomerOptions = (customers || []).filter(
     (c) =>
       getCommonName(c.profiles).toLowerCase().includes(newPayment.customerName.toLowerCase()) &&
-      (c.profiles || []).some((p) => p.advance?.value)
+      (c.profiles || []).some((p) => p.advance?.value && p.advance?.showinadvance)
   );
 
-  // Add debug message for customers data
   console.log("Total customers:", customers.length);
   console.log("Filtered customers:", filteredCustomers.length);
 
@@ -385,7 +418,7 @@ const AdvancePayments = () => {
                 profileId: "",
                 advanceAmount: "",
                 newProfileName: "",
-                paymentType: "Cash",
+                paymentMethod: "Cash",
               });
               setSearchTerm("");
               setSelectedBills(null);
@@ -408,7 +441,7 @@ const AdvancePayments = () => {
           <div className="form-group">
             <label className="checkbox-label">
               <span>Customer</span>
-              <span className="checkbox-container">
+              <span className="checkbox-container-p">
                 <input type="checkbox" checked={isExistingCustomer} onChange={handleCheckboxChange} />
                 Existing Customer
               </span>
@@ -445,7 +478,7 @@ const AdvancePayments = () => {
               <option value="">Select profile</option>
               <option value={`new-profile-${newPayment.phoneNumber}`}>New Profile</option>
               {(customers.find((c) => c.phoneNumber === newPayment.phoneNumber)?.profiles || [])
-                .filter((p) => p.advance?.value)
+                .filter((p) => p.advance?.value && p.advance?.showinadvance)
                 .map((p) => (
                   <option key={p.profileId} value={p.profileId}>
                     {p.name}
@@ -476,8 +509,8 @@ const AdvancePayments = () => {
             />
           </div>
           <div className="form-group">
-            <label>Payment Type</label>
-            <select name="paymentType" value={newPayment.paymentType} onChange={handleInputChange}>
+            <label>Payment Method</label>
+            <select name="paymentMethod" value={newPayment.paymentMethod} onChange={handleInputChange}>
               <option value="Cash">Cash</option>
               <option value="Card">Card</option>
               <option value="Online">Online</option>
@@ -503,17 +536,17 @@ const AdvancePayments = () => {
             className="search-input"
           />
         </div>
-        
+
         {filteredCustomers.length === 0 && !loading && (
           <div className="no-data">No advance payment customers found.</div>
         )}
-        
+
         <table className="advance-payment-table">
           <thead>
             <tr>
               <th>Contractor</th>
               <th>Profile</th>
-              <th>Payment Type</th>
+              <th>Payment Method</th>
               <th>Advance Given</th>
               <th>Advance Used</th>
               <th>Balance</th>
@@ -527,12 +560,12 @@ const AdvancePayments = () => {
                   <td colSpan={7}>
                     <h3 className="contractor-heading">
                       {getCommonName(c.profiles)} (
-                      {(c.profiles || []).filter((p) => p.advance?.value).length} profiles)
+                      {(c.profiles || []).filter((p) => p.advance?.value && p.advance?.showinadvance).length} profiles)
                     </h3>
                   </td>
                 </tr>
                 {(c.profiles || [])
-                  .filter((p) => p.advance?.value)
+                  .filter((p) => p.advance?.value && p.advance?.showinadvance)
                   .map((p) => {
                     const totalDeposits = (p.advanceHistory || [])
                       .filter((h) => h.transactionType === "Deposit")
@@ -542,7 +575,7 @@ const AdvancePayments = () => {
                       .reduce((sum, h) => sum + (h.amount || 0), 0);
                     const totalUsed = (p.bills || []).reduce((sum, b) => sum + (b.totalAmount || 0), 0);
                     const currentBalance = p.advance?.currentamount || 0;
-                    const paymentType = p.advance?.paymentType || p.paymentType || "N/A";
+                    const paymentMethod = p.advance?.paymentMethod || "N/A";
                     console.log(`Profile ${p.name} advanceHistory:`, p.advanceHistory);
                     return (
                       <tr key={p.profileId || Math.random()}>
@@ -563,8 +596,8 @@ const AdvancePayments = () => {
                         <td>
                           {editingProfile?.profileId === p.profileId ? (
                             <select
-                              name="paymentType"
-                              value={editedProfile.paymentType}
+                              name="paymentMethod"
+                              value={editedProfile.advance?.paymentMethod || "Cash"}
                               onChange={handleEditChange}
                               className="inline-edit-select"
                             >
@@ -574,7 +607,7 @@ const AdvancePayments = () => {
                               <option value="Cheque">Cheque</option>
                             </select>
                           ) : (
-                            paymentType
+                            paymentMethod
                           )}
                         </td>
                         <td>₹{totalDeposits.toFixed(2)}</td>
@@ -613,7 +646,7 @@ const AdvancePayments = () => {
                                   className="dropdown-item delete-btn"
                                   onClick={() => handleDeleteProfile(p, c.phoneNumber)}
                                 >
-                                  <Trash2 size={16} /> Delete
+                                  <Trash2 size={16} /> Hide
                                 </button>
                               </div>
                             )}
@@ -644,12 +677,13 @@ const AdvancePayments = () => {
                   <div key={bill.billNo || Math.random()} className="bill-details">
                     <h3>Bill No: {bill.billNo || "N/A"}</h3>
                     <p>Date: {bill.date ? new Date(bill.date).toLocaleDateString() : "N/A"}</p>
-                    <p>Payment Type: {bill.paymentType || "N/A"}</p>
+                    <p>Payment Method: {bill.paymentMethod || "N/A"}</p>
                     <table className="bill-table">
                       <thead>
                         <tr>
                           <th>Product</th>
                           <th>Qty</th>
+                          <th>Unit</th>
                           <th>Price/Qty</th>
                           <th>Amount</th>
                         </tr>
@@ -659,17 +693,18 @@ const AdvancePayments = () => {
                           <tr key={i}>
                             <td>{item.product || "N/A"}</td>
                             <td>{item.qty || 0}</td>
+                            <td>{item.unit || "N/A"}</td>
                             <td>₹{item.pricePerQty || 0}</td>
                             <td>₹{item.amount || 0}</td>
                           </tr>
                         ))}
                         <tr className="total">
-                          <td colSpan={3}>Total Amount</td>
+                          <td colSpan={4}>Total Amount</td>
                           <td>₹{bill.totalAmount || 0}</td>
                         </tr>
                         {bill.advanceRemaining !== undefined && (
                           <tr className="total">
-                            <td colSpan={3}>Advance Remaining</td>
+                            <td colSpan={4}>Advance Remaining</td>
                             <td>₹{bill.advanceRemaining}</td>
                           </tr>
                         )}
