@@ -1,4 +1,5 @@
-const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
+// const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
+const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
 async function request(method, url, data = null) {
@@ -44,7 +45,7 @@ export const updateStockItem = async (shop, id, item) => {
 
 
 export const deleteStockItems = async (shop, { id }) => {
-  return request('DELETE', `${BASE_URL}/${encodeURIComponent(shop)}/stock`, { id });
+  return request('DELETE', `/${encodeURIComponent(shop)}/stock`, { id });
 };
 
 // Sales APIs
