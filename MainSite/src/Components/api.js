@@ -1,5 +1,5 @@
-// const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
+// const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
 async function request(method, url, data = null) {
