@@ -74,6 +74,10 @@
     color: #4caf50;
 }
 
+.status-deleted-dax {
+    color: #ff4444;
+}
+
 .items-table-dax,
 .payment-history-table-dax {
     width: 100%;
@@ -107,8 +111,15 @@
 }
 
 .payment-section-dax,
-.edit-payment-section-dax {
+.edit-payment-section-dax,
+.delete-section-dax {
     margin-top: 20px;
+}
+
+.delete-section-dax h3 {
+    font-size: 16px;
+    color: #a1a5b7;
+    margin-bottom: 10px;
 }
 
 .payment-form-dax {
@@ -148,19 +159,35 @@
 .form-buttons-dax {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-buttons-dax {
+    display: flex;
+    gap: 5px;
+    align-items: center;
 }
 
 .submit-btn-dax,
 .manual-close-btn-dax,
 .cancel-btn-dax,
 .edit-btn-dax,
-.delete-btn-dax {
+.delete-btn-dax,
+.restore-btn-dax {
     padding: 10px 20px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
     transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.edit-btn-dax,
+.delete-btn-dax {
+    padding: 5px 10px;
 }
 
 .submit-btn-dax {
@@ -193,7 +220,6 @@
 .edit-btn-dax {
     background: #0288d1;
     color: #ffffff;
-    padding: 5px 10px;
 }
 
 .edit-btn-dax:hover:not(:disabled) {
@@ -203,11 +229,19 @@
 .delete-btn-dax {
     background: #d32f2f;
     color: #ffffff;
-    padding: 5px 10px;
 }
 
 .delete-btn-dax:hover:not(:disabled) {
     background: #b71c1c;
+}
+
+.restore-btn-dax {
+    background: #4caf50;
+    color: #ffffff;
+}
+
+.restore-btn-dax:hover:not(:disabled) {
+    background: #45a049;
 }
 
 .warning-message-dax {
@@ -217,6 +251,9 @@
     color: #ff4444;
     font-size: 14px;
     margin-top: 10px;
+    padding: 10px;
+    background: #4a2b2b;
+    border-radius: 4px;
 }
 
 @media (max-width: 768px) {
@@ -228,5 +265,9 @@
     }
     .payment-form-dax {
         grid-template-columns: 1fr;
+    }
+    .form-buttons-dax {
+        flex-direction: column;
+        align-items: stretch;
     }
 }

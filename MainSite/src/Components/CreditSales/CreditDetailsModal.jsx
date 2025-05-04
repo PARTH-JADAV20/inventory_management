@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { format } from "date-fns";
-import { AlertCircle, X, Edit2, Trash2 } from "lucide-react";
-import { addCreditPayment, closeCreditSale, addCreditRefund, updateCreditPayment, deleteCreditPayment } from "../api.js";
+import { AlertCircle, X, Edit2, Trash2, Undo, Delete } from "lucide-react";
+import { addCreditPayment, closeCreditSale, addCreditRefund, updateCreditPayment, deleteCreditPayment, deleteCreditSale, restoreCreditSale, permanentDeleteCreditSale } from "../api.js";
 import "./CreditDetailsModal.css";
 
 const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) => {
@@ -71,6 +71,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
       const refundData = {
         amount,
         note: refund.note || "Customer refund",
+        date: format(new Date(), "yyyy-MM-dd"),
       };
       const updatedSale = await addCreditRefund(shop, creditSale._id, refundData);
       onUpdate(updatedSale);
@@ -160,6 +161,48 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
     }
   };
 
+  const handleSoftDelete = async () => {
+    if (!window.confirm("Are you sure you want to soft delete this credit sale?")) return;
+    setLoading(true);
+    try {
+      const updatedSale = await deleteCreditSale(shop, creditSale._id);
+      onUpdate(updatedSale);
+      setWarning("");
+    } catch (error) {
+      setWarning(error.message || "Failed to soft delete credit sale");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!window.confirm("Are you sure you want to restore this credit sale?")) return;
+    setLoading(true);
+    try {
+      const updatedSale = await restoreCreditSale(shop, creditSale._id);
+      onUpdate(updatedSale);
+      setWarning("");
+    } catch (error) {
+      setWarning(error.message || "Failed to restore credit sale");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!window.confirm("Are you sure you want to permanently delete this credit sale? This action cannot be undone.")) return;
+    setLoading(true);
+    try {
+      await permanentDeleteCreditSale(shop, creditSale._id);
+      onClose();
+      setWarning("");
+    } catch (error) {
+      setWarning(error.message || "Failed to permanently delete credit sale");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const totalPaid = creditSale.paidAmount || 0;
   const remainingBalance = creditSale.totalAmount || 0;
   const originalBillAmount = totalPaid + remainingBalance;
@@ -173,6 +216,12 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
             <X size={20} />
           </button>
         </div>
+        {creditSale.isDeleted && (
+          <div className="warning-message-dax">
+            <AlertCircle size={16} />
+            <span>This credit sale is deleted</span>
+          </div>
+        )}
         <div className="credit-details-dax">
           <div className="detail-row-dax">
             <span>Bill Number:</span>
@@ -243,25 +292,31 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
             <tbody>
               {creditSale.paymentHistory.map((payment, index) => (
                 <tr key={index}>
-                  <td>{format(new Date(payment.date), "dd MMMM yyyy")}</td>
+                  <td>
+                    {payment.date && !isNaN(new Date(payment.date).getTime())
+                      ? format(new Date(payment.date), "dd MMMM yyyy")
+                      : "N/A"}
+                  </td>
                   <td>₹{payment.amount.toFixed(2)}</td>
                   <td>{payment.mode}</td>
                   <td>{payment.note || "-"}</td>
                   <td>
-                    <button
-                      className="edit-btn-dax"
-                      onClick={() => startEditPayment(payment)}
-                      disabled={loading}
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      className="delete-btn-dax"
-                      onClick={() => deletePayment(payment._id)}
-                      disabled={loading}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="action-buttons-dax">
+                      <button
+                        className="edit-btn-dax"
+                        onClick={() => startEditPayment(payment)}
+                        disabled={loading || creditSale.isDeleted}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        className="delete-btn-dax"
+                        onClick={() => deletePayment(payment._id)}
+                        disabled={loading || creditSale.isDeleted}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -334,7 +389,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
           </div>
         )}
 
-        {creditSale.status !== "Cleared" && (
+        {!creditSale.isDeleted && creditSale.status !== "Cleared" && (
           <div className="payment-section-dax">
             <h3>Add Partial Payment</h3>
             <div className="payment-form-dax">
@@ -444,6 +499,39 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
             </div>
           </div>
         )}
+
+        <div className="delete-section-dax">
+          <h3>Manage Credit Sale</h3>
+          <div className="form-buttons-dax">
+            {!creditSale.isDeleted && (
+              <button
+                className="delete-btn-dax"
+                onClick={handleSoftDelete}
+                disabled={loading}
+              >
+                <Trash2 size={16} /> Soft Delete
+              </button>
+            )}
+            {creditSale.isDeleted && (
+              <>
+                <button
+                  className="submit-btn-dax"
+                  onClick={handleRestore}
+                  disabled={loading}
+                >
+                  <Undo size={16} /> Restore
+                </button>
+                <button
+                  className="delete-btn-dax"
+                  onClick={handlePermanentDelete}
+                  disabled={loading}
+                >
+                  <Delete size={16} /> Permanent Delete
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
         {warning && (
           <div className="warning-message-dax">

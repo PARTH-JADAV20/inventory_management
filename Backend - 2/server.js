@@ -13,7 +13,6 @@ app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-// mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -130,7 +129,9 @@ const creditSaleSchema = new mongoose.Schema({
   status: { type: String, enum: ['Open', 'Cleared'], default: 'Open' },
   lastTransactionDate: { type: String, required: true }, // YYYY-MM-DD
   shop: { type: String, required: true },
-  paymentHistory: [paymentHistorySchema], // Store payments and refunds
+  paymentHistory: [paymentHistorySchema],
+  isDeleted: { type: Boolean, default: false }, // Added for soft delete
+  deletedAt: { type: String, default: null }, // Date of deletion (YYYY-MM-DD)
 });
 
 // Models
@@ -157,6 +158,14 @@ const getNextBillNumber = async (shop) => {
     { new: true, upsert: true }
   );
   return `B${String(counter.sequence).padStart(3, '0')}`;
+};
+
+// Date Validation Helper
+const validateDate = (dateStr) => {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateStr)) return false;
+  const date = new Date(dateStr);
+  return date instanceof Date && !isNaN(date);
 };
 
 // Stock Routes (Unchanged)
@@ -244,7 +253,7 @@ app.delete('/api/:shop/stock', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
-})
+});
 
 // Sales Routes (Unchanged)
 app.post('/api/:shop/sales', async (req, res) => {
@@ -893,10 +902,10 @@ app.delete('/api/:shop/advance/:phoneNumber/profiles/:profileId', async (req, re
 app.get('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search } = req.query;
+    const { page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search, showDeleted = 'false' } = req.query;
     const CreditSale = getCreditSaleModel(shop);
 
-    const query = {};
+    const query = { isDeleted: showDeleted === 'true' };
     if (search) {
       query.$or = [
         { billNumber: { $regex: search, $options: 'i' } },
@@ -913,10 +922,10 @@ app.get('/api/:shop/credits', async (req, res) => {
       .sort(sortOptions)
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
-      .lean(); // Use lean for faster queries
+      .lean();
 
     res.json({
-      data: creditSales, // Consistent response structure
+      data: creditSales,
       total,
       page: parseInt(page),
       limit: parseInt(limit),
@@ -941,11 +950,18 @@ app.post('/api/:shop/credits', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Validate stock
+    // Validate items and dates
     for (const item of items) {
       if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
+      if (!validateDate(item.date)) {
+        return res.status(400).json({ error: `Invalid date for item ${item.product}: ${item.date}` });
+      }
+    }
+
+    // Validate stock
+    for (const item of items) {
       const stockItems = await Stock.find({ name: item.product, unit: item.unit });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
       if (totalQty < item.qty) {
@@ -974,6 +990,8 @@ app.post('/api/:shop/credits', async (req, res) => {
       lastTransactionDate: items[0].date,
       shop,
       paymentHistory: [],
+      isDeleted: false,
+      deletedAt: null,
     });
     await creditSale.save();
 
@@ -1094,8 +1112,14 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is deleted' });
 
     const currentDate = new Date().toISOString().split('T')[0];
+
+    // Validate payment date
+    if (payment && payment.date && !validateDate(payment.date)) {
+      return res.status(400).json({ error: `Invalid payment date: ${payment.date}` });
+    }
 
     // Handle partial payment
     if (payment && payment.amount >= 0) {
@@ -1104,12 +1128,12 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
       }
       creditSale.paidAmount += payment.amount;
       creditSale.totalAmount -= payment.amount;
-      creditSale.lastTransactionDate = currentDate;
+      creditSale.lastTransactionDate = payment.date || currentDate;
       creditSale.paymentHistory.push({
         amount: payment.amount,
         mode: payment.mode || 'Cash',
         note: payment.note || '',
-        date: currentDate,
+        date: payment.date || currentDate,
       });
       if (creditSale.totalAmount <= 0) {
         creditSale.status = 'Cleared';
@@ -1127,12 +1151,12 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
         creditSale.paidAmount = creditSale.paidAmount + payment.amount;
         creditSale.totalAmount = 0;
         creditSale.status = 'Cleared';
-        creditSale.lastTransactionDate = currentDate;
+        creditSale.lastTransactionDate = payment.date || currentDate;
         creditSale.paymentHistory.push({
           amount: payment.amount,
           mode: 'Manual',
           note: payment.note || 'Manual settlement',
-          date: currentDate,
+          date: payment.date || currentDate,
         });
       } else if (status === 'Cleared') {
         // Full payment close
@@ -1140,13 +1164,13 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
         creditSale.paidAmount += remaining;
         creditSale.totalAmount = 0;
         creditSale.status = 'Cleared';
-        creditSale.lastTransactionDate = currentDate;
+        creditSale.lastTransactionDate = payment?.date || currentDate;
         if (payment) {
           creditSale.paymentHistory.push({
             amount: payment.amount || remaining,
             mode: payment.mode || 'Cash',
             note: payment.note || 'Full payment',
-            date: currentDate,
+            date: payment.date || currentDate,
           });
         }
       }
@@ -1179,12 +1203,13 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
 app.post('/api/:shop/credits/:id/refund', async (req, res) => {
   try {
     const { shop, id } = req.params;
-    const { amount, note } = req.body;
+    const { amount, note, date } = req.body;
     const CreditSale = getCreditSaleModel(shop);
     const Customer = getCustomerModel(shop);
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is deleted' });
 
     // Validate refund
     if (!amount || amount <= 0) {
@@ -1193,18 +1218,19 @@ app.post('/api/:shop/credits/:id/refund', async (req, res) => {
     if (amount > creditSale.paidAmount) {
       return res.status(400).json({ error: 'Refund amount exceeds paid amount' });
     }
-
-    const currentDate = new Date().toISOString().split('T')[0];
+    if (!date || !validateDate(date)) {
+      return res.status(400).json({ error: `Invalid refund date: ${date}` });
+    }
 
     // Process refund
     creditSale.paidAmount -= amount;
     creditSale.totalAmount += amount;
-    creditSale.lastTransactionDate = currentDate;
+    creditSale.lastTransactionDate = date;
     creditSale.paymentHistory.push({
       amount: -amount,
       mode: 'Refund',
       note: note || 'Customer refund',
-      date: currentDate,
+      date,
     });
 
     // Reopen bill if necessary
@@ -1239,26 +1265,28 @@ app.post('/api/:shop/credits/:id/refund', async (req, res) => {
 app.put('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
   try {
     const { shop, id, paymentId } = req.params;
-    const { amount, mode, note } = req.body;
+    const { amount, mode, note, date } = req.body;
     const CreditSale = getCreditSaleModel(shop);
     const Customer = getCustomerModel(shop);
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is deleted' });
 
     const payment = creditSale.paymentHistory.id(paymentId);
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
 
-    // Validate updated amount
+    // Validate updated amount and date
     if (!amount || amount < 0) {
       return res.status(400).json({ error: 'Invalid payment amount' });
+    }
+    if (!date || !validateDate(date)) {
+      return res.status(400).json({ error: `Invalid payment date: ${date}` });
     }
     const maxPayment = creditSale.totalAmount + (payment.amount >= 0 ? payment.amount : 0);
     if (amount > maxPayment) {
       return res.status(400).json({ error: 'Updated payment amount exceeds remaining balance' });
     }
-
-    const currentDate = new Date().toISOString().split('T')[0];
 
     // Adjust paidAmount and totalAmount
     if (payment.amount >= 0) {
@@ -1279,7 +1307,7 @@ app.put('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
     payment.amount = amount;
     payment.mode = mode || payment.mode;
     payment.note = note || payment.note;
-    payment.date = currentDate;
+    payment.date = date;
 
     // Update status
     if (creditSale.totalAmount <= 0) {
@@ -1288,7 +1316,7 @@ app.put('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
     } else {
       creditSale.status = 'Open';
     }
-    creditSale.lastTransactionDate = currentDate;
+    creditSale.lastTransactionDate = date;
 
     await creditSale.save();
 
@@ -1322,6 +1350,7 @@ app.delete('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is deleted' });
 
     const payment = creditSale.paymentHistory.id(paymentId);
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
@@ -1347,7 +1376,9 @@ app.delete('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
     } else {
       creditSale.status = 'Open';
     }
-    creditSale.lastTransactionDate = currentDate;
+    creditSale.lastTransactionDate = creditSale.paymentHistory.length > 0
+      ? creditSale.paymentHistory[creditSale.paymentHistory.length - 1].date
+      : creditSale.items[0].date;
 
     await creditSale.save();
 
@@ -1373,7 +1404,187 @@ app.delete('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
   }
 });
 
-// Dashboard Routes (Unchanged)
+app.delete('/api/:shop/credits/:id', async (req, res) => {
+  try {
+    const { shop, id } = req.params;
+    const CreditSale = getCreditSaleModel(shop);
+    const Customer = getCustomerModel(shop);
+    const Stock = getStockModel(shop);
+
+    const creditSale = await CreditSale.findById(id);
+    if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is already deleted' });
+
+    // Mark as soft deleted
+    creditSale.isDeleted = true;
+    creditSale.deletedAt = new Date().toISOString().split('T')[0];
+    await creditSale.save();
+
+    // Restore stock
+    for (const item of creditSale.items) {
+      const stockItems = await Stock.find({ name: item.product, unit: item.unit });
+      let qtyToRestore = item.qty;
+      if (stockItems.length > 0) {
+        for (const stockItem of stockItems) {
+          if (qtyToRestore <= 0) break;
+          stockItem.quantity += qtyToRestore;
+          qtyToRestore = 0;
+          await stockItem.save();
+        }
+      }
+      if (qtyToRestore > 0) {
+        const newStock = new Stock({
+          id: uuidv4(),
+          name: item.product,
+          quantity: qtyToRestore,
+          unit: item.unit,
+          category: 'Unknown', // Default since category is missing
+          price: item.pricePerUnit,
+          addedDate: new Date().toISOString().split('T')[0],
+        });
+        await newStock.save();
+      }
+    }
+
+    // Update customer profile
+    const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
+    if (customer) {
+      const profile = customer.profiles.find(p => p.name === creditSale.customerName && !p.deleteuser.value);
+      if (profile) {
+        const billIndex = profile.bills.findIndex(b => b.billNo === creditSale.billNumber);
+        if (billIndex !== -1) {
+          profile.bills.splice(billIndex, 1);
+          profile.credit = profile.bills.reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+          await customer.save();
+        }
+      }
+    }
+
+    res.json({ message: 'Credit sale soft deleted successfully' });
+  } catch (err) {
+    console.error('Delete credit sale error:', err);
+    res.status(400).json({ error: 'Failed to delete credit sale: ' + err.message });
+  }
+});
+
+app.put('/api/:shop/credits/:id/restore', async (req, res) => {
+  try {
+    const { shop, id } = req.params;
+    const CreditSale = getCreditSaleModel(shop);
+    const Customer = getCustomerModel(shop);
+    const Stock = getStockModel(shop);
+
+    const creditSale = await CreditSale.findById(id);
+    if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (!creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is not deleted' });
+
+    // Validate stock before restoring
+    for (const item of creditSale.items) {
+      const stockItems = await Stock.find({ name: item.product, unit: item.unit });
+      const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
+      if (totalQty < item.qty) {
+        return res.status(400).json({ error: `Insufficient stock to restore ${item.product} (${item.unit})` });
+      }
+    }
+
+    // Deduct stock
+    for (const item of creditSale.items) {
+      let qtyToDeduct = item.qty;
+      const stockItems = await Stock.find({ name: item.product, unit: item.unit }).sort({ addedDate: 1 });
+      for (const stockItem of stockItems) {
+        if (qtyToDeduct <= 0) break;
+        const deduct = Math.min(qtyToDeduct, stockItem.quantity);
+        stockItem.quantity -= deduct;
+        qtyToDeduct -= deduct;
+        if (stockItem.quantity === 0) {
+          await Stock.deleteOne({ _id: stockItem._id });
+        } else {
+          await stockItem.save();
+        }
+      }
+    }
+
+    // Restore credit sale
+    creditSale.isDeleted = false;
+    creditSale.deletedAt = null;
+    await creditSale.save();
+
+    // Update customer profile
+    const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
+    if (customer) {
+      const profile = customer.profiles.find(p => p.name === creditSale.customerName && !p.deleteuser.value);
+      if (profile) {
+        profile.bills.push({
+          billNo: creditSale.billNumber,
+          date: creditSale.items[0].date,
+          items: creditSale.items.map(item => ({
+            product: item.product,
+            qty: item.qty,
+            unit: item.unit,
+            pricePerQty: item.pricePerUnit,
+            amount: item.amount,
+          })),
+          totalAmount: creditSale.totalAmount,
+          creditAmount: creditSale.totalAmount,
+          paymentMethod: 'Credit',
+          shop,
+        });
+        profile.credit = profile.bills.reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+        await customer.save();
+      }
+    }
+
+    res.json({ message: 'Credit sale restored successfully', creditSale });
+  } catch (err) {
+    console.error('Restore credit sale error:', err);
+    res.status(400).json({ error: 'Failed to restore credit sale: ' + err.message });
+  }
+});
+
+app.delete('/api/:shop/credits/:id/permanent', async (req, res) => {
+  try {
+    const { shop, id } = req.params;
+    const CreditSale = getCreditSaleModel(shop);
+
+    const creditSale = await CreditSale.findById(id);
+    if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (!creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale must be soft deleted first' });
+
+    // Permanently delete
+    await CreditSale.deleteOne({ _id: id });
+
+    res.json({ message: 'Credit sale permanently deleted' });
+  } catch (err) {
+    console.error('Permanent delete credit sale error:', err);
+    res.status(400).json({ error: 'Failed to permanently delete credit sale: ' + err.message });
+  }
+});
+
+app.get('/api/:shop/credits/deleted', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const CreditSale = getCreditSaleModel(shop);
+
+    const deletedCreditSales = await CreditSale.find({ isDeleted: true }).lean();
+
+    // Auto-delete entries older than 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+    await CreditSale.deleteMany({
+      isDeleted: true,
+      deletedAt: { $lte: thirtyDaysAgoStr },
+    });
+
+    res.json({ data: deletedCreditSales });
+  } catch (err) {
+    console.error('Fetch deleted credit sales error:', err);
+    res.status(500).json({ error: 'Failed to fetch deleted credit sales: ' + err.message });
+  }
+});
+
+// Dashboard Routes (Updated)
 app.get('/api/:shop/low-stock', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -1489,28 +1700,130 @@ app.get('/api/:shop/profit-trend', async (req, res) => {
 app.get('/api/:shop/summary', async (req, res) => {
   try {
     const { shop } = req.params;
+    const { date } = req.query; // Optional date filter (YYYY-MM-DD)
     const Customer = getCustomerModel(shop);
     const customers = await Customer.find();
-    const totalSales = customers
-      .flatMap(c => c.profiles.flatMap(p => p.bills))
-      .reduce((sum, b) => sum + b.totalAmount, 0);
+
+    const sales = customers
+      .flatMap(c => c.profiles
+        .filter(p => !p.deleteuser.value)
+        .flatMap(p => p.bills.map(b => ({
+          ...b,
+          profileName: p.name,
+          phoneNumber: c.phoneNumber,
+          paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+        }))))
+      .filter(b => !date || b.date === date);
+
+    const totalSales = sales.reduce((sum, b) => sum + b.totalAmount, 0);
     const users = new Set(customers.flatMap(c => c.profiles.map(p => p.name))).size;
-    const creditSales = customers
-      .flatMap(c => c.profiles.flatMap(p => p.bills))
-      .filter(b => b.paymentType === 'Credit' && b.creditAmount > 0)
+    const creditSales = sales
+      .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
       .reduce((sum, b) => sum + b.creditAmount, 0);
     const advancePayments = customers
       .flatMap(c => c.profiles)
       .reduce((sum, p) => sum + (p.advance?.currentamount || 0), 0);
+
+    // Sales by payment method
+    const salesByPaymentMethod = {
+      Cash: sales
+        .filter(b => b.paymentMethod === 'Cash')
+        .reduce((sum, b) => sum + b.totalAmount, 0),
+      Online: sales
+        .filter(b => b.paymentMethod === 'Online')
+        .reduce((sum, b) => sum + b.totalAmount, 0),
+      Advance: sales
+        .filter(b => b.paymentMethod === 'Advance')
+        .reduce((sum, b) => sum + b.totalAmount, 0),
+      Credit: sales
+        .filter(b => b.paymentMethod === 'Credit')
+        .reduce((sum, b) => sum + b.totalAmount, 0),
+      Cheque: sales
+        .filter(b => b.paymentMethod === 'Cheque')
+        .reduce((sum, b) => sum + b.totalAmount, 0),
+    };
 
     res.json({
       totalSales,
       users,
       creditSales,
       advancePayments,
+      salesByPaymentMethod,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Fetch summary error:', err);
+    res.status(500).json({ error: 'Failed to fetch summary: ' + err.message });
+  }
+});
+
+app.get('/api/summary', async (req, res) => {
+  try {
+    const { date } = req.query; // Optional date filter (YYYY-MM-DD)
+    const shops = ['Shop 1', 'Shop 2'];
+    let totalSales = 0;
+    let users = new Set();
+    let creditSales = 0;
+    let advancePayments = 0;
+    const salesByPaymentMethod = {
+      Cash: 0,
+      Online: 0,
+      Advance: 0,
+      Credit: 0,
+      Cheque: 0,
+    };
+
+    for (const shop of shops) {
+      const Customer = getCustomerModel(shop);
+      const customers = await Customer.find();
+
+      const sales = customers
+        .flatMap(c => c.profiles
+          .filter(p => !p.deleteuser.value)
+          .flatMap(p => p.bills.map(b => ({
+            ...b,
+            profileName: p.name,
+            phoneNumber: c.phoneNumber,
+            paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+          }))))
+        .filter(b => !date || b.date === date);
+
+      totalSales += sales.reduce((sum, b) => sum + b.totalAmount, 0);
+      customers.flatMap(c => c.profiles.map(p => p.name)).forEach(name => users.add(name));
+      creditSales += sales
+        .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
+        .reduce((sum, b) => sum + b.creditAmount, 0);
+      advancePayments += customers
+        .flatMap(c => c.profiles)
+        .reduce((sum, p) => sum + (p.advance?.currentamount || 0), 0);
+
+      // Aggregate sales by payment method
+      salesByPaymentMethod.Cash += sales
+        .filter(b => b.paymentMethod === 'Cash')
+        .reduce((sum, b) => sum + b.totalAmount, 0);
+      salesByPaymentMethod.Online += sales
+        .filter(b => b.paymentMethod === 'Online')
+        .reduce((sum, b) => sum + b.totalAmount, 0);
+      salesByPaymentMethod.Advance += sales
+        .filter(b => b.paymentMethod === 'Advance')
+        .reduce((sum, b) => sum + b.totalAmount, 0);
+      salesByPaymentMethod.Credit += sales
+        .filter(b => b.paymentMethod === 'Credit')
+        .reduce((sum, b) => sum + b.totalAmount, 0);
+      salesByPaymentMethod.Cheque += sales
+        .filter(b => b.paymentMethod === 'Cheque')
+        .reduce((sum, b) => sum + b.totalAmount, 0);
+    }
+
+    res.json({
+      totalSales,
+      users: users.size,
+      creditSales,
+      advancePayments,
+      salesByPaymentMethod,
+    });
+  } catch (err) {
+    console.error('Fetch combined summary error:', err);
+    res.status(500).json({ error: 'Failed to fetch combined summary: ' + err.message });
   }
 });
 

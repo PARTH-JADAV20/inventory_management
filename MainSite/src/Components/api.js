@@ -43,7 +43,6 @@ export const updateStockItem = async (shop, id, item) => {
   return request('PUT', `/${encodeURIComponent(shop)}/stock/${id}`, item);
 };
 
-
 export const deleteStockItems = async (shop, { id }) => {
   return request('DELETE', `/${encodeURIComponent(shop)}/stock`, { id });
 };
@@ -173,18 +172,27 @@ export const fetchProfitTrend = async (shop) => {
   return request('GET', `/${encodeURIComponent(shop)}/profit-trend`);
 };
 
-export const fetchSummary = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/summary`);
+export const fetchSummary = async (shop, date = '') => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  return request('GET', `/${encodeURIComponent(shop)}/summary?${params}`);
+};
+
+export const fetchCombinedSummary = async (date = '') => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  return request('GET', `/summary?${params}`);
 };
 
 // Credit Sales APIs
-export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '') => {
+export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false) => {
   const params = new URLSearchParams();
   params.append('page', page);
   params.append('limit', limit);
   params.append('sortBy', sortBy);
   params.append('sortOrder', sortOrder);
   if (search) params.append('search', search);
+  if (showDeleted) params.append('showDeleted', showDeleted);
   return request('GET', `/${encodeURIComponent(shop)}/credits?${params}`);
 };
 
@@ -214,4 +222,20 @@ export const updateCreditPayment = async (shop, id, paymentId, paymentData) => {
 
 export const deleteCreditPayment = async (shop, id, paymentId) => {
   return request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`);
+};
+
+export const deleteCreditSale = async (shop, id) => {
+  return request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`);
+};
+
+export const restoreCreditSale = async (shop, id) => {
+  return request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/restore`);
+};
+
+export const permanentDeleteCreditSale = async (shop, id) => {
+  return request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/permanent`);
+};
+
+export const fetchDeletedCreditSales = async (shop) => {
+  return request('GET', `/${encodeURIComponent(shop)}/credits/deleted`);
 };
