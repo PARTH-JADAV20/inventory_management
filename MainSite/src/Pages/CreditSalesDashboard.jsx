@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { Search, Plus, Download, AlertCircle } from "lucide-react";
+import { Search, Plus, Download, AlertCircle, Undo, Delete } from "lucide-react";
 import AddCreditSale from "../Components/CreditSales/AddCreditSale";
 import CreditDetailsModal from "../Components/CreditSales/CreditDetailsModal";
-import { fetchCreditSales, closeCreditSale, fetchCurrentStock } from "../Components/api";
+import { fetchCreditSales, closeCreditSale, fetchCurrentStock, restoreCreditSale, permanentDeleteCreditSale } from "../Components/api";
 import "./CreditSales.css";
 
 // Custom debounce function
@@ -22,6 +22,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [amountFilter, setAmountFilter] = useState("All");
   const [timeFilter, setTimeFilter] = useState("All");
+  const [showDeleted, setShowDeleted] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -45,13 +46,16 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
       setLoading(true);
       try {
         const [salesResponse, stockData] = await Promise.all([
-          fetchCreditSales(shop, page, limit, sortBy, sortOrder, search.trim() || undefined),
+          fetchCreditSales(shop, page, limit, sortBy, sortOrder, search.trim() || undefined, showDeleted),
           fetchCurrentStock(shop),
         ]);
-        // Log response for debugging
         console.log("fetchCreditSales response:", salesResponse);
-        // Ensure salesResponse.data is an array; fallback to empty array if not
-        const salesData = Array.isArray(salesResponse.data) ? salesResponse.data : [];
+        const salesData = Array.isArray(salesResponse.data)
+          ? salesResponse.data.map((sale) => ({
+              ...sale,
+              status: sale.status ?? "Unknown", // Default status if undefined
+            }))
+          : [];
         setCreditSales(salesData);
         setTotalPages(salesResponse.totalPages || 1);
         setStock(Array.isArray(stockData) ? stockData : []);
@@ -59,12 +63,12 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
       } catch (err) {
         console.error("fetchData error:", err);
         setError(err.message || "Failed to fetch data");
-        setCreditSales([]); // Ensure creditSales is an array on error
+        setCreditSales([]);
       } finally {
         setLoading(false);
       }
     },
-    [shop, page, limit, sortBy, sortOrder]
+    [shop, page, limit, sortBy, sortOrder, showDeleted]
   );
 
   // Debounced search handler
@@ -77,7 +81,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
 
   // Initial data fetch on mount and when dependencies change
   useEffect(() => {
-    fetchData(""); // Explicitly fetch all data on initial load
+    fetchData("");
   }, [fetchData]);
 
   // Handle search input changes
@@ -88,7 +92,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   };
 
   const filteredSales = creditSales.filter((sale) => {
-    const matchesStatus = statusFilter === "All" || sale.status === statusFilter;
+    const matchesStatus = statusFilter === "All" || (sale.status ?? "Unknown") === statusFilter;
     const matchesAmount =
       amountFilter === "All" ||
       (amountFilter === ">10000" && (sale.totalAmount || 0) > 10000) ||
@@ -110,19 +114,20 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
   const summary = {
     customers: new Set(
       creditSales
-        .filter((sale) => sale.status !== "Cleared")
+        .filter((sale) => (sale.status ?? "Unknown") !== "Cleared" && !sale.isDeleted)
         .map((sale) => sale.customerName)
     ).size,
     totalCredit: creditSales
-      .filter((sale) => sale.status !== "Cleared")
+      .filter((sale) => (sale.status ?? "Unknown") !== "Cleared" && !sale.isDeleted)
       .reduce((sum, sale) => sum + (sale.totalAmount || 0), 0),
     totalPaid: creditSales
-      .filter((sale) => sale.status !== "Cleared")
+      .filter((sale) => (sale.status ?? "Unknown") !== "Cleared" && !sale.isDeleted)
       .reduce((sum, sale) => sum + (sale.paidAmount || 0), 0),
     overdue: creditSales
       .filter(
         (sale) =>
-          sale.status !== "Cleared" &&
+          (sale.status ?? "Unknown") !== "Cleared" &&
+          !sale.isDeleted &&
           (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60
       )
       .reduce((sum, sale) => sum + (sale.totalAmount || 0), 0),
@@ -162,6 +167,32 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
     }
   };
 
+  const handleRestore = async (sale) => {
+    if (!window.confirm(`Restore credit sale for ${sale.customerName}?`)) return;
+    setLoading(true);
+    try {
+      const updatedSale = await restoreCreditSale(shop, sale._id);
+      handleUpdateCredit(updatedSale);
+    } catch (error) {
+      setError(error.message || "Failed to restore credit sale");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePermanentDelete = async (sale) => {
+    if (!window.confirm(`Permanently delete credit sale for ${sale.customerName}? This action cannot be undone.`)) return;
+    setLoading(true);
+    try {
+      await permanentDeleteCreditSale(shop, sale._id);
+      setCreditSales(creditSales.filter((s) => s._id !== sale._id));
+    } catch (error) {
+      setError(error.message || "Failed to permanently delete credit sale");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     const printContent = `
@@ -180,6 +211,8 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
             .overdue-dax { color: #ff4444; font-weight: bold; }
             .status-cleared-dax { color: #4caf50; }
             .status-open-dax { color: #ff6b35; }
+            .status-deleted-dax { color: #ff4444; }
+            .status-unknown-dax { color: #a1a5b7; }
             @media print {
               button { display: none; }
             }
@@ -204,6 +237,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                 <th>Remaining (₹)</th>
                 <th>Last Transaction</th>
                 <th>Status</th>
+                <th>Deleted</th>
               </tr>
             </thead>
             <tbody>
@@ -222,7 +256,8 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                       <td>₹${(sale.paidAmount || 0).toFixed(2)}</td>
                       <td>₹${(sale.totalAmount || 0).toFixed(2)}</td>
                       <td class="${isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}">${lastTransactionDate}</td>
-                      <td class="status-${sale.status.toLowerCase()}-dax">${sale.status}</td>
+                      <td class="status-${(sale.status ?? "Unknown").toLowerCase()}-dax">${sale.status ?? "Unknown"}</td>
+                      <td class="${sale.isDeleted ? "status-deleted-dax" : ""}">${sale.isDeleted ? "Yes" : "No"}</td>
                     </tr>
                   `;
                   }
@@ -248,6 +283,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
       "Remaining (₹)",
       "Last Transaction",
       "Status",
+      "Deleted",
     ];
     const rows = filteredSales.map((sale) => [
       sale.billNumber,
@@ -257,9 +293,10 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
       (sale.paidAmount || 0).toFixed(2),
       (sale.totalAmount || 0).toFixed(2),
       sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-        ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+        ? format(new Date(sale.lastTransactionDate), "yyyy-MM-dd")
         : "N/A",
-      sale.status,
+      sale.status ?? "Unknown",
+      sale.isDeleted ? "Yes" : "No",
     ]);
     const csvContent = [
       headers.join(","),
@@ -342,6 +379,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
               <option>All</option>
               <option>Open</option>
               <option>Cleared</option>
+              <option>Unknown</option>
             </select>
           </div>
           <div className="filter-group-dax">
@@ -354,7 +392,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
               <option value="All">All</option>
               <option value=">10000">Credit &gt; ₹10,000</option>
               <option value=">50000">Credit &gt; ₹50,000</option>
-              <option value=">2months">Overdue &t; 2 Months</option>
+              <option value=">2months">Overdue &gt; 2 Months</option>
             </select>
           </div>
           <div className="filter-group-dax">
@@ -369,6 +407,15 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
               <option value="Last Month">Last Month</option>
               <option value="Last 3 Months">Last 3 Months</option>
             </select>
+          </div>
+          <div className="filter-group-dax checkbox-group-dax">
+            <label>Show Deleted:</label>
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(e) => setShowDeleted(e.target.checked)}
+              disabled={loading}
+            />
           </div>
         </div>
         <div className="actions-dax">
@@ -444,6 +491,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                 <th onClick={() => handleSort("status")}>
                   Status {sortBy === "status" && (sortOrder === "asc" ? "↑" : "↓")}
                 </th>
+                <th>Deleted</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -466,8 +514,11 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                       ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
                       : "N/A"}
                   </td>
-                  <td className={`status-${sale.status}-dax`}>
-                    {sale.status}
+                  <td className={`status-${(sale.status ?? "Unknown").toLowerCase()}-dax`}>
+                    {sale.status ?? "Unknown"}
+                  </td>
+                  <td className={sale.isDeleted ? "status-deleted-dax" : ""}>
+                    {sale.isDeleted ? "Yes" : "No"}
                   </td>
                   <td>
                     <div className="action-buttons-dax">
@@ -478,7 +529,7 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                       >
                         View Details
                       </button>
-                      {sale.status !== "Cleared" && (
+                      {(sale.status ?? "Unknown") !== "Cleared" && !sale.isDeleted && (
                         <button
                           className="quick-close-btn-dax"
                           onClick={() => handleQuickClose(sale)}
@@ -486,6 +537,24 @@ const CreditSalesDashboard = ({ shop = "Shop 1" }) => {
                         >
                           Quick Close
                         </button>
+                      )}
+                      {sale.isDeleted && (
+                        <>
+                          <button
+                            className="restore-btn-dax"
+                            onClick={() => handleRestore(sale)}
+                            disabled={loading}
+                          >
+                            <Undo size={16} /> Restore
+                          </button>
+                          <button
+                            className="delete-btn-dax"
+                            onClick={() => handlePermanentDelete(sale)}
+                            disabled={loading}
+                          >
+                            <Delete size={16} /> Permanent Delete
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>

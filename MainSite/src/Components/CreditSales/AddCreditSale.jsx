@@ -29,19 +29,22 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
       setLoading(true);
       fetchCustomers(shop, customerSearch)
         .then((data) => {
-          setCustomers(data);
+          console.log("Fetched customers:", data); // Debug log
+          setCustomers(data || []);
           setLoading(false);
         })
         .catch((err) => {
           setWarning(err.message || "Failed to fetch customers");
           setLoading(false);
         });
+    } else {
+      setCustomers([]);
     }
   }, [isExistingCustomer, shop, customerSearch]);
 
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
-    setFormData({ customerName: customer.name, phone: customer.phoneNumber });
+    setFormData({ customerName: customer.name || "", phone: customer.phoneNumber || "" });
     setCustomerSearch("");
   };
 
@@ -161,8 +164,8 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
 
   const filteredCustomers = customers.filter(
     (customer) =>
-      customer.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      customer.phoneNumber.includes(customerSearch)
+      (customer.name || "").toLowerCase().includes(customerSearch.toLowerCase()) ||
+      (customer.phoneNumber || "").includes(customerSearch)
   );
 
   return (
@@ -201,7 +204,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
                       className="customer-option-dax"
                       onClick={() => handleCustomerSelect(customer)}
                     >
-                      {customer.name} ({customer.phoneNumber})
+                      {customer.name || "Unknown"} ({customer.phoneNumber || "No phone"})
                     </div>
                   ))}
                 </div>
