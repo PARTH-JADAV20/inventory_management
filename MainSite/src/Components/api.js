@@ -1,4 +1,5 @@
-const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
+// const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
+const BASE_URL = 'http://bussinespro-env.eba-37zmk5ee.ap-south-1.elasticbeanstalk.com/api';
 // const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
