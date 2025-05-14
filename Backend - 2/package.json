@@ -2,10 +2,10 @@
   "name": "construction-management-backend",
   "version": "1.0.0",
   "description": "Backend for construction management system supporting two shops",
-  "main": "src/server.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node app.js",
+    "dev": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

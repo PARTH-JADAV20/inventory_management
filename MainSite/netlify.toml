@@ -9,6 +9,12 @@
     Content-Type = "text/javascript; charset=UTF-8"
 
 [[redirects]]
+  from = "/api/*"
+  to = "http://bussinespro-env.eba-37zmk5ee.ap-south-1.elasticbeanstalk.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "./index.html"
   status = 200
