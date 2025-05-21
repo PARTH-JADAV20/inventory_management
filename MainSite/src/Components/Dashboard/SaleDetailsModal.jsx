@@ -2,10 +2,13 @@ import React from "react";
 import { motion } from "framer-motion";
 
 const SaleDetailsModal = ({ sale, onClose }) => {
-  const parseDate = (dateStr) => {
-    if (!dateStr) return new Date();
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "Unknown Date";
     const [day, month, year] = dateStr.split("-").map(Number);
-    return new Date(year, month - 1, day);
+    const date = new Date(year, month - 1, day);
+    return isNaN(date.getTime())
+      ? "Invalid Date"
+      : date.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
   };
 
   return (
@@ -24,15 +27,15 @@ const SaleDetailsModal = ({ sale, onClose }) => {
         transition={{ duration: 0.3 }}
       >
         <h2>Sale Details</h2>
-        <p><strong>Customer:</strong> {sale.profileName || sale.customer}</p>
-        <p><strong>Bill No:</strong> {sale.billNo}</p>
+        <p><strong>Customer:</strong> {sale.profileName || sale.customer || "Unknown"}</p>
+        <p><strong>Bill No:</strong> {sale.billNo || "N/A"}</p>
         <p><strong>Product:</strong> {sale.items?.[0]?.product || "Unknown"}</p>
         <p><strong>Amount:</strong> ₹{(sale.totalAmount || 0).toLocaleString()}</p>
         {sale.creditAmount > 0 && <p><strong>Credit Amount:</strong> ₹{(sale.creditAmount || 0).toLocaleString()}</p>}
         <p><strong>Payment Method:</strong> {sale.paymentMethod || "Unknown"}</p>
-        <p><strong>Date:</strong> {sale.date}</p>
+        <p><strong>Date:</strong> {formatDate(sale.date)}</p>
         <p><strong>Status:</strong> {sale.paymentMethod === "Credit" && sale.creditAmount > 0 ? "Credit" : "Cleared"}</p>
-        <p><strong>Shop:</strong> {sale.shop}</p>
+        <p><strong>Shop:</strong> {sale.shop || "Unknown"}</p>
         <div className="form-buttons">
           <button className="cancel-btn" onClick={onClose}>
             Close

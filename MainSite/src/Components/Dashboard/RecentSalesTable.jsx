@@ -28,7 +28,7 @@ const RecentSalesTable = ({ sales, onSaleClick }) => {
           ) : (
             sales.map((sale, index) => (
               <motion.tr
-                key={sale.billNo || index}
+                key={sale.billNo || `sale-${index}`}
                 whileHover={{ backgroundColor: "#3a3a5a" }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -36,12 +36,12 @@ const RecentSalesTable = ({ sales, onSaleClick }) => {
                 onClick={() => onSaleClick(sale)}
                 style={{ cursor: "pointer" }}
               >
-                <td>{sale.billNo}</td>
-                <td>{sale.profileName}</td>
+                <td>{sale.billNo || "N/A"}</td>
+                <td>{sale.profileName || "Unknown"}</td>
                 <td>₹{(sale.totalAmount || 0).toLocaleString()}</td>
                 <td>₹{(sale.creditAmount || 0).toLocaleString()}</td>
                 <td>{sale.paymentMethod || "Unknown"}</td>
-                <td>{sale.date}</td>
+                <td>{sale.date || "N/A"}</td>
               </motion.tr>
             ))
           )}

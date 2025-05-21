@@ -174,6 +174,10 @@ export const fetchProfitTrend = async (shop) => {
   return request('GET', `/${encodeURIComponent(shop)}/profit-trend`);
 };
 
+export const fetchSalesStats = async (shop) => {
+  return request('GET', `/${encodeURIComponent(shop)}/sales-stats`);
+};
+
 export const fetchSummary = async (shop, date = '') => {
   const params = new URLSearchParams();
   if (date) params.append('date', date);

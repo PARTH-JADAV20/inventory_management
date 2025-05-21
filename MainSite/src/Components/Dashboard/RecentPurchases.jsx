@@ -1,8 +1,14 @@
 import React from "react";
-import { format } from "date-fns";
 import { motion } from "framer-motion";
 
 const RecentPurchases = ({ purchases }) => {
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "Unknown Date";
+    const [day, month, year] = dateStr.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+  };
+
   return (
     <div className="purchases-list">
       {purchases.length === 0 ? (
@@ -19,7 +25,7 @@ const RecentPurchases = ({ purchases }) => {
             <p>
               <strong>{purchase.product}</strong> purchased for ₹{purchase.amount.toLocaleString()} by {purchase.customer}
             </p>
-            <p className="purchase-date">{format(new Date(purchase.date), "dd MMMM yyyy")}</p>
+            <p className="purchase-date">{formatDate(purchase.date)}</p>
           </motion.div>
         ))
       )}
