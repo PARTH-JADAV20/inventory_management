@@ -18,7 +18,6 @@ app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-  // mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -52,6 +51,7 @@ const billSchema = new mongoose.Schema({
   paymentMethod: String,
   shop: String,
   otherExpenses: { type: Number, default: 0 },
+  profit: { type: Number, default: 0 },
 });
 
 const advanceHistorySchema = new mongoose.Schema({
@@ -138,9 +138,11 @@ const creditSaleSchema = new mongoose.Schema({
   lastTransactionDate: { type: String, required: true }, // DD-MM-YYYY
   shop: { type: String, required: true },
   paymentHistory: [paymentHistorySchema],
-  isDeleted: { type: Boolean, default: false }, // Added for soft delete
-  deletedAt: { type: String, default: null }, // Date of deletion (YYYY-MM-DD)
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: String, default: null },
   otherExpenses: { type: Number, default: 0 },
+  profit: { type: Number, default: 0 },
+  finalPaymentMethod: { type: String, default: null },
 });
 
 // Models
@@ -170,42 +172,61 @@ const getNextBillNumber = async (shop) => {
 };
 
 // Date Conversion Helper
-const convertToDDMMYYYY = (dateStr) => {
-  if (!dateStr) return dateStr;
-  const [year, month, day] = dateStr.includes('-') ? dateStr.split('-') : ['', '', ''];
-  if (year.length === 4) {
-    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
-  } else {
-    return `${year.padStart(2, '0')}-${month.padStart(2, '0')}-${day}`;
+const convertToDDMMYYYY = (dateInput) => {
+  if (!dateInput) return new Date().toLocaleDateString('en-GB').split('/').join('-');
+  let dateStr = dateInput;
+  if (typeof dateInput !== 'string') {
+    dateStr = new Date(dateInput).toLocaleDateString('en-GB').split('/').join('-');
   }
+  const ddmmyyyyRegex = /^\d{2}-\d{2}-\d{4}$/;
+  const yyyymmddRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (ddmmyyyyRegex.test(dateStr)) {
+    const [day, month, year] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (isNaN(date.getTime())) return new Date().toLocaleDateString('en-GB').split('/').join('-');
+    return `${day.toString().padStart(2, '0')}-${month.toString().padStart(2, '0')}-${year}`;
+  } else if (yyyymmddRegex.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (isNaN(date.getTime())) return new Date().toLocaleDateString('en-GB').split('/').join('-');
+    return `${day.toString().padStart(2, '0')}-${month.toString().padStart(2, '0')}-${year}`;
+  }
+  return new Date().toLocaleDateString('en-GB').split('/').join('-');
 };
 
-const convertToYYYYMMDD = (dateStr) => {
-  if (!dateStr) return dateStr;
-  const [day, month, year] = dateStr.includes('-') ? dateStr.split('-') : ['', '', ''];
-  if (day.length === 4) {
-    return `${day}-${month.padStart(2, '0')}-${year.padStart(2, '0')}`;
-  } else {
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+const convertToYYYYMMDD = (dateInput) => {
+  if (!dateInput) return new Date().toISOString().split('T')[0];
+  let dateStr = dateInput;
+  if (typeof dateInput !== 'string') {
+    dateStr = new Date(dateInput).toLocaleDateString('en-GB').split('/').join('-');
   }
+  const ddmmyyyyRegex = /^\d{2}-\d{2}-\d{4}$/;
+  const yyyymmddRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (ddmmyyyyRegex.test(dateStr)) {
+    const [day, month, year] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+    return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  } else if (yyyymmddRegex.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+    return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  }
+  return new Date().toISOString().split('T')[0];
 };
 
 // Date Validation Helper
 const validateDate = (dateStr) => {
-  if (!dateStr) return false;
-  const regex = /^(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2})$/;
-  if (!regex.test(dateStr)) return false;
-  let day, month, year;
-  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    [year, month, day] = dateStr.split('-').map(Number);
-  } else {
-    [day, month, year] = dateStr.split('-').map(Number);
-  }
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  const ddmmyyyyRegex = /^\d{2}-\d{2}-\d{4}$/;
+  if (!ddmmyyyyRegex.test(dateStr)) return false;
+  const [day, month, year] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   return date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year;
 };
 
-// Stock Routes (Unchanged)
+// Stock Routes
 app.get('/api/:shop/stock', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -296,8 +317,8 @@ app.delete('/api/:shop/stock', async (req, res) => {
 app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
-    console.log("Received sale data:", { profileName, phoneNumber, paymentMethod, items, date, otherExpenses });
+    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0, profit = 0 } = req.body;
+    console.log("Received sale data:", { profileName, phoneNumber, paymentMethod, items, date, otherExpenses, profit });
 
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
@@ -307,11 +328,14 @@ app.post('/api/:shop/sales', async (req, res) => {
     if (!profileName || !phoneNumber || !paymentMethod || !items || !items.length) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    if (isNaN(profit) || profit < 0) {
+      return res.status(400).json({ error: 'Profit must be a non-negative number' });
+    }
 
-    // Validate and normalize date
-    const saleDate = date ? convertToYYYYMMDD(new Date(date)) : convertToYYYYMMDD(new Date());
-    if (!saleDate) {
-      return res.status(400).json({ error: 'Invalid date format' });
+    // Validate and normalize date to DD-MM-YYYY
+    const saleDate = convertToDDMMYYYY(date);
+    if (!validateDate(saleDate)) {
+      return res.status(400).json({ error: `Invalid date format, expected DD-MM-YYYY: ${date}` });
     }
 
     // Validate stock availability
@@ -340,9 +364,9 @@ app.post('/api/:shop/sales', async (req, res) => {
     if (customer) {
       const profile = customer.profiles.find(p => p.name === profileName && !p.deleteuser.value);
       if (profile && paymentMethod === 'Advance' && profile.advance?.value) {
-        finalPaymentMethod = 'Advance';
+        finalPaymentMethod = profile.advance.paymentMethod || paymentMethod;
       } else if (profile) {
-        finalPaymentMethod = profile.paymentMethod || paymentMethod;
+        finalPaymentMethod = paymentMethod; // Respect the provided paymentMethod
       }
     }
 
@@ -353,7 +377,7 @@ app.post('/api/:shop/sales', async (req, res) => {
         product: item.product,
         qty: item.qty,
         unit: item.unit,
-        pricePerUnit: item.pricePerUnit || item.pricePerQty, // Handle potential field mismatch
+        pricePerQty: item.pricePerUnit || item.pricePerQty,
         amount: item.amount,
         category: item.category,
       })),
@@ -361,6 +385,7 @@ app.post('/api/:shop/sales', async (req, res) => {
       paymentMethod: finalPaymentMethod,
       shop,
       otherExpenses: parseFloat(otherExpenses || 0),
+      profit,
     };
 
     if (!customer) {
@@ -376,8 +401,8 @@ app.post('/api/:shop/sales', async (req, res) => {
             showinadvance: paymentMethod === 'Advance',
           },
           advanceHistory: [],
-          credit: paymentMethod === 'Credit' ? totalAmount : 0,
-          paymentMethod: paymentMethod === 'Advance' ? '' : finalPaymentMethod,
+          credit: paymentMethod === 'Credit' ? totalAmount : 0, // Only set credit for Credit sales
+          paymentMethod: finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
@@ -401,8 +426,8 @@ app.post('/api/:shop/sales', async (req, res) => {
             showinadvance: paymentMethod === 'Advance',
           },
           advanceHistory: [],
-          credit: paymentMethod === 'Credit' ? totalAmount : 0,
-          paymentMethod: paymentMethod === 'Advance' ? '' : finalPaymentMethod,
+          credit: paymentMethod === 'Credit' ? totalAmount : 0, // Only set credit for Credit sales
+          paymentMethod: finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
@@ -427,20 +452,23 @@ app.post('/api/:shop/sales', async (req, res) => {
           bill.advanceRemaining = newBalance;
         } else if (paymentMethod === 'Credit') {
           profile.credit = (profile.credit || 0) + totalAmount;
-          profile.paymentMethod = finalPaymentMethod;
           bill.creditAmount = totalAmount;
         }
+        // Only update paymentMethod for non-Advance/Credit sales
+        if (paymentMethod !== 'Advance' && paymentMethod !== 'Credit') {
+          profile.paymentMethod = finalPaymentMethod;
+        }
         profile.bills.push(
-          paymentMethod === 'Advance'
-            ? { ...bill, advanceRemaining }
-            : paymentMethod === 'Credit'
-              ? { ...bill, creditAmount: totalAmount }
+          paymentMethod === 'Credit'
+            ? { ...bill, creditAmount: totalAmount }
+            : paymentMethod === 'Advance'
+              ? { ...bill, advanceRemaining }
               : bill,
         );
       }
     }
 
-    // Add to CreditSale if paymentMethod is Credit
+    // Add to CreditSale only if paymentMethod is Credit
     if (paymentMethod === 'Credit') {
       const creditSale = new CreditSale({
         billNumber: billNo,
@@ -450,7 +478,7 @@ app.post('/api/:shop/sales', async (req, res) => {
           product: item.product,
           qty: item.qty,
           unit: item.unit,
-          pricePerUnit: item.pricePerUnit || item.pricePerQty, // Handle potential field mismatch
+          pricePerUnit: item.pricePerUnit || item.pricePerQty,
           amount: item.amount,
           date: saleDate,
           category: item.category,
@@ -464,10 +492,11 @@ app.post('/api/:shop/sales', async (req, res) => {
         isDeleted: false,
         deletedAt: null,
         otherExpenses: parseFloat(otherExpenses),
+        profit,
       });
-      console.log("Creating CreditSale:", creditSale); // Debug: Log CreditSale before saving
+      console.log("Creating CreditSale:", creditSale);
       await creditSale.save();
-      console.log("CreditSale saved successfully"); // Debug: Confirm save
+      console.log("CreditSale saved successfully");
     }
 
     // Save customer after all modifications
@@ -524,6 +553,7 @@ app.get('/api/:shop/sales', async (req, res) => {
           phoneNumber: c.phoneNumber,
           paymentMethod: b.paymentMethod || 'Cash',
           profileId: p.profileId,
+          profit: b.profit || 0,
         }))))
       .filter(s => !date || s.date === date)
       .filter(s => !search || s.profileName.toLowerCase().includes(search.toLowerCase()) || s.phoneNumber.includes(search));
@@ -636,7 +666,7 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
   }
 });
 
-// Expense Routes (Unchanged)
+// Expense Routes
 app.get('/api/:shop/expenses', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -688,7 +718,7 @@ app.delete('/api/:shop/expenses/:id', async (req, res) => {
   }
 });
 
-// Customer Routes (Unchanged)
+// Customer Routes
 app.get('/api/:shop/customers', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -925,7 +955,7 @@ app.put('/api/:shop/customers/:phoneNumber/profiles/:profileId/softdelete', asyn
   }
 });
 
-// Advance Payment Routes (Unchanged)
+// Advance Payment Routes
 app.post('/api/:shop/advance/:phoneNumber/:profileId', async (req, res) => {
   try {
     const { shop, phoneNumber, profileId } = req.params;
@@ -1045,6 +1075,7 @@ app.get('/api/:shop/credits', async (req, res) => {
 
     const formattedCreditSales = creditSales.map(sale => ({
       ...sale,
+      profit: sale.profit || 0,
       items: sale.items.map(item => ({
         ...item,
         date: convertToDDMMYYYY(item.date),
@@ -1073,7 +1104,7 @@ app.get('/api/:shop/credits', async (req, res) => {
 app.post('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0 } = req.body;
+    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0, profit = 0 } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
@@ -1084,17 +1115,19 @@ app.post('/api/:shop/credits', async (req, res) => {
     if (isNaN(otherExpenses) || otherExpenses < 0) {
       return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
     }
+    if (isNaN(profit) || profit < 0) {
+      return res.status(400).json({ error: 'Profit must be a non-negative number' });
+    }
 
     for (const item of items) {
       if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
-      if (!validateDate(item.date)) {
-        item.date = convertToDDMMYYYY(item.date);
-        if (!validateDate(item.date)) {
-          return res.status(400).json({ error: `Invalid date for item ${item.product}: ${item.date}` });
-        }
+      const itemDate = convertToDDMMYYYY(item.date);
+      if (!validateDate(itemDate)) {
+        return res.status(400).json({ error: `Invalid date for item ${item.product}: ${item.date}` });
       }
+      item.date = itemDate;
     }
 
     for (const item of items) {
@@ -1105,7 +1138,6 @@ app.post('/api/:shop/credits', async (req, res) => {
       }
     }
 
-    // Verify totalAmount
     const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
     if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
       return res.status(400).json({ error: 'Total amount does not match item amounts plus other expenses' });
@@ -1130,6 +1162,7 @@ app.post('/api/:shop/credits', async (req, res) => {
       isDeleted: false,
       deletedAt: null,
       otherExpenses: parseFloat(otherExpenses),
+      profit,
     });
     await creditSale.save();
 
@@ -1159,6 +1192,7 @@ app.post('/api/:shop/credits', async (req, res) => {
             paymentMethod: 'Credit',
             shop,
             otherExpenses: parseFloat(otherExpenses),
+            profit,
           }],
           deleteuser: { value: false, date: '' },
         }],
@@ -1189,6 +1223,7 @@ app.post('/api/:shop/credits', async (req, res) => {
             paymentMethod: 'Credit',
             shop,
             otherExpenses: parseFloat(otherExpenses),
+            profit,
           }],
           deleteuser: { value: false, date: '' },
         };
@@ -1211,6 +1246,7 @@ app.post('/api/:shop/credits', async (req, res) => {
           paymentMethod: 'Credit',
           shop,
           otherExpenses: parseFloat(otherExpenses),
+          profit,
         });
       }
       await customer.save();
@@ -1275,6 +1311,7 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
         note: payment.note || '',
         date: payment.date || currentDate,
       });
+      creditSale.finalPaymentMethod = payment.mode || 'Cash';
       if (creditSale.totalAmount <= 0) {
         creditSale.status = 'Cleared';
         creditSale.totalAmount = 0;
@@ -1296,6 +1333,7 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
           note: payment.note || 'Manual settlement',
           date: payment.date || currentDate,
         });
+        creditSale.finalPaymentMethod = 'Manual';
       } else if (status === 'Cleared') {
         const remaining = creditSale.totalAmount;
         creditSale.paidAmount += remaining;
@@ -1309,6 +1347,7 @@ app.put('/api/:shop/credits/:id', async (req, res) => {
             note: payment.note || 'Full payment',
             date: payment.date || currentDate,
           });
+          creditSale.finalPaymentMethod = payment.mode || 'Cash';
         }
       }
     }
@@ -1825,6 +1864,48 @@ app.get('/api/:shop/profit-trend', async (req, res) => {
   }
 });
 
+app.get('/api/:shop/profit-by-method', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { date } = req.query;
+    const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
+    const customers = await Customer.find();
+    const creditSales = await CreditSale.find({ isDeleted: false }).lean();
+
+    const sales = customers
+      .flatMap(c => c.profiles
+        .filter(p => !p.deleteuser.value)
+        .flatMap(p => p.bills.map(b => ({
+          ...b,
+          paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+          profit: b.profit || 0,
+        }))))
+      .filter(b => !date || b.date === date);
+
+    const creditSalesProfit = creditSales
+      .filter(s => !date || s.lastTransactionDate === date)
+      .map(s => ({
+        profit: s.profit || 0,
+        paymentMethod: s.finalPaymentMethod || 'Credit',
+      }));
+
+    const allSales = [...sales, ...creditSalesProfit];
+
+    const profitByMethod = allSales.reduce((acc, sale) => {
+      const method = sale.paymentMethod;
+      acc[method] = (acc[method] || 0) + sale.profit;
+      return acc;
+    }, { Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
+
+    res.json(profitByMethod);
+  } catch (err) {
+    console.error('Fetch profit by method error:', err);
+    res.status(500).json({ error: 'Failed to fetch profit by method: ' + err.message });
+  }
+});
+
+
 app.get('/api/:shop/summary', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -1841,10 +1922,12 @@ app.get('/api/:shop/summary', async (req, res) => {
           profileName: p.name,
           phoneNumber: c.phoneNumber,
           paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+          profit: b.profit || 0, // Default to 0 if missing
         }))))
       .filter(b => !date || b.date === date);
 
     const totalSales = sales.reduce((sum, b) => sum + b.totalAmount, 0);
+    const totalProfit = sales.reduce((sum, b) => sum + b.profit, 0); // Total profit
     const users = new Set(customers.flatMap(c => c.profiles.map(p => p.name))).size;
     const creditSales = sales
       .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
@@ -1868,6 +1951,15 @@ app.get('/api/:shop/summary', async (req, res) => {
     const chequeSales = sales
       .filter(b => b.paymentMethod === 'Cheque')
       .reduce((sum, b) => sum + b.totalAmount, 0);
+    const cashProfit = sales
+      .filter(b => b.paymentMethod === 'Cash')
+      .reduce((sum, b) => sum + b.profit, 0); // Profit for Cash
+    const onlineProfit = sales
+      .filter(b => b.paymentMethod === 'Online')
+      .reduce((sum, b) => sum + b.profit, 0); // Profit for Online
+    const chequeProfit = sales
+      .filter(b => b.paymentMethod === 'Cheque')
+      .reduce((sum, b) => sum + b.profit, 0); // Profit for Cheque
     const advanceUsers = customers
       .flatMap(c => c.profiles)
       .filter(p => p.advance?.value && p.advance.currentamount > 0).length;
@@ -1895,6 +1987,10 @@ app.get('/api/:shop/summary', async (req, res) => {
 
     res.json({
       totalSales,
+      totalProfit, // Added
+      cashProfit, // Added
+      onlineProfit, // Added
+      chequeProfit, // Added
       users,
       creditSales,
       advancePayments,
@@ -1922,6 +2018,10 @@ app.get('/api/summary', async (req, res) => {
     const { date } = req.query;
     const shops = ['Shop 1', 'Shop 2'];
     let totalSales = 0;
+    let totalProfit = 0; // Added
+    let cashProfit = 0; // Added
+    let onlineProfit = 0; // Added
+    let chequeProfit = 0; // Added
     let users = new Set();
     let creditSales = 0;
     let advancePayments = 0;
@@ -1936,9 +2036,8 @@ app.get('/api/summary', async (req, res) => {
     let advanceCash = 0;
     let advanceOnline = 0;
     let advanceCheque = 0;
-    let totalExpenses = 0; // Moved outside loop to accumulate correctly
+    let totalExpenses = 0;
 
-    // Validate date if provided
     if (date && !validateDate(date)) {
       return res.status(400).json({ error: 'Invalid date format' });
     }
@@ -1958,12 +2057,23 @@ app.get('/api/summary', async (req, res) => {
                 profileName: p.name,
                 phoneNumber: c.phoneNumber,
                 paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+                profit: b.profit || 0, // Default to 0 if missing
               }))
             )
         )
         .filter(b => !date || b.date === date);
 
       totalSales += sales.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+      totalProfit += sales.reduce((sum, b) => sum + b.profit, 0); // Added
+      cashProfit += sales
+        .filter(b => b.paymentMethod === 'Cash')
+        .reduce((sum, b) => sum + b.profit, 0); // Added
+      onlineProfit += sales
+        .filter(b => b.paymentMethod === 'Online')
+        .reduce((sum, b) => sum + b.profit, 0); // Added
+      chequeProfit += sales
+        .filter(b => b.paymentMethod === 'Cheque')
+        .reduce((sum, b) => sum + b.profit, 0); // Added
       customers
         .flatMap(c => c.profiles.filter(p => !p.deleteuser.value).map(p => p.name))
         .forEach(name => users.add(name));
@@ -2014,13 +2124,17 @@ app.get('/api/summary', async (req, res) => {
       const expenses = await Expense.find({
         date: date ? convertToYYYYMMDD(date) : { $exists: true },
       });
-      totalExpenses += expenses.reduce((sum, e) => sum + (e.amount || 0), 0); // Accumulate expenses
+      totalExpenses += expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     }
 
-    const profit = totalSales - totalExpenses; // Calculate profit once after loop
+    const profit = totalSales - totalExpenses;
 
     res.json({
       totalSales,
+      totalProfit, // Added
+      cashProfit, // Added
+      onlineProfit, // Added
+      chequeProfit, // Added
       users: users.size,
       creditSales,
       advancePayments,
