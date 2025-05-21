@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { DollarSign, Users, CreditCard, Wallet } from "lucide-react";
+import { DollarSign, Users, CreditCard, Wallet, TrendingUp } from "lucide-react";
 import SummaryCard from "../Components/Dashboard/SummaryCard";
 import RecentPurchases from "../Components/Dashboard/RecentPurchases";
 import RecentSalesTable from "../Components/Dashboard/RecentSalesTable";
@@ -35,6 +35,7 @@ const MainDashboard = () => {
       advanceCash: 0,
       advanceOnline: 0,
       advanceCheque: 0,
+      profit: 0,
     },
     profitData: [],
   });
@@ -56,7 +57,15 @@ const MainDashboard = () => {
   };
 
   const formatDate = (date) => {
-    return date.toISOString().split("T")[0]; // yyyy-MM-dd
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`; // DD-MM-YYYY
+  };
+
+  const parseDate = (dateStr) => {
+    const [day, month, year] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
   };
 
   const fetchData = async () => {
@@ -94,6 +103,7 @@ const MainDashboard = () => {
           advanceCash: 0,
           advanceOnline: 0,
           advanceCheque: 0,
+          profit: 0,
         },
         profitData: profitTrend || [],
       });
@@ -111,7 +121,7 @@ const MainDashboard = () => {
   const filterData = (items, type) => {
     return items.filter((item) => {
       const matchesShop = selectedShop === "All Shops" || item.shop === selectedShop;
-      const itemDate = new Date(item.date);
+      const itemDate = parseDate(item.date);
       const today = new Date();
       let matchesTime = true;
       if (selectedTime === "Today") {
@@ -145,6 +155,7 @@ const MainDashboard = () => {
     advanceCash: data.summary?.advanceCash ?? 0,
     advanceOnline: data.summary?.advanceOnline ?? 0,
     advanceCheque: data.summary?.advanceCheque ?? 0,
+    profit: data.summary?.profit ?? 0,
   };
 
   return (
@@ -234,6 +245,12 @@ const MainDashboard = () => {
                 { label: "Online", value: filteredSummary.advanceOnline ?? 0 },
                 { label: "Cheque", value: filteredSummary.advanceCheque ?? 0 },
               ]}
+            />
+            <SummaryCard
+              title="Profit"
+              value={`₹${(filteredSummary.profit ?? 0).toLocaleString()}`}
+              icon={<TrendingUp size={24} />}
+              breakdown={[]}
             />
           </motion.div>
           <motion.div

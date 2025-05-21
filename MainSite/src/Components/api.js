@@ -188,56 +188,111 @@ export const fetchCombinedSummary = async (date = '') => {
 
 // Credit Sales APIs
 export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false) => {
-  const params = new URLSearchParams();
-  params.append('page', page);
-  params.append('limit', limit);
-  params.append('sortBy', sortBy);
-  params.append('sortOrder', sortOrder);
-  if (search) params.append('search', search);
-  if (showDeleted) params.append('showDeleted', showDeleted);
-  return request('GET', `/${encodeURIComponent(shop)}/credits?${params}`);
+  try {
+    const params = new URLSearchParams();
+    params.append('page', page);
+    params.append('limit', limit);
+    params.append('sortBy', sortBy);
+    params.append('sortOrder', sortOrder);
+    if (search) params.append('search', search);
+    params.append('showDeleted', showDeleted);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/credits?${params}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch credit sales for ${shop}: ${error.message}`);
+  }
 };
 
 export const addCreditSale = async (shop, saleData) => {
-  return request('POST', `/${encodeURIComponent(shop)}/credits`, saleData);
+  try {
+    const data = await request('POST', `/${encodeURIComponent(shop)}/credits`, saleData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to add credit sale for ${shop}: ${error.message}`);
+  }
 };
 
 export const addCreditPayment = async (shop, id, paymentData) => {
-  return request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, { payment: paymentData });
+  try {
+    const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, { payment: paymentData });
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to add credit payment for credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
-export const closeCreditSale = async (shop, id, status = 'Cleared', paymentData = null) => {
-  const updateData = { status };
-  if (paymentData) {
-    updateData.payment = paymentData;
+export const closeCreditSale = async (shop, id, paymentData = null) => {
+  try {
+    const updateData = { status: 'Cleared' };
+    if (paymentData) {
+      updateData.payment = paymentData;
+    }
+    const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, updateData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to close credit sale ${id} in ${shop}: ${error.message}`);
   }
-  return request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`, updateData);
 };
 
 export const addCreditRefund = async (shop, id, refundData) => {
-  return request('POST', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/refund`, refundData);
+  try {
+    const data = await request('POST', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/refund`, refundData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to add credit refund for credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
 export const updateCreditPayment = async (shop, id, paymentId, paymentData) => {
-  return request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`, paymentData);
+  try {
+    const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`, paymentData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to update credit payment ${paymentId} for credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
 export const deleteCreditPayment = async (shop, id, paymentId) => {
-  return request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`);
+  try {
+    const data = await request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/payment/${encodeURIComponent(paymentId)}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to delete credit payment ${paymentId} for credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
 export const deleteCreditSale = async (shop, id) => {
-  return request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`);
+  try {
+    const data = await request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to delete credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
 export const restoreCreditSale = async (shop, id) => {
-  return request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/restore`);
+  try {
+    const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/restore`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to restore credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
 export const permanentDeleteCreditSale = async (shop, id) => {
-  return request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/permanent`);
+  try {
+    const data = await request('DELETE', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/permanent`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to permanently delete credit sale ${id} in ${shop}: ${error.message}`);
+  }
 };
 
 export const fetchDeletedCreditSales = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/credits/deleted`);
+  try {
+    const data = await request('GET', `/${encodeURIComponent(shop)}/credits/deleted`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch deleted credit sales for ${shop}: ${error.message}`);
+  }
 };
