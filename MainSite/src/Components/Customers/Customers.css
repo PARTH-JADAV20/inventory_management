@@ -39,7 +39,6 @@
   background-color: var(--card-bg);
   border-radius: 8px;
   padding: 20px;
-  overflow-x: auto;
 }
 
 .customers-table-container-p2 h3 {
@@ -465,4 +464,30 @@
 .advance-modal-content-p2 {
   max-height: 80vh;
   overflow-y: auto;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.load-more-btn {
+  background-color: rgba(255, 107, 44, 0.5);
+  border: none;
+  padding: 8px 16px;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.load-more-btn:hover {
+  background-color: rgba(255, 107, 44, 0.8);
+}
+
+.load-more-btn:disabled {
+  background-color: #555;
+  cursor: not-allowed;
 }

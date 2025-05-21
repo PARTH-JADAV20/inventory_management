@@ -95,7 +95,7 @@ export const deleteExpense = async (shop, id) => {
 };
 
 // Customer APIs
-export const fetchCustomers = async (shop, search = '', deleted = false) => {
+export const fetchCustomers = async (shop, search = '', deleted = false, page = 1, limit = 25) => {
   try {
     const params = new URLSearchParams();
     if (search) params.append('search', search);

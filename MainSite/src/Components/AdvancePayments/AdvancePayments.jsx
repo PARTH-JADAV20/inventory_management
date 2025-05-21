@@ -24,6 +24,9 @@ const AdvancePayments = () => {
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(25); 
+  const [totalCustomersCount, setTotalCustomersCount] = useState(0);
 
   const formatDateToDDMMYYYY = (dateStr) => {
     if (!dateStr) return "N/A";
@@ -47,9 +50,14 @@ const AdvancePayments = () => {
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      const data = await apiService.fetchCustomers(shop, searchTerm, false);
+      const data = await apiService.fetchCustomers(shop, searchTerm, false, page, limit);
       console.log("Fetched customers:", data);
-      setCustomers(data || []);
+      setCustomers(data.customers || []);
+      // Count customers with advance profiles
+      const advanceCount = (data.customers || []).filter(c =>
+        (c.profiles || []).some(p => p.advance?.value && p.advance?.showinadvance)
+      ).length;
+      setTotalCustomersCount(advanceCount);
       setError(null);
     } catch (err) {
       console.error("Error fetching customers:", err);
@@ -61,7 +69,7 @@ const AdvancePayments = () => {
 
   useEffect(() => {
     loadCustomers();
-  }, [shop, searchTerm]);
+  }, [shop, searchTerm, page]);
 
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
@@ -310,7 +318,10 @@ const AdvancePayments = () => {
     setDropdownOpen(null);
   };
 
-  const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
+  const handleSearch = (e) => {
+    setSearchTerm(e.target.value.toLowerCase());
+    setPage(1); // Reset page on search
+  };
 
   const filteredCustomers = (customers || []).filter(
     (c) => {
@@ -382,6 +393,10 @@ const AdvancePayments = () => {
                   <td>₹${item.amount || 0}</td>
                 </tr>
               `).join("")}
+              <tr className="total">
+                <td colspan="4">Other Expenses</td>
+                <td>₹${parseInt(bill.otherExpenses || 0)}</td>
+              </tr>
               <tr class="total">
                 <td colspan="4">Total Amount</td>
                 <td>₹${bill.totalAmount || 0}</td>
@@ -440,6 +455,7 @@ const AdvancePayments = () => {
               setIsExistingCustomer(false);
               setEditingProfile(null);
               setEditedProfile(null);
+              setPage(1);
             }}
           >
             <option value="Shop 1">Shop 1</option>
@@ -549,6 +565,10 @@ const AdvancePayments = () => {
             onChange={handleSearch}
             className="search-input"
           />
+          <div className="summary-stats">
+            <p>Total Customers: {totalCustomersCount}</p>
+            <p>Showing: {Math.min(page * limit, totalCustomersCount)}/{totalCustomersCount}</p>
+          </div>
         </div>
 
         {filteredCustomers.length === 0 && !loading && (
@@ -674,7 +694,17 @@ const AdvancePayments = () => {
           </tbody>
         </table>
       </div>
-
+      <div className="pagination-controls">
+        {filteredCustomers.length > 0 && page * limit < totalCustomersCount && (
+          <button
+            className="load-more-btn"
+            onClick={() => setPage((prev) => prev + 1)}
+            disabled={loading}
+          >
+            Load More
+          </button>
+        )}
+      </div>
       {(selectedBills || selectedHistory) && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -712,6 +742,10 @@ const AdvancePayments = () => {
                             <td>₹{item.amount || 0}</td>
                           </tr>
                         ))}
+                        <tr className="total">
+                          <td colSpan={4}>Other Expenses</td>
+                          <td>₹{bill.otherExpenses}</td>
+                        </tr>
                         <tr className="total">
                           <td colSpan={4}>Total Amount</td>
                           <td>₹{bill.totalAmount || 0}</td>

@@ -25,6 +25,7 @@ const SalesEntry = () => {
     phoneNumber: "",
     paymentType: "Cash",
     items: [],
+    otherExpenses: "",
   });
   const [currentItem, setCurrentItem] = useState({
     product: "",
@@ -271,6 +272,12 @@ const SalesEntry = () => {
     return stockItem ? stockItem.price.toFixed(2) : "0.00";
   };
 
+  const getItemTotal = () => {
+    const qty = parseFloat(currentItem.qty) || 0;
+    const pricePerQty = parseFloat(currentItem.pricePerQty) || 0;
+    return (qty * pricePerQty).toFixed(2);
+  };
+
   const handleDeleteSale = async (billNo, profileId, phoneNumber, items) => {
     if (!window.confirm("Are you sure you want to delete this sale?")) {
       return;
@@ -338,169 +345,173 @@ const SalesEntry = () => {
   };
 
   const saveSale = async () => {
-    if (!newSale.profileName || !newSale.phoneNumber) {
-      setWarning("Please enter both profile name and phone number");
-      return false;
-    }
+  if (!newSale.profileName || !newSale.phoneNumber) {
+    setWarning("Please enter both profile name and phone number");
+    return false;
+  }
 
-    if (newSale.items.length === 0) {
-      setWarning("Please add at least one item to the sale");
-      return false;
-    }
+  if (newSale.items.length === 0) {
+    setWarning("Please add at least one item to the sale");
+    return false;
+  }
 
-    setIsLoading(true);
-    try {
-      setWarning("");
-      const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
-      let paymentMethod = newSale.paymentType;
-      const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
-      let profileExists = false;
-      let bill = null;
+  if (!newSale.otherExpenses || isNaN(parseFloat(newSale.otherExpenses)) || parseFloat(newSale.otherExpenses) < 0) {
+    setWarning("Please enter a valid other expenses amount (non-negative number)");
+    return false;
+  }
 
-      if (customer) {
-        const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
-        if (profile && newSale.paymentType === 'Advance' && profile.advance?.value) {
-          paymentMethod = 'Advance'; // Send 'Advance' to use profile.advance.paymentMethod
-          profileExists = true;
-        } else if (profile) {
-          paymentMethod = newSale.paymentType; // Use selected paymentType
-          profileExists = true;
-        }
+  setIsLoading(true);
+  try {
+    setWarning("");
+    const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+    let paymentMethod = newSale.paymentType;
+    const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
+    let profileExists = false;
+    let bill = null;
+
+    if (customer) {
+      const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
+      if (profile && newSale.paymentType === 'Advance' && profile.advance?.value) {
+        paymentMethod = 'Advance';
+        profileExists = true;
+      } else if (profile) {
+        paymentMethod = newSale.paymentType;
+        profileExists = true;
       }
+    }
 
-      const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0);
-      const saleData = {
-        profileName: newSale.profileName,
+    const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(newSale.otherExpenses || 0);
+    const saleData = {
+      profileName: newSale.profileName,
+      phoneNumber: newSale.phoneNumber,
+      paymentMethod,
+      items: newSale.items,
+      date: newSale.date,
+      otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
+    };
+
+    if (newSale.paymentType === 'Credit') {
+      const creditSaleData = {
+        customerName: newSale.profileName,
         phoneNumber: newSale.phoneNumber,
-        paymentMethod,
-        items: newSale.items,
-        date: newSale.date,
+        items: newSale.items.map(item => ({
+          product: item.product,
+          qty: item.qty,
+          unit: item.unit,
+          pricePerUnit: item.pricePerQty,
+          amount: item.amount,
+          date: newSale.date.split('-').reverse().join('-'),
+        })),
+        totalAmount,
+        otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
       };
 
-      if (newSale.paymentType === 'Credit') {
-        // Prepare credit sale data
-        const creditSaleData = {
-          customerName: newSale.profileName,
-          phoneNumber: newSale.phoneNumber,
-          items: newSale.items.map(item => ({
-            product: item.product,
-            qty: item.qty,
-            unit: item.unit,
-            pricePerUnit: item.pricePerQty,
-            amount: item.amount,
-            date: newSale.date.split('-').reverse().join('-'), // Convert DD-MM-YYYY to YYYY-MM-DD
-          })),
-          totalAmount,
+      const response = await addCreditSale(shopApiName, creditSaleData);
+      const { creditSale, customer: updatedCustomer } = response;
+
+      bill = {
+        billNo: creditSale.billNumber,
+        date: newSale.date,
+        items: newSale.items,
+        totalAmount,
+        creditAmount: totalAmount,
+        paymentMethod: 'Credit',
+        shop: shopApiName,
+        otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
+      };
+
+      setStock(await fetchStock(shopApiName).catch((err) => {
+        console.error("fetchStock error:", err);
+        return [];
+      }));
+      setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
+        console.error("fetchCurrentStock error:", err);
+        return [];
+      }));
+      setCustomers((prev) =>
+        prev
+          .map((c) =>
+            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+          )
+          .concat(
+            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+              ? [updatedCustomer]
+              : []
+          )
+      );
+      setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
+        console.error("fetchSales error:", err);
+        return [];
+      }));
+    } else {
+      if (!profileExists) {
+        saleData.newProfile = {
+          name: newSale.profileName,
+          advance: newSale.paymentType === 'Advance' ? {
+            value: true,
+            currentamount: 0,
+            showinadvance: true,
+            paymentMethod: newSale.paymentType
+          } : undefined,
+          paymentMethod: newSale.paymentType !== 'Advance' ? newSale.paymentType : "",
+          credit: newSale.paymentType === 'Credit' ? totalAmount : 0,
+          advanceHistory: [],
+          bills: [],
+          deleteuser: { value: false, date: "" },
         };
-
-        // Call addCreditSale API
-        const response = await addCreditSale(shopApiName, creditSaleData);
-        const { creditSale, customer: updatedCustomer } = response;
-
-        bill = {
-          billNo: creditSale.billNumber,
-          date: newSale.date,
-          items: newSale.items,
-          totalAmount,
-          creditAmount: totalAmount,
-          paymentMethod: 'Credit',
-          shop: shopApiName,
-        };
-
-        // Update state
-        setStock(await fetchStock(shopApiName).catch((err) => {
-          console.error("fetchStock error:", err);
-          return [];
-        }));
-        setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
-          console.error("fetchCurrentStock error:", err);
-          return [];
-        }));
-        setCustomers((prev) =>
-          prev
-            .map((c) =>
-              c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
-            )
-            .concat(
-              updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
-                ? [updatedCustomer]
-                : []
-            )
-        );
-        setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
-          console.error("fetchSales error:", err);
-          return [];
-        }));
-      } else {
-        // Handle non-credit sales
-        if (!profileExists) {
-          saleData.newProfile = {
-            name: newSale.profileName,
-            advance: newSale.paymentType === 'Advance' ? {
-              value: true,
-              currentamount: 0,
-              showinadvance: true,
-              paymentMethod: newSale.paymentType
-            } : undefined,
-            paymentMethod: newSale.paymentType !== 'Advance' ? newSale.paymentType : "",
-            credit: newSale.paymentType === 'Credit' ? totalAmount : 0,
-            advanceHistory: [],
-            bills: [],
-            deleteuser: { value: false, date: "" },
-          };
-        }
-
-        const response = await createSale(shopApiName, saleData);
-        const { bill: createdBill, customer: updatedCustomer } = response;
-        bill = createdBill;
-
-        // Update state
-        setStock(await fetchStock(shopApiName).catch((err) => {
-          console.error("fetchStock error:", err);
-          return [];
-        }));
-        setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
-          console.error("fetchCurrentStock error:", err);
-          return [];
-        }));
-        setCustomers((prev) =>
-          prev
-            .map((c) =>
-              c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
-            )
-            .concat(
-              updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
-                ? [updatedCustomer]
-                : []
-            )
-        );
-        setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
-          console.error("fetchSales error:", err);
-          return [];
-        }));
       }
 
-      const { billNo } = await fetchNextBillNumber(shopApiName);
+      const response = await createSale(shopApiName, saleData);
+      const { bill: createdBill, customer: updatedCustomer } = response;
+      bill = createdBill;
 
-      setNewSale({
-        billNo,
-        date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
-        profileName: "",
-        phoneNumber: "",
-        paymentType: "Cash",
-        items: [],
-      });
-      setAdvanceSearchTerm("");
-      setWarning("Sale created successfully");
-      return bill;
-    } catch (err) {
-      console.error("createSale error:", err);
-      setWarning(`Failed to create sale: ${err.message}`);
-      return false;
-    } finally {
-      setIsLoading(false);
+      setStock(await fetchStock(shopApiName).catch((err) => {
+        console.error("fetchStock error:", err);
+        return [];
+      }));
+      setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
+        console.error("fetchCurrentStock error:", err);
+        return [];
+      }));
+      setCustomers((prev) =>
+        prev
+          .map((c) =>
+            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+          )
+          .concat(
+            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+              ? [updatedCustomer]
+              : []
+          )
+      );
+      setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
+        console.error("fetchSales error:", err);
+        return [];
+      }));
     }
-  };
+
+    const { billNo } = await fetchNextBillNumber(shopApiName);
+
+    setNewSale({
+      billNo,
+      date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
+      profileName: "",
+      phoneNumber: "",
+      paymentType: "Cash",
+      items: [],
+      otherExpenses: "", // Reset otherExpenses
+    });
+    setAdvanceSearchTerm("");
+    setWarning("Sale created successfully");
+    return bill;
+  } catch (err) {
+    console.error("createSale error:", err);
+    setWarning(`Failed to create sale: ${err.message}`);
+    return false;
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleSaleEntry = async () => {
     await saveSale();
@@ -515,6 +526,7 @@ const SalesEntry = () => {
 
   const handleGenerateBill = async () => {
     const bill = await saveSale();
+    console.log("parth:", bill);
     if (bill) {
       handlePrintBill(bill, bill.profileName, bill.phoneNumber);
     }
@@ -523,78 +535,86 @@ const SalesEntry = () => {
   const handlePrintBill = (bill, profileName, phoneNumber) => {
     const printWindow = window.open("", "_blank");
     let billContent = `
-      <html>
-        <head>
-          <title>Bill ${bill.billNo}</title>
-          <style>
-            body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
-            h2 { color: #ff6b35; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
-            th { background-color: #2b2b40; color: #a1a5b7; }
-            td { background-color: #1e1e2d; color: #ffffff; }
-            .total { font-weight: bold; }
-            .payment-method { margin-top: 10px; font-style: italic; }
-          </style>
-        </head>
-        <body>
-          <h2>Bill No: ${bill.billNo}</h2>
-          <p>Profile Name: ${profileName}</p>
-          <p>Phone Number: ${phoneNumber}</p>
-          <p>Date: ${bill.date}</p>
-          <p class="payment-method">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
-          <table>
-            <thead>
+    <html>
+      <head>
+        <title>Bill ${bill.billNo}</title>
+        <style>
+          body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+          h2 { color: #ff6b35; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
+          th { background-color: #2b2b40; color: #a1a5b7; }
+          td { background-color: #1e1e2d; color: #ffffff; }
+          .total { font-weight: bold; }
+          .payment-method { margin-top: 10px; font-style: italic; }
+        </style>
+      </head>
+      <body>
+        <h2>Bill No: ${bill.billNo}</h2>
+        <p>Profile Name: ${profileName}</p>
+        <p>Phone Number: ${phoneNumber}</p>
+        <p>Date: ${bill.date}</p>
+        <p class="payment-method">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Price/Qty</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bill.items
+        .map(
+          (item) => `
               <tr>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Price/Qty</th>
-                <th>Amount</th>
+                <td>${item.product}</td>
+                <td>${item.qty}</td>
+                <td>₹${item.pricePerQty}</td>
+                <td>₹${item.amount}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${bill.items
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item.product}</td>
-                  <td>${item.qty}</td>
-                  <td>₹${item.pricePerQty}</td>
-                  <td>₹${item.amount}</td>
-                </tr>
-              `
-                )
-                .join("")}
-              <tr class="total">
-                <td colspan="3">Total Amount</td>
-                <td>₹${bill.totalAmount}</td>
-              </tr>
-    `;
+            `
+        )
+        .join("")}
+            <tr className="total">
+              <td colspan="3">Items Total</td>
+              <td>₹${bill.items.reduce((sum, item) => sum + item.amount, 0)}</td>
+            </tr>
+            <tr className="total">
+              <td colspan="3">Other Expenses</td>
+              <td>₹${parseInt(bill.otherExpenses || 0)}</td>
+            </tr>
+            <tr className="total">
+              <td colspan="3">Grand Total</td>
+              <td>₹${(bill.totalAmount).toFixed(2)}</td>
+            </tr>
+  `;
 
     if (bill.advanceRemaining !== undefined) {
       billContent += `
-              <tr class="total">
-                <td colspan="3">Advance Remaining</td>
-                <td>₹${bill.advanceRemaining}</td>
-              </tr>
-            `;
+            <tr className="total">
+              <td colspan="3">Advance Remaining</td>
+              <td>₹${bill.advanceRemaining}</td>
+            </tr>
+          `;
     }
 
     if (bill.creditAmount) {
       billContent += `
-              <tr class="total">
-                <td colspan="3">Credit Amount</td>
-                <td>₹${bill.creditAmount}</td>
-              </tr>
-            `;
+            <tr className="total">
+              <td colspan="3">Credit Amount</td>
+              <td>₹${bill.creditAmount}</td>
+            </tr>
+          `;
     }
 
     billContent += `
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
 
     printWindow.document.write(billContent);
     printWindow.document.close();
@@ -610,18 +630,20 @@ const SalesEntry = () => {
   };
 
   const allSales = Array.isArray(sales)
-    ? sales
-      .filter((sale) =>
-        filterDate
-          ? sale.date === filterDate
-          : true
-      )
-      .filter((sale) =>
-        searchTerm
-          ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            sale.phoneNumber.includes(searchTerm)
-          : true
-      )
+    ? sales.filter((sale) => {
+      // Convert sale.date to DD-MM-YYYY for comparison
+      let saleDate = sale.date;
+      if (sale.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = sale.date.split("-");
+        saleDate = `${day}-${month}-${year}`;
+      }
+      return filterDate ? saleDate === filterDate : true;
+    }).filter((sale) =>
+      searchTerm
+        ? sale.profileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sale.phoneNumber.includes(searchTerm)
+        : true
+    )
     : [];
 
   const salesByDate = allSales.reduce((acc, sale) => {
@@ -646,8 +668,8 @@ const SalesEntry = () => {
     .flatMap((c) =>
       Array.isArray(c.profiles)
         ? c.profiles
-            .filter((p) => p.advance?.value && !p.deleteuser?.value)
-            .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
+          .filter((p) => p.advance?.value && !p.deleteuser?.value)
+          .map((p) => ({ ...p, phoneNumber: c.phoneNumber }))
         : []
     );
 
@@ -868,14 +890,10 @@ const SalesEntry = () => {
             />
             <input
               type="text"
-              value={
-                currentItem.product && currentItem.category && currentItem.unit
-                  ? `Avg: ₹${getAveragePrice(currentItem.product, currentItem.category, currentItem.unit)}`
-                  : "Avg: ₹0"
-              }
+              value={currentItem.product && currentItem.qty && currentItem.pricePerQty ? `₹${getItemTotal()}` : "₹0.00"}
               readOnly
               className="small-input-p"
-              disabled
+              disabledd
             />
             <button
               className="add-item-btn-p"
@@ -913,9 +931,33 @@ const SalesEntry = () => {
                     </td>
                   </tr>
                 ))}
+                <tr>
+                  <td colSpan="4">Other Expenses</td>
+                  <td>
+                    <input
+                      type="number"
+                      name="otherExpenses"
+                      value={newSale.otherExpenses}
+                      onChange={handleInputChange}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      style={{ width: '100%', padding: '5px' }}
+                    />
+                  </td>
+                  <td></td>
+                </tr>
                 <tr className="total-row-p">
-                  <td colSpan="4">Total Amount</td>
-                  <td colSpan="2">₹{totalAmount}</td>
+                  <td colSpan="4">Items Total</td>
+                  <td colSpan="2">₹{newSale.items.reduce((sum, item) => sum + item.amount, 0)}</td>
+                </tr>
+                <tr className="total-row-p">
+                  <td colSpan="4">Other Expenses</td>
+                  <td colSpan="2">₹{parseFloat(newSale.otherExpenses || 0).toFixed(2)}</td>
+                </tr>
+                <tr className="total-row-p">
+                  <td colSpan="4">Grand Total</td>
+                  <td colSpan="2">₹{(newSale.items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(newSale.otherExpenses || 0)).toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1044,6 +1086,7 @@ const SalesEntry = () => {
                                     advanceRemaining: sale.advanceRemaining,
                                     creditAmount: sale.creditAmount,
                                     paymentMethod: sale.paymentMethod,
+                                    otherExpenses: sale.otherExpenses,
                                   },
                                   sale.profileName,
                                   sale.phoneNumber

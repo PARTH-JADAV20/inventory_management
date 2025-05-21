@@ -51,12 +51,13 @@ const billSchema = new mongoose.Schema({
   creditAmount: Number,
   paymentMethod: String,
   shop: String,
+  otherExpenses: { type: Number, default: 0 },
 });
 
 const advanceHistorySchema = new mongoose.Schema({
   transactionType: { type: String, enum: ['Deposit', 'Refund'], required: true },
   amount: { type: Number, required: true },
-  date: { type: String, required: true }, // YYYY-MM-DD
+  date: { type: String, required: true }, 
 });
 
 const profileSchema = new mongoose.Schema({
@@ -84,6 +85,7 @@ const profileSchema = new mongoose.Schema({
     totalAmount: Number,
     advanceRemaining: Number,
     paymentMethod: String,
+    otherExpenses: { type: Number, default: 0 },
   }],
   deleteuser: {
     value: Boolean,
@@ -136,8 +138,9 @@ const creditSaleSchema = new mongoose.Schema({
   lastTransactionDate: { type: String, required: true }, // DD-MM-YYYY
   shop: { type: String, required: true },
   paymentHistory: [paymentHistorySchema],
-  isDeleted: { type: Boolean, default: false },
-  deletedAt: { type: String, default: null }, // DD-MM-YYYY
+  isDeleted: { type: Boolean, default: false }, // Added for soft delete
+  deletedAt: { type: String, default: null }, // Date of deletion (YYYY-MM-DD)
+  otherExpenses: { type: Number, default: 0 },
 });
 
 // Models
@@ -293,10 +296,11 @@ app.delete('/api/:shop/stock', async (req, res) => {
 app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { profileName, phoneNumber, paymentMethod, items, date } = req.body;
+    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
+    console.log("Received sale data:", { profileName, phoneNumber, paymentMethod, items, date, otherExpenses }); // Debug: Log incoming data
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
-
+  
     for (const item of items) {
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
@@ -305,8 +309,15 @@ app.post('/api/:shop/sales', async (req, res) => {
       }
     }
 
+    // Validate otherExpenses
+    if (isNaN(otherExpenses) || otherExpenses < 0) {
+      return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
+    }
+
+    // Generate bill number
     const billNo = await getNextBillNumber(shop);
-    const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+    const itemsTotal = items.reduce((sum, item) => sum + item.amount, 0);
+    const totalAmount = itemsTotal + parseFloat(otherExpenses);
 
     let advanceRemaining = null;
     let finalPaymentMethod = paymentMethod;
@@ -315,13 +326,14 @@ app.post('/api/:shop/sales', async (req, res) => {
     if (customer) {
       const profile = customer.profiles.find(p => p.name === profileName && !p.deleteuser.value);
       if (profile && paymentMethod === 'Advance' && profile.advance?.value) {
-        finalPaymentMethod = profile.advance.paymentMethod || 'Cash';
+        finalPaymentMethod = 'Advance';
       } else if (profile) {
         finalPaymentMethod = profile.paymentMethod || paymentMethod;
       }
     }
 
-    const bill = { billNo, date, items, totalAmount, paymentMethod: finalPaymentMethod, shop };
+    const bill = { billNo, date, items, totalAmount, paymentMethod: finalPaymentMethod, shop, otherExpenses: parseFloat(otherExpenses || 0) };
+    console.log("Constructed bill:", bill); // Debug: Log bill before saving
 
     if (!customer) {
       customer = new Customer({
@@ -329,10 +341,15 @@ app.post('/api/:shop/sales', async (req, res) => {
         profiles: [{
           profileId: uuidv4(),
           name: profileName,
-          advance: { value: false, currentamount: 0, paymentMethod: finalPaymentMethod, showinadvance: false },
+          advance: {
+            value: paymentMethod === 'Advance',
+            currentamount: 0,
+            paymentMethod: paymentMethod === 'Advance' ? 'Cash' : '',
+            showinadvance: paymentMethod === 'Advance',
+          },
           advanceHistory: [],
           credit: paymentMethod === 'Credit' ? totalAmount : 0,
-          paymentMethod: finalPaymentMethod,
+          paymentMethod: paymentMethod === 'Advance' ? '' : finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
@@ -350,10 +367,15 @@ app.post('/api/:shop/sales', async (req, res) => {
         profile = {
           profileId: uuidv4(),
           name: profileName,
-          advance: { value: false, currentamount: 0, paymentMethod: "", showinadvance: false },
+          advance: {
+            value: paymentMethod === 'Advance',
+            currentamount: 0,
+            paymentMethod: paymentMethod === 'Advance' ? 'Cash' : '',
+            showinadvance: paymentMethod === 'Advance',
+          },
           advanceHistory: [],
           credit: paymentMethod === 'Credit' ? totalAmount : 0,
-          paymentMethod: finalPaymentMethod,
+          paymentMethod: paymentMethod === 'Advance' ? '' : finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
@@ -374,7 +396,6 @@ app.post('/api/:shop/sales', async (req, res) => {
             throw new Error('Insufficient advance balance');
           }
           profile.advance.currentamount = newBalance;
-          profile.advance.paymentMethod = finalPaymentMethod;
           advanceRemaining = newBalance;
           bill.advanceRemaining = newBalance;
         } else if (paymentMethod === 'Credit') {
@@ -409,6 +430,7 @@ app.post('/api/:shop/sales', async (req, res) => {
       }
     }
 
+    console.log("Saved customer with bill:", customer.profiles.find(p => p.name === profileName).bills); // Debug: Log saved bills
     res.status(201).json({ bill, customer });
   } catch (err) {
     console.error('Create sale error:', err);
@@ -440,7 +462,7 @@ app.get('/api/:shop/sales', async (req, res) => {
           ...b._doc,
           profileName: p.name,
           phoneNumber: c.phoneNumber,
-          paymentMethod: p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+          paymentMethod: b.paymentMethod || 'Cash',
           profileId: p.profileId,
         }))))
       .filter(s => !date || s.date === date)
@@ -598,7 +620,7 @@ app.delete('/api/:shop/expenses/:id', async (req, res) => {
 app.get('/api/:shop/customers', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { search, deleted } = req.query;
+    const { search, deleted, page = 1, limit = 25 } = req.query;
     const Customer = getCustomerModel(shop);
     let query = {};
     if (search) {
@@ -610,8 +632,19 @@ app.get('/api/:shop/customers', async (req, res) => {
     if (deleted === 'true') {
       query['profiles.deleteuser.value'] = true;
     }
-    const customers = await Customer.find(query);
-    res.json(customers);
+
+    const total = await Customer.countDocuments(query);
+    const customers = await Customer.find(query)
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    res.json({
+      customers,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -770,6 +803,7 @@ app.put('/api/:shop/customers/:phoneNumber/profiles/:profileId/restore', async (
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
     const profile = customer.profiles.find(p => p.profileId === profileId);
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    profile.advance.showinadvance = true;
     profile.deleteuser = { value: false, date: '' };
     await customer.save();
     res.json({ message: 'Profile restored' });
@@ -807,6 +841,7 @@ app.put('/api/:shop/customers/:phoneNumber/profiles/:profileId/softdelete', asyn
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
     const profile = customer.profiles.find(p => p.profileId === profileId);
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    profile.advance.showinadvance = false;
     profile.deleteuser = {
       value: true,
       date: new Date().toISOString().split('T')[0]
@@ -966,13 +1001,16 @@ app.get('/api/:shop/credits', async (req, res) => {
 app.post('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { customerName, phoneNumber, items, totalAmount } = req.body;
+    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0 } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
 
     if (!customerName || !phoneNumber || !items || !Array.isArray(items) || !totalAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (isNaN(otherExpenses) || otherExpenses < 0) {
+      return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
     }
 
     for (const item of items) {
@@ -995,9 +1033,10 @@ app.post('/api/:shop/credits', async (req, res) => {
       }
     }
 
-    const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0);
+    // Verify totalAmount
+    const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
     if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
-      return res.status(400).json({ error: 'Total amount does not match item amounts' });
+      return res.status(400).json({ error: 'Total amount does not match item amounts plus other expenses' });
     }
 
     const billNumber = await getNextBillNumber(shop);
@@ -1018,6 +1057,7 @@ app.post('/api/:shop/credits', async (req, res) => {
       paymentHistory: [],
       isDeleted: false,
       deletedAt: null,
+      otherExpenses: parseFloat(otherExpenses),
     });
     await creditSale.save();
 
@@ -1046,6 +1086,7 @@ app.post('/api/:shop/credits', async (req, res) => {
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
             shop,
+            otherExpenses: parseFloat(otherExpenses),
           }],
           deleteuser: { value: false, date: '' },
         }],
@@ -1075,6 +1116,7 @@ app.post('/api/:shop/credits', async (req, res) => {
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
             shop,
+            otherExpenses: parseFloat(otherExpenses),
           }],
           deleteuser: { value: false, date: '' },
         };
@@ -1096,6 +1138,7 @@ app.post('/api/:shop/credits', async (req, res) => {
           creditAmount: totalAmount,
           paymentMethod: 'Credit',
           shop,
+          otherExpenses: parseFloat(otherExpenses),
         });
       }
       await customer.save();

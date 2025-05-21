@@ -15,6 +15,9 @@ const Customers = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+  const [page, setPage] = useState(1);
+  const [limit] = useState(25); // Fixed limit of 25 contractors per page
+  const [totalCustomersCount, setTotalCustomersCount] = useState(0);
 
   const getCommonName = (profiles) => {
     if (!profiles || !Array.isArray(profiles) || profiles.length === 0) {
@@ -34,15 +37,16 @@ const Customers = () => {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const activeData = await apiGetCustomers(shopApiName, searchTerm, false);
-      const updatedCustomers = activeData.map((customer) => ({
+      const activeData = await apiGetCustomers(shopApiName, searchTerm, false, page, limit);
+      const updatedCustomers = activeData.customers.map((customer) => ({
         ...customer,
         profiles: Array.isArray(customer.profiles) ? customer.profiles : [] // No sorting
       }));
       setCustomers(updatedCustomers);
+      setTotalCustomersCount(activeData.total); // Assuming API returns total count
 
-      const deletedData = await apiGetCustomers(shopApiName, searchTerm, true);
-      const deletedProfiles = deletedData
+      const deletedData = await apiGetCustomers(shopApiName, searchTerm, true, page, limit);
+      const deletedProfiles = deletedData.customers
         .flatMap((c) => {
           if (!Array.isArray(c.profiles)) return [];
           return c.profiles
@@ -71,7 +75,7 @@ const Customers = () => {
 
   useEffect(() => {
     fetchCustomers();
-  }, [shop, searchTerm]);
+  }, [shop, searchTerm, page]);
 
   useEffect(() => {
     const checkDeletedProfiles = async () => {
@@ -92,6 +96,7 @@ const Customers = () => {
         }
       }
 
+      setPage(1); // Reset to page 1 after deletion
       await fetchCustomers();
     };
 
@@ -329,6 +334,10 @@ const Customers = () => {
                   <td>₹${item.amount || 0}</td>
                 </tr>
               `).join("") : ''}
+              <tr className="total">
+                <td colspan="3">Other Expenses</td>
+                <td>₹${parseInt(bill.otherExpenses || 0)}</td>
+              </tr>
               <tr class="total">
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount || 0}</td>
@@ -364,6 +373,7 @@ const Customers = () => {
               setSelectedBills(null);
               setSelectedAdvanceDetails(null);
               setShowDeleted(false);
+              setPage(1);
             }}
           >
             <option value="Shop 1">Shop 1</option>
@@ -374,6 +384,7 @@ const Customers = () => {
         <div className="summary-stats-p2">
           <p>Total Customers: {totalCustomers}</p>
           <p>Advance Payment Customers: {advanceCustomers}</p>
+          <p>Showing: {Math.min(page * limit, totalCustomersCount)}/{totalCustomersCount}</p>
         </div>
         <div className="search-container-p2">
           <input
@@ -593,6 +604,20 @@ const Customers = () => {
         </div>
       )}
 
+      {!showDeleted && (
+        <div className="pagination-controls">
+          {filteredCustomers.length > 0 && page * limit < totalCustomersCount && (
+            <button
+              className="load-more-btn"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={loading}
+            >
+              Load More
+            </button>
+          )}
+        </div>
+      )}
+
       {selectedAdvanceDetails && (
         <div className="modal-overlay">
           <div className="modal-content advance-modal-content-p2">
@@ -685,6 +710,10 @@ const Customers = () => {
                           <td>₹{item.amount}</td>
                         </tr>
                       )) : null}
+                      <tr className="total">
+                        <td colSpan={3}>Other Expenses</td>
+                        <td>₹{bill.otherExpenses}</td>
+                      </tr>
                       <tr className="total">
                         <td colSpan={3}>Total Amount</td>
                         <td>₹{bill.totalAmount}</td>
