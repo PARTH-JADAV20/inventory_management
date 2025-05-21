@@ -1,5 +1,4 @@
 import React from "react";
-import { format } from "date-fns";
 import { motion } from "framer-motion";
 
 const RecentSalesTable = ({ sales, onSaleClick }) => {
@@ -13,33 +12,36 @@ const RecentSalesTable = ({ sales, onSaleClick }) => {
       <table className="expense-table">
         <thead>
           <tr>
+            <th>Bill No</th>
             <th>Customer</th>
-            <th>Product</th>
-            <th>Amount (₹)</th>
+            <th>Amount</th>
+            <th>Credit Amount</th>
+            <th>Payment Method</th>
             <th>Date</th>
-            <th>Status</th>
           </tr>
         </thead>
         <tbody>
           {sales.length === 0 ? (
             <tr>
-              <td colSpan="5">No recent sales.</td>
+              <td colSpan="6">No recent sales.</td>
             </tr>
           ) : (
             sales.map((sale, index) => (
               <motion.tr
-                key={sale.id}
-                onClick={() => onSaleClick(sale)}
+                key={sale.billNo || index}
                 whileHover={{ backgroundColor: "#3a3a5a" }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
+                onClick={() => onSaleClick(sale)}
+                style={{ cursor: "pointer" }}
               >
-                <td>{sale.customer}</td>
-                <td>{sale.product}</td>
-                <td>₹{sale.amount.toLocaleString()}</td>
-                <td>{format(new Date(sale.date), "dd MMMM yyyy")}</td>
-                <td>{sale.status}</td>
+                <td>{sale.billNo}</td>
+                <td>{sale.profileName}</td>
+                <td>₹{(sale.totalAmount || 0).toLocaleString()}</td>
+                <td>₹{(sale.creditAmount || 0).toLocaleString()}</td>
+                <td>{sale.paymentMethod || "Unknown"}</td>
+                <td>{sale.date}</td>
               </motion.tr>
             ))
           )}
