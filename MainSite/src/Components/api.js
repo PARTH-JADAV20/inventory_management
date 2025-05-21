@@ -186,6 +186,12 @@ export const fetchCombinedSummary = async (date = '') => {
   return request('GET', `/summary?${params}`);
 };
 
+export const fetchProfitByMethod = async (shop, date = '') => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  return request('GET', `/${encodeURIComponent(shop)}/profit-by-method?${params}`);
+};
+
 // Credit Sales APIs
 export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false) => {
   try {
