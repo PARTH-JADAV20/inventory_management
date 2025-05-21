@@ -1,7 +1,7 @@
 // const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
 // const BASE_URL = 'http://bussinespro-env.eba-37zmk5ee.ap-south-1.elasticbeanstalk.com/api';
-const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
-// const BASE_URL = 'http://localhost:5000/api';
+// const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
+const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
 async function request(method, url, data = null) {
@@ -95,7 +95,7 @@ export const deleteExpense = async (shop, id) => {
 };
 
 // Customer APIs
-export const fetchCustomers = async (shop, search = '', deleted = false) => {
+export const fetchCustomers = async (shop, search = '', deleted = false, page = 1, limit = 25) => {
   try {
     const params = new URLSearchParams();
     if (search) params.append('search', search);

@@ -394,3 +394,36 @@
     }
 }
 
+.summary-stats {
+  margin-top: 10px;
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+  color: #a1a5b7;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.load-more-btn {
+  background-color: rgba(255, 107, 44, 0.5);
+  border: none;
+  padding: 8px 16px;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.load-more-btn:hover {
+  background-color: rgba(255, 107, 44, 0.8);
+}
+
+.load-more-btn:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
