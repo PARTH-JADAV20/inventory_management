@@ -207,6 +207,14 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
   const remainingBalance = creditSale.totalAmount || 0;
   const originalBillAmount = totalPaid + remainingBalance;
 
+  // Helper function to format date safely
+  const formatDate = (date) => {
+    if (!date || isNaN(new Date(date).getTime())) {
+      return "N/A";
+    }
+    return format(new Date(date), "dd MMMM yyyy");
+  };
+
   return (
     <div className="modal-overlay-dax">
       <div className="modal-content-dax">
@@ -271,7 +279,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
                 <td>{item.unit}</td>
                 <td>₹{item.pricePerUnit.toFixed(2)}</td>
                 <td>₹{item.amount.toFixed(2)}</td>
-                <td>{format(new Date(item.date), "dd MMMM yyyy")}</td>
+                <td>{formatDate(item.date)}</td> {/* Use safe date formatting */}
               </tr>
             ))}
           </tbody>
@@ -293,9 +301,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
               {creditSale.paymentHistory.map((payment, index) => (
                 <tr key={index}>
                   <td>
-                    {payment.date && !isNaN(new Date(payment.date).getTime())
-                      ? format(new Date(payment.date), "dd MMMM yyyy")
-                      : "N/A"}
+                    {formatDate(payment.date)} {/* Use safe date formatting */}
                   </td>
                   <td>₹{payment.amount.toFixed(2)}</td>
                   <td>{payment.mode}</td>

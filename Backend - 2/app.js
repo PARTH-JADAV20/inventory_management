@@ -18,7 +18,7 @@ app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-// mongoose.connect('mongodb://localhost:27017/', {
+  // mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -57,7 +57,7 @@ const billSchema = new mongoose.Schema({
 const advanceHistorySchema = new mongoose.Schema({
   transactionType: { type: String, enum: ['Deposit', 'Refund'], required: true },
   amount: { type: Number, required: true },
-  date: { type: String, required: true }, 
+  date: { type: String, required: true },
 });
 
 const profileSchema = new mongoose.Schema({
@@ -292,15 +292,29 @@ app.delete('/api/:shop/stock', async (req, res) => {
   }
 });
 
-// Sales Routes (Unchanged)
+// Sales Routes
 app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
     const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
-    console.log("Received sale data:", { profileName, phoneNumber, paymentMethod, items, date, otherExpenses }); // Debug: Log incoming data
+    console.log("Received sale data:", { profileName, phoneNumber, paymentMethod, items, date, otherExpenses });
+
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
-  
+    const CreditSale = getCreditSaleModel(shop);
+
+    // Validate input data
+    if (!profileName || !phoneNumber || !paymentMethod || !items || !items.length) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate and normalize date
+    const saleDate = date ? convertToYYYYMMDD(new Date(date)) : convertToYYYYMMDD(new Date());
+    if (!saleDate) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
+    // Validate stock availability
     for (const item of items) {
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
@@ -332,8 +346,22 @@ app.post('/api/:shop/sales', async (req, res) => {
       }
     }
 
-    const bill = { billNo, date, items, totalAmount, paymentMethod: finalPaymentMethod, shop, otherExpenses: parseFloat(otherExpenses || 0) };
-    console.log("Constructed bill:", bill); // Debug: Log bill before saving
+    const bill = {
+      billNo,
+      date: saleDate,
+      items: items.map(item => ({
+        product: item.product,
+        qty: item.qty,
+        unit: item.unit,
+        pricePerUnit: item.pricePerUnit || item.pricePerQty, // Handle potential field mismatch
+        amount: item.amount,
+        category: item.category,
+      })),
+      totalAmount,
+      paymentMethod: finalPaymentMethod,
+      shop,
+      otherExpenses: parseFloat(otherExpenses || 0),
+    };
 
     if (!customer) {
       customer = new Customer({
@@ -355,12 +383,11 @@ app.post('/api/:shop/sales', async (req, res) => {
               ? { ...bill, creditAmount: totalAmount }
               : paymentMethod === 'Advance'
                 ? { ...bill, advanceRemaining }
-                : bill
+                : bill,
           ],
           deleteuser: { value: false, date: '' },
         }],
       });
-      await customer.save();
     } else {
       let profile = customer.profiles.find(p => p.name === profileName && !p.deleteuser.value);
       if (!profile) {
@@ -381,7 +408,7 @@ app.post('/api/:shop/sales', async (req, res) => {
               ? { ...bill, creditAmount: totalAmount }
               : paymentMethod === 'Advance'
                 ? { ...bill, advanceRemaining }
-                : bill
+                : bill,
           ],
           deleteuser: { value: false, date: '' },
         };
@@ -408,12 +435,45 @@ app.post('/api/:shop/sales', async (req, res) => {
             ? { ...bill, advanceRemaining }
             : paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
-              : bill
+              : bill,
         );
       }
-      await customer.save();
     }
 
+    // Add to CreditSale if paymentMethod is Credit
+    if (paymentMethod === 'Credit') {
+      const creditSale = new CreditSale({
+        billNumber: billNo,
+        customerName: profileName,
+        phoneNumber,
+        items: items.map(item => ({
+          product: item.product,
+          qty: item.qty,
+          unit: item.unit,
+          pricePerUnit: item.pricePerUnit || item.pricePerQty, // Handle potential field mismatch
+          amount: item.amount,
+          date: saleDate,
+          category: item.category,
+        })),
+        totalAmount,
+        paidAmount: 0,
+        status: 'Open',
+        lastTransactionDate: saleDate,
+        shop,
+        paymentHistory: [],
+        isDeleted: false,
+        deletedAt: null,
+        otherExpenses: parseFloat(otherExpenses),
+      });
+      console.log("Creating CreditSale:", creditSale); // Debug: Log CreditSale before saving
+      await creditSale.save();
+      console.log("CreditSale saved successfully"); // Debug: Confirm save
+    }
+
+    // Save customer after all modifications
+    await customer.save();
+
+    // Deduct stock
     for (const item of items) {
       let qtyToDeduct = item.qty;
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit });
@@ -430,11 +490,11 @@ app.post('/api/:shop/sales', async (req, res) => {
       }
     }
 
-    console.log("Saved customer with bill:", customer.profiles.find(p => p.name === profileName).bills); // Debug: Log saved bills
+    console.log("Saved customer with bill:", customer.profiles.find(p => p.name === profileName).bills);
     res.status(201).json({ bill, customer });
   } catch (err) {
     console.error('Create sale error:', err);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: `Failed to create sale: ${err.message}` });
   }
 });
 
@@ -480,6 +540,7 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
     const { profileId, phoneNumber, items } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
 
     if (!profileId || !phoneNumber || !items) {
       return res.status(400).json({ error: 'profileId, phoneNumber, and items are required' });
@@ -501,6 +562,7 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
     }
     const bill = profile.bills[billIndex];
 
+    // Restore stock
     for (const item of items) {
       let category = item.category;
       if (!category) {
@@ -552,6 +614,16 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
           throw new Error(`Insufficient advance balance after restoring sale ${billNo}`);
         }
         b.advanceRemaining = currentAdvance;
+      }
+    }
+
+    // Soft delete from CreditSale if it exists
+    if (bill.paymentMethod === 'Credit') {
+      const creditSale = await CreditSale.findOne({ billNumber: billNo, shop });
+      if (creditSale) {
+        creditSale.isDeleted = true;
+        creditSale.deletedAt = convertToDDMMYYYY(new Date().toISOString().split('T')[0]);
+        await creditSale.save();
       }
     }
 
@@ -1864,7 +1936,12 @@ app.get('/api/summary', async (req, res) => {
     let advanceCash = 0;
     let advanceOnline = 0;
     let advanceCheque = 0;
-    let profit = 0;
+    let totalExpenses = 0; // Moved outside loop to accumulate correctly
+
+    // Validate date if provided
+    if (date && !validateDate(date)) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
 
     for (const shop of shops) {
       const Customer = getCustomerModel(shop);
@@ -1872,64 +1949,75 @@ app.get('/api/summary', async (req, res) => {
       const customers = await Customer.find();
 
       const sales = customers
-        .flatMap(c => c.profiles
-          .filter(p => !p.deleteuser.value)
-          .flatMap(p => p.bills.map(b => ({
-            ...b,
-            profileName: p.name,
-            phoneNumber: c.phoneNumber,
-            paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
-          }))))
+        .flatMap(c =>
+          c.profiles
+            .filter(p => !p.deleteuser.value)
+            .flatMap(p =>
+              p.bills.map(b => ({
+                ...b,
+                profileName: p.name,
+                phoneNumber: c.phoneNumber,
+                paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
+              }))
+            )
+        )
         .filter(b => !date || b.date === date);
 
-      totalSales += sales.reduce((sum, b) => sum + b.totalAmount, 0);
-      customers.flatMap(c => c.profiles.map(p => p.name)).forEach(name => users.add(name));
+      totalSales += sales.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+      customers
+        .flatMap(c => c.profiles.filter(p => !p.deleteuser.value).map(p => p.name))
+        .forEach(name => users.add(name));
       creditSales += sales
         .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
-        .reduce((sum, b) => sum + b.creditAmount, 0);
+        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
       advancePayments += customers
         .flatMap(c => c.profiles)
         .reduce((sum, p) => sum + (p.advance?.currentamount || 0), 0);
+
       cashSales += sales
         .filter(b => b.paymentMethod === 'Cash')
-        .reduce((sum, b) => sum + b.totalAmount, 0);
+        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
       onlineSales += sales
         .filter(b => b.paymentMethod === 'Online')
-        .reduce((sum, b) => sum + b.totalAmount, 0);
+        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
       chequeSales += sales
         .filter(b => b.paymentMethod === 'Cheque')
-        .reduce((sum, b) => sum + b.totalAmount, 0);
+        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+
       advanceUsers += customers
         .flatMap(c => c.profiles)
         .filter(p => p.advance?.value && p.advance.currentamount > 0).length;
       creditUsers += customers
         .flatMap(c => c.profiles)
         .filter(p => p.credit > 0).length;
+
       creditCash += sales
         .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cash'))
-        .reduce((sum, b) => sum + b.creditAmount, 0);
+        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
       creditOnline += sales
         .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Online'))
-        .reduce((sum, b) => sum + b.creditAmount, 0);
+        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
       creditCheque += sales
         .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cheque'))
-        .reduce((sum, b) => sum + b.creditAmount, 0);
+        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+
       advanceCash += sales
         .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cash'))
-        .reduce((sum, b) => sum + b.advanceRemaining, 0);
+        .reduce((sum, b) => sum + (b.advanceRemaining || 0), 0);
       advanceOnline += sales
         .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Online'))
-        .reduce((sum, b) => sum + b.advanceRemaining, 0);
+        .reduce((sum, b) => sum + (b.advanceRemaining || 0), 0);
       advanceCheque += sales
         .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cheque'))
-        .reduce((sum, b) => sum + b.advanceRemaining, 0);
+        .reduce((sum, b) => sum + (b.advanceRemaining || 0), 0);
 
       const expenses = await Expense.find({
         date: date ? convertToYYYYMMDD(date) : { $exists: true },
-              });
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-      profit += totalSales - totalExpenses;
+      });
+      totalExpenses += expenses.reduce((sum, e) => sum + (e.amount || 0), 0); // Accumulate expenses
     }
+
+    const profit = totalSales - totalExpenses; // Calculate profit once after loop
 
     res.json({
       totalSales,
@@ -1950,8 +2038,8 @@ app.get('/api/summary', async (req, res) => {
       profit,
     });
   } catch (err) {
-    console.error('Fetch combined summary error:', err);
-    res.status(500).json({ error: 'Failed to fetch combined summary: ' + err.message });
+    console.error('Fetch overall summary error:', err);
+    res.status(500).json({ error: 'Failed to fetch overall summary: ' + err.message });
   }
 });
 
