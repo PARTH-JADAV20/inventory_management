@@ -25,7 +25,7 @@ const SalesEntry = () => {
     phoneNumber: "",
     paymentType: "Cash",
     items: [],
-    otherExpenses: "",
+    otherExpenses: "0",
   });
   const [currentItem, setCurrentItem] = useState({
     product: "",
@@ -89,7 +89,7 @@ const SalesEntry = () => {
         ]);
         setStock(Array.isArray(stockData) ? stockData : []);
         setGroupedStock(Array.isArray(groupedStockData) ? groupedStockData : []);
-        setCustomers(Array.isArray(customerData) ? customerData : []);
+        setCustomers(Array.isArray(customerData.customers) ? customerData.customers : []);
         setSales(Array.isArray(salesData) ? salesData : []);
       } catch (err) {
         console.error("loadData error:", err);
@@ -345,173 +345,174 @@ const SalesEntry = () => {
   };
 
   const saveSale = async () => {
-  if (!newSale.profileName || !newSale.phoneNumber) {
-    setWarning("Please enter both profile name and phone number");
-    return false;
-  }
-
-  if (newSale.items.length === 0) {
-    setWarning("Please add at least one item to the sale");
-    return false;
-  }
-
-  if (!newSale.otherExpenses || isNaN(parseFloat(newSale.otherExpenses)) || parseFloat(newSale.otherExpenses) < 0) {
-    setWarning("Please enter a valid other expenses amount (non-negative number)");
-    return false;
-  }
-
-  setIsLoading(true);
-  try {
-    setWarning("");
-    const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
-    let paymentMethod = newSale.paymentType;
-    const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
-    let profileExists = false;
-    let bill = null;
-
-    if (customer) {
-      const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
-      if (profile && newSale.paymentType === 'Advance' && profile.advance?.value) {
-        paymentMethod = 'Advance';
-        profileExists = true;
-      } else if (profile) {
-        paymentMethod = newSale.paymentType;
-        profileExists = true;
-      }
+    if (!newSale.profileName || !newSale.phoneNumber) {
+      setWarning("Please enter both profile name and phone number");
+      return false;
     }
 
-    const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(newSale.otherExpenses || 0);
-    const saleData = {
-      profileName: newSale.profileName,
-      phoneNumber: newSale.phoneNumber,
-      paymentMethod,
-      items: newSale.items,
-      date: newSale.date,
-      otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
-    };
+    if (newSale.items.length === 0) {
+      setWarning("Please add at least one item to the sale");
+      return false;
+    }
 
-    if (newSale.paymentType === 'Credit') {
-      const creditSaleData = {
-        customerName: newSale.profileName,
+    if (!newSale.otherExpenses || isNaN(parseFloat(newSale.otherExpenses)) || parseFloat(newSale.otherExpenses) < 0) {
+      setWarning("Please enter a valid other expenses amount (non-negative number)");
+      return false;
+    }
+
+    setIsLoading(true);
+    try {
+      setWarning("");
+      const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+      let paymentMethod = newSale.paymentType;
+      const customer = customers.find(c => c.phoneNumber === newSale.phoneNumber);
+      let profileExists = false;
+      let bill = null;
+
+      if (customer) {
+        const profile = customer.profiles.find(p => p.name === newSale.profileName && !p.deleteuser?.value);
+        if (profile && newSale.paymentType === 'Advance' && profile.advance?.value) {
+          paymentMethod = 'Advance';
+          profileExists = true;
+        } else if (profile) {
+          paymentMethod = newSale.paymentType;
+          profileExists = true;
+        }
+      }
+
+      const totalAmount = newSale.items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(newSale.otherExpenses || 0);
+      const saleData = {
+        profileName: newSale.profileName,
         phoneNumber: newSale.phoneNumber,
-        items: newSale.items.map(item => ({
-          product: item.product,
-          qty: item.qty,
-          unit: item.unit,
-          pricePerUnit: item.pricePerQty,
-          amount: item.amount,
-          date: newSale.date.split('-').reverse().join('-'),
-        })),
-        totalAmount,
-        otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
-      };
-
-      const response = await addCreditSale(shopApiName, creditSaleData);
-      const { creditSale, customer: updatedCustomer } = response;
-
-      bill = {
-        billNo: creditSale.billNumber,
-        date: newSale.date,
+        paymentMethod,
         items: newSale.items,
-        totalAmount,
-        creditAmount: totalAmount,
-        paymentMethod: 'Credit',
-        shop: shopApiName,
+        date: newSale.date,
         otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
       };
 
-      setStock(await fetchStock(shopApiName).catch((err) => {
-        console.error("fetchStock error:", err);
-        return [];
-      }));
-      setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
-        console.error("fetchCurrentStock error:", err);
-        return [];
-      }));
-      setCustomers((prev) =>
-        prev
-          .map((c) =>
-            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
-          )
-          .concat(
-            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
-              ? [updatedCustomer]
-              : []
-          )
-      );
-      setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
-        console.error("fetchSales error:", err);
-        return [];
-      }));
-    } else {
-      if (!profileExists) {
-        saleData.newProfile = {
-          name: newSale.profileName,
-          advance: newSale.paymentType === 'Advance' ? {
-            value: true,
-            currentamount: 0,
-            showinadvance: true,
-            paymentMethod: newSale.paymentType
-          } : undefined,
-          paymentMethod: newSale.paymentType !== 'Advance' ? newSale.paymentType : "",
-          credit: newSale.paymentType === 'Credit' ? totalAmount : 0,
-          advanceHistory: [],
-          bills: [],
-          deleteuser: { value: false, date: "" },
+      if (newSale.paymentType === 'Credit') {
+        const creditSaleData = {
+          customerName: newSale.profileName,
+          phoneNumber: newSale.phoneNumber,
+          items: newSale.items.map(item => ({
+            product: item.product,
+            qty: item.qty,
+            unit: item.unit,
+            pricePerUnit: item.pricePerQty,
+            amount: item.amount,
+            date: newSale.date.split('-').reverse().join('-'),
+            category: item.category,
+          })),
+          totalAmount,
+          otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
         };
+
+        const response = await addCreditSale(shopApiName, creditSaleData);
+        const { creditSale, customer: updatedCustomer } = response;
+
+        bill = {
+          billNo: creditSale.billNumber,
+          date: newSale.date,
+          items: newSale.items,
+          totalAmount,
+          creditAmount: totalAmount,
+          paymentMethod: 'Credit',
+          shop: shopApiName,
+          otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
+        };
+
+        setStock(await fetchStock(shopApiName).catch((err) => {
+          console.error("fetchStock error:", err);
+          return [];
+        }));
+        setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
+          console.error("fetchCurrentStock error:", err);
+          return [];
+        }));
+        setCustomers((prev) =>
+          prev
+            .map((c) =>
+              c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+            )
+            .concat(
+              updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+                ? [updatedCustomer]
+                : []
+            )
+        );
+        setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        }));
+      } else {
+        if (!profileExists) {
+          saleData.newProfile = {
+            name: newSale.profileName,
+            advance: newSale.paymentType === 'Advance' ? {
+              value: true,
+              currentamount: 0,
+              showinadvance: true,
+              paymentMethod: newSale.paymentType
+            } : undefined,
+            paymentMethod: newSale.paymentType !== 'Advance' ? newSale.paymentType : "",
+            credit: newSale.paymentType === 'Credit' ? totalAmount : 0,
+            advanceHistory: [],
+            bills: [],
+            deleteuser: { value: false, date: "" },
+          };
+        }
+
+        const response = await createSale(shopApiName, saleData);
+        const { bill: createdBill, customer: updatedCustomer } = response;
+        bill = createdBill;
+
+        setStock(await fetchStock(shopApiName).catch((err) => {
+          console.error("fetchStock error:", err);
+          return [];
+        }));
+        setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
+          console.error("fetchCurrentStock error:", err);
+          return [];
+        }));
+        setCustomers((prev) =>
+          prev
+            .map((c) =>
+              c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
+            )
+            .concat(
+              updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
+                ? [updatedCustomer]
+                : []
+            )
+        );
+        setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        }));
       }
 
-      const response = await createSale(shopApiName, saleData);
-      const { bill: createdBill, customer: updatedCustomer } = response;
-      bill = createdBill;
+      const { billNo } = await fetchNextBillNumber(shopApiName);
 
-      setStock(await fetchStock(shopApiName).catch((err) => {
-        console.error("fetchStock error:", err);
-        return [];
-      }));
-      setGroupedStock(await fetchCurrentStock(shopApiName).catch((err) => {
-        console.error("fetchCurrentStock error:", err);
-        return [];
-      }));
-      setCustomers((prev) =>
-        prev
-          .map((c) =>
-            c.phoneNumber === updatedCustomer.phoneNumber ? updatedCustomer : c
-          )
-          .concat(
-            updatedCustomer.phoneNumber && !prev.some((c) => c.phoneNumber === updatedCustomer.phoneNumber)
-              ? [updatedCustomer]
-              : []
-          )
-      );
-      setSales(await fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
-        console.error("fetchSales error:", err);
-        return [];
-      }));
+      setNewSale({
+        billNo,
+        date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
+        profileName: "",
+        phoneNumber: "",
+        paymentType: "Cash",
+        items: [],
+        otherExpenses: "", // Reset otherExpenses
+      });
+      setAdvanceSearchTerm("");
+      setWarning("Sale created successfully");
+      return bill;
+    } catch (err) {
+      console.error("createSale error:", err);
+      setWarning(`Failed to create sale: ${err.message}`);
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-
-    const { billNo } = await fetchNextBillNumber(shopApiName);
-
-    setNewSale({
-      billNo,
-      date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
-      profileName: "",
-      phoneNumber: "",
-      paymentType: "Cash",
-      items: [],
-      otherExpenses: "", // Reset otherExpenses
-    });
-    setAdvanceSearchTerm("");
-    setWarning("Sale created successfully");
-    return bill;
-  } catch (err) {
-    console.error("createSale error:", err);
-    setWarning(`Failed to create sale: ${err.message}`);
-    return false;
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const handleSaleEntry = async () => {
     await saveSale();
@@ -526,7 +527,6 @@ const SalesEntry = () => {
 
   const handleGenerateBill = async () => {
     const bill = await saveSale();
-    console.log("parth:", bill);
     if (bill) {
       handlePrintBill(bill, bill.profileName, bill.phoneNumber);
     }
@@ -588,6 +588,10 @@ const SalesEntry = () => {
             <tr className="total">
               <td colspan="3">Grand Total</td>
               <td>₹${(bill.totalAmount).toFixed(2)}</td>
+            </tr>
+            <tr className="total">
+              <td colspan="3">Profit</td>
+              <td>₹${parseInt(bill.profit || 0)}</td>
             </tr>
   `;
 
@@ -1048,7 +1052,7 @@ const SalesEntry = () => {
                   {salesByDate[date]
                     .sort((a, b) => a.billNo.localeCompare(b.billNo))
                     .map((sale) => (
-                      <tr key={sale.billNo}>
+                      <tr key={sale.billNo} title={`Profit: ${sale.profit}`}>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           {sale.profileName}
                         </td>
@@ -1087,6 +1091,7 @@ const SalesEntry = () => {
                                     creditAmount: sale.creditAmount,
                                     paymentMethod: sale.paymentMethod,
                                     otherExpenses: sale.otherExpenses,
+                                    profit: sale.profit,
                                   },
                                   sale.profileName,
                                   sale.phoneNumber

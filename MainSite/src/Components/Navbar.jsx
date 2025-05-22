@@ -12,10 +12,6 @@ const Navbar = ({ pageTitles }) => {
     <div className="header">
       <h1 className='h1-base'>{getPageTitle(location.pathname)}</h1>
       <div className="user-info">
-        <div className="notification">
-          <span className="notification-icon">🔔</span>
-          <span className="notification-badge">3</span>
-        </div>
         <div className="user">
           <span className="user-name">John Smith</span>
           <span className="user-role">Admin</span>
