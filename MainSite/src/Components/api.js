@@ -158,42 +158,140 @@ export const deleteAdvanceProfile = async (shop, phoneNumber, profileId) => {
 };
 
 // Dashboard APIs
-export const fetchLowStock = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/low-stock`);
+export const fetchLowStock = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/low-stock?${params}`);
+    return data.map(item => ({
+      ...item,
+      stock: Math.max(0, item.stock),
+      unit: item.unit || 'Unknown'
+    }));
+  } catch (error) {
+    throw new Error(`Failed to fetch low stock for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchRecentSales = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/recent-sales`);
+export const fetchTotalSales = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/total-sales?${params}`);
+    return {
+      totalSales: Number(data.totalSales) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0,
+      Credit: Number(data.Credit) || 0,
+      Advance: Number(data.Advance) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch total sales for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchRecentPurchases = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/recent-purchases`);
+export const fetchTotalProfit = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/total-profit?${params}`);
+    return {
+      totalProfit: Number(data.totalProfit) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0,
+      Credit: Number(data.Credit) || 0,
+      Advance: Number(data.Advance) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch total profit for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchProfitTrend = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/profit-trend`);
+export const fetchUsers = async (shop) => {
+  try {
+    const data = await request('GET', `/${encodeURIComponent(shop)}/users`);
+    return {
+      totalUsers: Number(data.totalUsers) || 0,
+      creditUsers: Number(data.creditUsers) || 0,
+      advanceUsers: Number(data.advanceUsers) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch users for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchSalesStats = async (shop) => {
-  return request('GET', `/${encodeURIComponent(shop)}/sales-stats`);
+export const fetchCreditSalesSummary = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/credit-sales?${params}`);
+    return {
+      totalCreditGiven: Number(data.totalCreditGiven) || 0,
+      totalCreditReceived: Number(data.totalCreditReceived) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch credit sales summary for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchSummary = async (shop, date = '') => {
-  const params = new URLSearchParams();
-  if (date) params.append('date', date);
-  return request('GET', `/${encodeURIComponent(shop)}/summary?${params}`);
+export const fetchAdvancePayments = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/advance-payments?${params}`);
+    return {
+      totalAdvance: Number(data.totalAdvance) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch advance payments for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchCombinedSummary = async (date = '') => {
-  const params = new URLSearchParams();
-  if (date) params.append('date', date);
-  return request('GET', `/summary?${params}`);
+export const fetchRecentPurchases = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/recent-purchases?${params}`);
+    return Array.isArray(data) ? data.map(purchase => ({
+      ...purchase,
+      quantity: Number(purchase.quantity) || 0,
+      price: Number(purchase.price) || 0,
+      date: purchase.date || new Date().toLocaleDateString('en-GB').split('/').join('-')
+    })) : [];
+  } catch (error) {
+    throw new Error(`Failed to fetch recent purchases for ${shop}: ${error.message}`);
+  }
 };
 
-export const fetchProfitByMethod = async (shop, date = '') => {
-  const params = new URLSearchParams();
-  if (date) params.append('date', date);
-  return request('GET', `/${encodeURIComponent(shop)}/profit-by-method?${params}`);
+export const fetchRecentSales = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/recent-sales?${params}`);
+    return Array.isArray(data) ? data.map(sale => ({
+      ...sale,
+      amount: Number(sale.amount) || 0,
+      date: sale.date || new Date().toLocaleDateString('en-GB').split('/').join('-'),
+      paymentMethod: sale.paymentMethod || 'Cash'
+    })) : [];
+  } catch (error) {
+    throw new Error(`Failed to fetch recent sales for ${shop}: ${error.message}`);
+  }
 };
 
 // Credit Sales APIs
