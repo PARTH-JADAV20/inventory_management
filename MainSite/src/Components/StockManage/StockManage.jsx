@@ -70,7 +70,6 @@ const StockManage = () => {
       try {
         setError(null);
         const data = await fetchStock(shop); // Updated to use fetchStock
-        console.log('fetchStock response:', data);
         setItems(data);
         const { filtered } = processItems(data);
         setFilteredItems(filtered);
@@ -147,7 +146,6 @@ const StockManage = () => {
         try {
           setError(null);
           const data = await fetchStock(shop); // Fetch raw stock data
-          console.log('fetchStock response:', data);
           const grouped = groupItemsCaseInsensitive(data); // Group case-insensitively
           const processedItems = processGroupedItems(grouped); // Apply filters
           setGroupedItems(processedItems);
@@ -466,7 +464,17 @@ const StockManage = () => {
                 </td>
                 <td>{item.category}</td>
                 <td>₹{item.price.toFixed(2)}/{item.unit}</td>
-                <td>{new Date(item.addedDate).toLocaleDateString()}</td>
+                <td>
+                  {item.addedDate && !isNaN(new Date(item.addedDate))
+                    ? (() => {
+                      const date = new Date(item.addedDate);
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const year = date.getFullYear();
+                      return `${day}-${month}-${year}`;
+                    })()
+                    : 'N/A'}
+                </td>
                 <td className="action-buttons">
                   <button
                     className="edit-btn"

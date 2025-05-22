@@ -51,7 +51,6 @@ const AdvancePayments = () => {
     setLoading(true);
     try {
       const data = await apiService.fetchCustomers(shop, searchTerm, false, page, limit);
-      console.log("Fetched customers:", data);
       setCustomers(data.customers || []);
       // Count customers with advance profiles
       const advanceCount = (data.customers || []).filter(c =>
@@ -182,7 +181,6 @@ const AdvancePayments = () => {
           bills: [],
           deleteuser: { value: false, date: "" },
         };
-        console.log("Appending new profile to existing customer:", profileData);
         await apiService.appendCustomerProfile(shop, newPayment.phoneNumber, profileData);
       } else if (existingCustomer && !newPayment.profileId.startsWith("new-profile")) {
         const profile = existingCustomer.profiles.find((p) => p.profileId === newPayment.profileId);
@@ -194,11 +192,6 @@ const AdvancePayments = () => {
           alert("Refund amount cannot exceed the current advance balance.");
           return;
         }
-        console.log("addAdvancePayment request:", {
-          date: newPayment.date,
-          amount: advanceAmount,
-          paymentMethod: newPayment.paymentMethod,
-        });
         await apiService.addAdvancePayment(shop, newPayment.phoneNumber, newPayment.profileId, {
           date: newPayment.date,
           amount: advanceAmount,
@@ -228,7 +221,6 @@ const AdvancePayments = () => {
           phoneNumber: newPayment.phoneNumber,
           profiles: [profileData],
         };
-        console.log("createCustomer request:", customerData);
         await apiService.createCustomer(shop, customerData);
       }
 
@@ -340,7 +332,6 @@ const AdvancePayments = () => {
   };
 
   const handleShowHistory = (history, profileName, phoneNumber) => {
-    console.log("Showing history for profile:", profileName, history);
     setSelectedHistory({ history: history || [], profileName, phoneNumber });
     setDropdownOpen(null);
   };
@@ -401,6 +392,10 @@ const AdvancePayments = () => {
                 <td colspan="4">Total Amount</td>
                 <td>₹${bill.totalAmount || 0}</td>
               </tr>
+              <tr class="total">
+                <td colspan="4">Profit</td>
+                <td>₹${bill.profit || 0}</td>
+              </tr>
               ${bill.advanceRemaining !== undefined ? `
                 <tr class="total">
                   <td colspan="4">Advance Remaining</td>
@@ -425,9 +420,6 @@ const AdvancePayments = () => {
       getCommonName(c.profiles).toLowerCase().includes(newPayment.customerName.toLowerCase()) &&
       (c.profiles || []).some((p) => p.advance?.value && p.advance?.showinadvance)
   );
-
-  console.log("Total customers:", customers.length);
-  console.log("Filtered customers:", filteredCustomers.length);
 
   return (
     <div className="main-content">
@@ -610,7 +602,6 @@ const AdvancePayments = () => {
                     const totalUsed = (p.bills || []).reduce((sum, b) => sum + (b.totalAmount || 0), 0);
                     const currentBalance = p.advance?.currentamount || 0;
                     const paymentMethod = p.advance?.paymentMethod || "N/A";
-                    console.log(`Profile ${p.name} advanceHistory:`, p.advanceHistory);
                     return (
                       <tr key={p.profileId || Math.random()}>
                         <td>{getCommonName(c.profiles)}</td>
@@ -749,6 +740,10 @@ const AdvancePayments = () => {
                         <tr className="total">
                           <td colSpan={4}>Total Amount</td>
                           <td>₹{bill.totalAmount || 0}</td>
+                        </tr>
+                        <tr className="total">
+                          <td colSpan={4}>Profit</td>
+                          <td>₹{bill.profit || 0}</td>
                         </tr>
                         {bill.advanceRemaining !== undefined && (
                           <tr className="total">

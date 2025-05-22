@@ -18,6 +18,7 @@ app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+// mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -34,6 +35,11 @@ const stockSchema = new mongoose.Schema({
   addedDate: { type: String, required: true }, // YYYY-MM-DD
 });
 
+const deductionSchema = new mongoose.Schema({
+  price: { type: Number, required: true },
+  quantity: { type: Number, required: true },
+});
+
 const billSchema = new mongoose.Schema({
   billNo: { type: String, required: true },
   date: { type: String, required: true }, // DD-MM-YYYY
@@ -44,6 +50,7 @@ const billSchema = new mongoose.Schema({
     pricePerQty: Number,
     amount: Number,
     category: String,
+    deductions: [deductionSchema],
   }],
   totalAmount: Number,
   advanceRemaining: Number,
@@ -81,11 +88,14 @@ const profileSchema = new mongoose.Schema({
       unit: String,
       pricePerQty: Number,
       amount: Number,
+      category: String,
+      deductions: [deductionSchema],
     }],
     totalAmount: Number,
     advanceRemaining: Number,
     paymentMethod: String,
     otherExpenses: { type: Number, default: 0 },
+    profit: { type: Number, default: 0 },
   }],
   deleteuser: {
     value: Boolean,
@@ -131,6 +141,8 @@ const creditSaleSchema = new mongoose.Schema({
     pricePerUnit: Number,
     amount: Number,
     date: String, // DD-MM-YYYY
+    category: String,
+    deductions: [deductionSchema],
   }],
   totalAmount: { type: Number, required: true },
   paidAmount: { type: Number, default: 0 },
@@ -313,38 +325,47 @@ app.delete('/api/:shop/stock', async (req, res) => {
   }
 });
 
-// Sales Routes
+// Sales Routes (Unchanged)
 app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0, profit = 0 } = req.body;
-    console.log("Received sale data:", { profileName, phoneNumber, paymentMethod, items, date, otherExpenses, profit });
-
+    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
-    const CreditSale = getCreditSaleModel(shop);
 
-    // Validate input data
-    if (!profileName || !phoneNumber || !paymentMethod || !items || !items.length) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-    if (isNaN(profit) || profit < 0) {
-      return res.status(400).json({ error: 'Profit must be a non-negative number' });
-    }
-
-    // Validate and normalize date to DD-MM-YYYY
-    const saleDate = convertToDDMMYYYY(date);
-    if (!validateDate(saleDate)) {
-      return res.status(400).json({ error: `Invalid date format, expected DD-MM-YYYY: ${date}` });
-    }
-
-    // Validate stock availability
+    // Validate stock availability and calculate profit
+    let totalProfit = 0;
+    const billItems = [];
     for (const item of items) {
-      const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit });
+      if (!item.product || !item.qty || !item.unit || !item.pricePerQty || !item.amount || !item.category) {
+        return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
+      }
+      const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
+        .sort({ addedDate: -1 });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
       if (totalQty < item.qty) {
         return res.status(400).json({ error: `Insufficient stock for ${item.product}` });
       }
+      let qtyToDeduct = item.qty;
+      let itemProfit = 0;
+      const deductions = [];
+      for (const stockItem of stockItems) {
+        if (qtyToDeduct <= 0) break;
+        const deduct = Math.min(qtyToDeduct, stockItem.quantity);
+        itemProfit += (item.pricePerQty - stockItem.price) * deduct;
+        deductions.push({ price: stockItem.price, quantity: deduct });
+        qtyToDeduct -= deduct;
+      }
+      totalProfit += itemProfit;
+      billItems.push({
+        product: item.product,
+        qty: item.qty,
+        unit: item.unit,
+        pricePerQty: item.pricePerQty,
+        amount: item.amount,
+        category: item.category,
+        deductions, // Add deductions
+      });
     }
 
     // Validate otherExpenses
@@ -352,7 +373,7 @@ app.post('/api/:shop/sales', async (req, res) => {
       return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
     }
 
-    // Generate bill number
+    // Generate bill number (unchanged)
     const billNo = await getNextBillNumber(shop);
     const itemsTotal = items.reduce((sum, item) => sum + item.amount, 0);
     const totalAmount = itemsTotal + parseFloat(otherExpenses);
@@ -366,28 +387,22 @@ app.post('/api/:shop/sales', async (req, res) => {
       if (profile && paymentMethod === 'Advance' && profile.advance?.value) {
         finalPaymentMethod = profile.advance.paymentMethod || paymentMethod;
       } else if (profile) {
-        finalPaymentMethod = paymentMethod; // Respect the provided paymentMethod
+        finalPaymentMethod = paymentMethod;
       }
     }
 
     const bill = {
       billNo,
-      date: saleDate,
-      items: items.map(item => ({
-        product: item.product,
-        qty: item.qty,
-        unit: item.unit,
-        pricePerQty: item.pricePerUnit || item.pricePerQty,
-        amount: item.amount,
-        category: item.category,
-      })),
+      date,
+      items: billItems,
       totalAmount,
       paymentMethod: finalPaymentMethod,
       shop,
-      otherExpenses: parseFloat(otherExpenses || 0),
-      profit,
+      otherExpenses: parseFloat(otherExpenses),
+      profit: totalProfit,
     };
 
+    // Save bill to customer
     if (!customer) {
       customer = new Customer({
         phoneNumber,
@@ -401,18 +416,24 @@ app.post('/api/:shop/sales', async (req, res) => {
             showinadvance: paymentMethod === 'Advance',
           },
           advanceHistory: [],
-          credit: paymentMethod === 'Credit' ? totalAmount : 0, // Only set credit for Credit sales
+          credit: paymentMethod === 'Credit' ? totalAmount : 0,
           paymentMethod: finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
               : paymentMethod === 'Advance'
                 ? { ...bill, advanceRemaining }
-                : bill,
+                : bill
           ],
           deleteuser: { value: false, date: '' },
         }],
       });
+      // Validate document size
+      const customerSize = Buffer.byteLength(JSON.stringify(customer));
+      if (customerSize > 16 * 1024 * 1024) {
+        throw new Error('Customer document exceeds 16MB limit');
+      }
+      await customer.save();
     } else {
       let profile = customer.profiles.find(p => p.name === profileName && !p.deleteuser.value);
       if (!profile) {
@@ -426,14 +447,14 @@ app.post('/api/:shop/sales', async (req, res) => {
             showinadvance: paymentMethod === 'Advance',
           },
           advanceHistory: [],
-          credit: paymentMethod === 'Credit' ? totalAmount : 0, // Only set credit for Credit sales
+          credit: paymentMethod === 'Credit' ? totalAmount : 0,
           paymentMethod: finalPaymentMethod,
           bills: [
             paymentMethod === 'Credit'
               ? { ...bill, creditAmount: totalAmount }
               : paymentMethod === 'Advance'
                 ? { ...bill, advanceRemaining }
-                : bill,
+                : bill
           ],
           deleteuser: { value: false, date: '' },
         };
@@ -454,58 +475,30 @@ app.post('/api/:shop/sales', async (req, res) => {
           profile.credit = (profile.credit || 0) + totalAmount;
           bill.creditAmount = totalAmount;
         }
-        // Only update paymentMethod for non-Advance/Credit sales
         if (paymentMethod !== 'Advance' && paymentMethod !== 'Credit') {
           profile.paymentMethod = finalPaymentMethod;
         }
         profile.bills.push(
-          paymentMethod === 'Credit'
-            ? { ...bill, creditAmount: totalAmount }
-            : paymentMethod === 'Advance'
-              ? { ...bill, advanceRemaining }
-              : bill,
+          paymentMethod === 'Advance'
+            ? { ...bill, advanceRemaining }
+            : paymentMethod === 'Credit'
+              ? { ...bill, creditAmount: totalAmount }
+              : bill
         );
       }
+      // Validate document size
+      const customerSize = Buffer.byteLength(JSON.stringify(customer));
+      if (customerSize > 16 * 1024 * 1024) {
+        throw new Error('Customer document exceeds 16MB limit');
+      }
+      await customer.save();
     }
 
-    // Add to CreditSale only if paymentMethod is Credit
-    if (paymentMethod === 'Credit') {
-      const creditSale = new CreditSale({
-        billNumber: billNo,
-        customerName: profileName,
-        phoneNumber,
-        items: items.map(item => ({
-          product: item.product,
-          qty: item.qty,
-          unit: item.unit,
-          pricePerUnit: item.pricePerUnit || item.pricePerQty,
-          amount: item.amount,
-          date: saleDate,
-          category: item.category,
-        })),
-        totalAmount,
-        paidAmount: 0,
-        status: 'Open',
-        lastTransactionDate: saleDate,
-        shop,
-        paymentHistory: [],
-        isDeleted: false,
-        deletedAt: null,
-        otherExpenses: parseFloat(otherExpenses),
-        profit,
-      });
-      console.log("Creating CreditSale:", creditSale);
-      await creditSale.save();
-      console.log("CreditSale saved successfully");
-    }
-
-    // Save customer after all modifications
-    await customer.save();
-
-    // Deduct stock
+    // Deduct stock using LIFO
     for (const item of items) {
       let qtyToDeduct = item.qty;
-      const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit });
+      const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
+        .sort({ addedDate: -1 });
       for (const stockItem of stockItems) {
         if (qtyToDeduct <= 0) break;
         const deduct = Math.min(qtyToDeduct, stockItem.quantity);
@@ -517,13 +510,15 @@ app.post('/api/:shop/sales', async (req, res) => {
           await stockItem.save();
         }
       }
+      if (qtyToDeduct > 0) {
+        throw new Error(`Failed to deduct stock for ${item.product} (${item.unit})`);
+      }
     }
 
-    console.log("Saved customer with bill:", customer.profiles.find(p => p.name === profileName).bills);
     res.status(201).json({ bill, customer });
   } catch (err) {
     console.error('Create sale error:', err);
-    res.status(400).json({ error: `Failed to create sale: ${err.message}` });
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -553,7 +548,7 @@ app.get('/api/:shop/sales', async (req, res) => {
           phoneNumber: c.phoneNumber,
           paymentMethod: b.paymentMethod || 'Cash',
           profileId: p.profileId,
-          profit: b.profit || 0,
+          profit: b.profit || 0, // Include profit
         }))))
       .filter(s => !date || s.date === date)
       .filter(s => !search || s.profileName.toLowerCase().includes(search.toLowerCase()) || s.phoneNumber.includes(search));
@@ -570,7 +565,6 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
     const { profileId, phoneNumber, items } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
-    const CreditSale = getCreditSaleModel(shop);
 
     if (!profileId || !phoneNumber || !items) {
       return res.status(400).json({ error: 'profileId, phoneNumber, and items are required' });
@@ -592,38 +586,73 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
     }
     const bill = profile.bills[billIndex];
 
-    // Restore stock
-    for (const item of items) {
-      let category = item.category;
-      if (!category) {
-        const stockItem = await Stock.findOne({ name: item.product, unit: item.unit });
-        category = stockItem ? stockItem.category : 'Unknown';
-      }
+    // Restore stock using deductions
+    for (const item of bill.items) {
+      const category = item.category || 'Unknown';
+      const deductions = item.deductions || [];
 
-      const stockItems = await Stock.find({ name: item.product, category, unit: item.unit });
-      let qtyToRestore = item.qty;
-      if (stockItems.length > 0) {
-        for (const stockItem of stockItems) {
-          if (qtyToRestore <= 0) break;
-          stockItem.quantity += qtyToRestore;
-          qtyToRestore = 0;
-          await stockItem.save();
+      if (deductions.length > 0) {
+        // Use deductions for precise restoration
+        for (const deduction of deductions) {
+          const stockItem = await Stock.findOne({
+            name: item.product,
+            unit: item.unit,
+            category: category,
+            price: deduction.price,
+          });
+
+          if (stockItem) {
+            stockItem.quantity += deduction.quantity;
+            await stockItem.save();
+          } else {
+            const newStock = new Stock({
+              id: uuidv4(),
+              name: item.product,
+              quantity: deduction.quantity,
+              unit: item.unit,
+              category: category,
+              price: deduction.price,
+              addedDate: new Date().toISOString().split('T')[0],
+            });
+            await newStock.save();
+          }
         }
-      }
-      if (qtyToRestore > 0) {
-        const newStock = new Stock({
-          id: uuidv4(),
+      } else {
+        // Fallback for legacy bills without deductions
+        let qtyToRestore = item.qty;
+        const costPrice = item.costPrice || item.pricePerQty;
+
+        const stockItems = await Stock.find({
           name: item.product,
-          quantity: qtyToRestore,
           unit: item.unit,
-          category,
-          price: item.pricePerQty,
-          addedDate: new Date().toISOString().split('T')[0],
-        });
-        await newStock.save();
+          category: category,
+        }).sort({ addedDate: -1 });
+        if (stockItems.length > 0) {
+          for (const stockItem of stockItems) {
+            if (qtyToRestore <= 0) break;
+            stockItem.quantity += qtyToRestore;
+            qtyToRestore = 0;
+            await stockItem.save();
+
+          }
+        }
+
+        if (qtyToRestore > 0) {
+          const newStock = new Stock({
+            id: uuidv4(),
+            name: item.product,
+            quantity: qtyToRestore,
+            unit: item.unit,
+            category: category,
+            price: costPrice,
+            addedDate: new Date().toISOString().split('T')[0],
+          });
+          await newStock.save();
+        }
       }
     }
 
+    // Restore advance or credit
     let advanceRestored = 0;
     if (bill.paymentMethod === 'Advance' && bill.advanceRemaining !== undefined) {
       advanceRestored = bill.totalAmount;
@@ -633,8 +662,8 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
       profile.credit = (profile.credit || 0) - bill.creditAmount;
     }
 
+    // Remove bill and update advance balances
     profile.bills.splice(billIndex, 1);
-
     let currentAdvance = profile.advance.currentamount;
     for (let i = 0; i < profile.bills.length; i++) {
       const b = profile.bills[i];
@@ -647,14 +676,10 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
       }
     }
 
-    // Soft delete from CreditSale if it exists
-    if (bill.paymentMethod === 'Credit') {
-      const creditSale = await CreditSale.findOne({ billNumber: billNo, shop });
-      if (creditSale) {
-        creditSale.isDeleted = true;
-        creditSale.deletedAt = convertToDDMMYYYY(new Date().toISOString().split('T')[0]);
-        await creditSale.save();
-      }
+    // Validate document size before saving
+    const customerSize = Buffer.byteLength(JSON.stringify(customer));
+    if (customerSize > 16 * 1024 * 1024) {
+      throw new Error('Customer document exceeds 16MB limit');
     }
 
     await customer.save();
@@ -782,7 +807,6 @@ app.post('/api/:shop/customers', async (req, res) => {
       }));
       existingCustomer.profiles.push(...newProfiles);
       await existingCustomer.save();
-      console.log(`Appended profiles to existing customer ${phoneNumber} in ${shop}:`, newProfiles);
       return res.json(existingCustomer);
     }
 
@@ -794,7 +818,6 @@ app.post('/api/:shop/customers', async (req, res) => {
       })),
     });
     await customer.save();
-    console.log(`Created new customer for ${shop}:`, customer);
     res.status(201).json(customer);
   } catch (err) {
     console.error(`Error creating customer for ${shop}:`, err);
@@ -826,8 +849,6 @@ app.post('/api/:shop/customers/:phoneNumber/profiles', async (req, res) => {
     if (!updatedCustomer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
-
-    console.log(`Appended profile to customer ${phoneNumber} in ${shop}:`, profileData);
     res.json(updatedCustomer);
   } catch (err) {
     console.error(`Error appending profile for ${shop}:`, err);
@@ -1104,7 +1125,7 @@ app.get('/api/:shop/credits', async (req, res) => {
 app.post('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0, profit = 0 } = req.body;
+    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0 } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
@@ -1115,27 +1136,62 @@ app.post('/api/:shop/credits', async (req, res) => {
     if (isNaN(otherExpenses) || otherExpenses < 0) {
       return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
     }
-    if (isNaN(profit) || profit < 0) {
-      return res.status(400).json({ error: 'Profit must be a non-negative number' });
-    }
 
     for (const item of items) {
-      if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date) {
+      if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date || !item.category) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
-      const itemDate = convertToDDMMYYYY(item.date);
-      if (!validateDate(itemDate)) {
-        return res.status(400).json({ error: `Invalid date for item ${item.product}: ${item.date}` });
+      if (!validateDate(item.date)) {
+        item.date = convertToDDMMYYYY(item.date);
+        if (!validateDate(item.date)) {
+          return res.status(400).json({ error: `Invalid date for item ${item.product}: ${item.date}` });
+        }
       }
-      item.date = itemDate;
     }
 
+    let totalProfit = 0;
+    const billItems = [];
     for (const item of items) {
-      const stockItems = await Stock.find({ name: item.product, unit: item.unit });
+      const stockItems = await Stock.find({
+        name: item.product,
+        unit: item.unit,
+        category: item.category,
+      }).sort({ addedDate: -1 });
+
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
       if (totalQty < item.qty) {
         return res.status(400).json({ error: `Insufficient stock for ${item.product} (${item.unit})` });
       }
+
+      let qtyToDeduct = item.qty;
+      const deductions = [];
+      let itemProfit = 0;
+      for (const stockItem of stockItems) {
+        if (qtyToDeduct <= 0) break;
+        const deduct = Math.min(qtyToDeduct, stockItem.quantity);
+        itemProfit += (item.pricePerUnit - stockItem.price) * deduct;
+        deductions.push({ price: stockItem.price, quantity: deduct });
+        qtyToDeduct -= deduct;
+
+        stockItem.quantity -= deduct;
+        if (stockItem.quantity === 0) {
+          await Stock.deleteOne({ _id: stockItem._id });
+        } else {
+          await stockItem.save();
+        }
+      }
+
+      totalProfit += itemProfit;
+      billItems.push({
+        product: item.product,
+        qty: item.qty,
+        unit: item.unit,
+        pricePerUnit: item.pricePerUnit,
+        amount: item.amount,
+        date: item.date,
+        category: item.category,
+        deductions,
+      });
     }
 
     const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
@@ -1144,15 +1200,11 @@ app.post('/api/:shop/credits', async (req, res) => {
     }
 
     const billNumber = await getNextBillNumber(shop);
-
     const creditSale = new CreditSale({
       billNumber,
       customerName,
       phoneNumber,
-      items: items.map(item => ({
-        ...item,
-        date: item.date,
-      })),
+      items: billItems,
       totalAmount,
       paidAmount: 0,
       status: 'Open',
@@ -1162,8 +1214,14 @@ app.post('/api/:shop/credits', async (req, res) => {
       isDeleted: false,
       deletedAt: null,
       otherExpenses: parseFloat(otherExpenses),
-      profit,
+      profit: totalProfit,
     });
+
+    // Validate document size
+    const creditSaleSize = Buffer.byteLength(JSON.stringify(creditSale));
+    if (creditSaleSize > 16 * 1024 * 1024) {
+      throw new Error('Credit sale document exceeds 16MB limit');
+    }
     await creditSale.save();
 
     let customer = await Customer.findOne({ phoneNumber });
@@ -1180,24 +1238,25 @@ app.post('/api/:shop/credits', async (req, res) => {
           bills: [{
             billNo: billNumber,
             date: items[0].date,
-            items: items.map(item => ({
+            items: billItems.map(item => ({
               product: item.product,
               qty: item.qty,
               unit: item.unit,
               pricePerQty: item.pricePerUnit,
               amount: item.amount,
+              category: item.category,
+              deductions: item.deductions,
             })),
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
             shop,
             otherExpenses: parseFloat(otherExpenses),
-            profit,
+            profit: totalProfit,
           }],
           deleteuser: { value: false, date: '' },
         }],
       });
-      await customer.save();
     } else {
       let profile = customer.profiles.find(p => p.name === customerName && !p.deleteuser.value);
       if (!profile) {
@@ -1211,19 +1270,21 @@ app.post('/api/:shop/credits', async (req, res) => {
           bills: [{
             billNo: billNumber,
             date: items[0].date,
-            items: items.map(item => ({
+            items: billItems.map(item => ({
               product: item.product,
               qty: item.qty,
               unit: item.unit,
               pricePerQty: item.pricePerUnit,
               amount: item.amount,
+              category: item.category,
+              deductions: item.deductions,
             })),
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
             shop,
             otherExpenses: parseFloat(otherExpenses),
-            profit,
+            profit: totalProfit,
           }],
           deleteuser: { value: false, date: '' },
         };
@@ -1234,42 +1295,31 @@ app.post('/api/:shop/credits', async (req, res) => {
         profile.bills.push({
           billNo: billNumber,
           date: items[0].date,
-          items: items.map(item => ({
+          items: billItems.map(item => ({
             product: item.product,
             qty: item.qty,
             unit: item.unit,
             pricePerQty: item.pricePerUnit,
             amount: item.amount,
+            category: item.category,
+            deductions: item.deductions,
           })),
           totalAmount,
           creditAmount: totalAmount,
           paymentMethod: 'Credit',
           shop,
           otherExpenses: parseFloat(otherExpenses),
-          profit,
+          profit: totalProfit,
         });
       }
-      await customer.save();
     }
 
-    for (const item of items) {
-      let qtyToDeduct = item.qty;
-      const stockItems = await Stock.find({ name: item.product, unit: item.unit }).sort({ addedDate: 1 });
-      for (const stockItem of stockItems) {
-        if (qtyToDeduct <= 0) break;
-        const deduct = Math.min(qtyToDeduct, stockItem.quantity);
-        stockItem.quantity -= deduct;
-        qtyToDeduct -= deduct;
-        if (stockItem.quantity === 0) {
-          await Stock.deleteOne({ _id: stockItem._id });
-        } else {
-          await stockItem.save();
-        }
-      }
-      if (qtyToDeduct > 0) {
-        throw new Error(`Failed to deduct stock for ${item.product} (${item.unit})`);
-      }
+    // Validate document size
+    const customerSize = Buffer.byteLength(JSON.stringify(customer));
+    if (customerSize > 16 * 1024 * 1024) {
+      throw new Error('Customer document exceeds 16MB limit');
     }
+    await customer.save();
 
     res.status(201).json({ creditSale, customer });
   } catch (err) {
@@ -1577,34 +1627,84 @@ app.delete('/api/:shop/credits/:id', async (req, res) => {
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is already deleted' });
 
-    creditSale.isDeleted = true;
-    creditSale.deletedAt = convertToDDMMYYYY(new Date().toISOString().split('T')[0]);
-    await creditSale.save();
-
+    // Restore stock using deductions
     for (const item of creditSale.items) {
-      const stockItems = await Stock.find({ name: item.product, unit: item.unit });
-      let qtyToRestore = item.qty;
-      if (stockItems.length > 0) {
-        for (const stockItem of stockItems) {
-          if (qtyToRestore <= 0) break;
-          stockItem.quantity += qtyToRestore;
-          qtyToRestore = 0;
-          await stockItem.save();
+      console.log(`Restoring stock for item: ${item.product}, qty: ${item.qty}, unit: ${item.unit}`);
+      const category = item.category || 'Unknown';
+      const deductions = item.deductions || [];
+
+      if (deductions.length > 0) {
+        // Use deductions for precise restoration
+        for (const deduction of deductions) {
+          console.log(`Restoring: ${deduction.quantity} units at ₹${deduction.price}`);
+          const stockItem = await Stock.findOne({
+            name: item.product,
+            unit: item.unit,
+            category: category,
+            price: deduction.price,
+          });
+
+          if (stockItem) {
+            stockItem.quantity += deduction.quantity;
+            await stockItem.save();
+            console.log(`Updated stock item ${stockItem._id}: new quantity ${stockItem.quantity}`);
+          } else {
+            const newStock = new Stock({
+              id: uuidv4(),
+              name: item.product,
+              quantity: deduction.quantity,
+              unit: item.unit,
+              category: category,
+              price: deduction.price,
+              addedDate: new Date().toISOString().split('T')[0],
+            });
+            await newStock.save();
+            console.log(`Created new stock item: ${item.product}, qty: ${deduction.quantity}, price: ${deduction.price}`);
+          }
+        }
+      } else {
+        // Fallback for legacy credit sales without deductions
+        let qtyToRestore = item.qty;
+        console.log(`No deductions found, using fallback for ${item.product}`);
+        const costPrice = item.costPrice || item.pricePerUnit;
+
+        const stockItems = await Stock.find({
+          name: item.product,
+          unit: item.unit,
+          category: category,
+        }).sort({ addedDate: -1 });
+
+        console.log(`Found ${stockItems.length} matching stock items for ${item.product}, category: ${category}, unit: ${item.unit}`);
+
+        if (stockItems.length > 0) {
+          for (const stockItem of stockItems) {
+            if (qtyToRestore <= 0) break;
+            stockItem.quantity += qtyToRestore;
+            qtyToRestore = 0;
+            await stockItem.save();
+            console.log(`Updated stock item ${stockItem._id}: new quantity ${stockItem.quantity}`);
+          }
+        }
+
+        if (qtyToRestore > 0) {
+          const newStock = new Stock({
+            id: uuidv4(),
+            name: item.product,
+            quantity: qtyToRestore,
+            unit: item.unit,
+            category: category,
+            price: costPrice,
+            addedDate: new Date().toISOString().split('T')[0],
+          });
+          await newStock.save();
+          console.log(`Created new stock item: ${item.product}, qty: ${qtyToRestore}, category: ${category}, price: ${costPrice}`);
         }
       }
-      if (qtyToRestore > 0) {
-        const newStock = new Stock({
-          id: uuidv4(),
-          name: item.product,
-          quantity: qtyToRestore,
-          unit: item.unit,
-          category: 'Unknown',
-          price: item.pricePerUnit,
-          addedDate: new Date().toISOString().split('T')[0],
-        });
-        await newStock.save();
-      }
     }
+
+    creditSale.isDeleted = true;
+    creditSale.deletedAt = new Date().toISOString().split('T')[0];
+    await creditSale.save();
 
     const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
     if (customer) {
@@ -1614,6 +1714,12 @@ app.delete('/api/:shop/credits/:id', async (req, res) => {
         if (billIndex !== -1) {
           profile.bills.splice(billIndex, 1);
           profile.credit = profile.bills.reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+
+          // Validate document size
+          const customerSize = Buffer.byteLength(JSON.stringify(customer));
+          if (customerSize > 16 * 1024 * 1024) {
+            throw new Error('Customer document exceeds 16MB limit');
+          }
           await customer.save();
         }
       }
@@ -1647,7 +1753,8 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
 
     for (const item of creditSale.items) {
       let qtyToDeduct = item.qty;
-      const stockItems = await Stock.find({ name: item.product, unit: item.unit }).sort({ addedDate: 1 });
+      const stockItems = await Stock.find({ name: item.product, unit: item.unit })
+        .sort({ addedDate: -1 });
       for (const stockItem of stockItems) {
         if (qtyToDeduct <= 0) break;
         const deduct = Math.min(qtyToDeduct, stockItem.quantity);
@@ -1683,6 +1790,8 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
           creditAmount: creditSale.totalAmount,
           paymentMethod: 'Credit',
           shop,
+          otherExpenses: creditSale.otherExpenses,
+          profit: profile.bills.find(b => b.billNo === creditSale.billNumber)?.profit || 0,
         });
         profile.credit = profile.bills.reduce((sum, b) => sum + (b.creditAmount || 0), 0);
         await customer.save();
@@ -2041,6 +2150,7 @@ app.get('/api/summary', async (req, res) => {
     if (date && !validateDate(date)) {
       return res.status(400).json({ error: 'Invalid date format' });
     }
+    // let profit = 0; // Removed duplicate declaration
 
     for (const shop of shops) {
       const Customer = getCustomerModel(shop);
@@ -2079,47 +2189,43 @@ app.get('/api/summary', async (req, res) => {
         .forEach(name => users.add(name));
       creditSales += sales
         .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
-        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+        .reduce((sum, b) => sum + b.creditAmount, 0);
       advancePayments += customers
         .flatMap(c => c.profiles)
         .reduce((sum, p) => sum + (p.advance?.currentamount || 0), 0);
-
       cashSales += sales
         .filter(b => b.paymentMethod === 'Cash')
-        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        .reduce((sum, b) => sum + b.totalAmount, 0);
       onlineSales += sales
         .filter(b => b.paymentMethod === 'Online')
-        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        .reduce((sum, b) => sum + b.totalAmount, 0);
       chequeSales += sales
         .filter(b => b.paymentMethod === 'Cheque')
-        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-
+        .reduce((sum, b) => sum + b.totalAmount, 0);
       advanceUsers += customers
         .flatMap(c => c.profiles)
         .filter(p => p.advance?.value && p.advance.currentamount > 0).length;
       creditUsers += customers
         .flatMap(c => c.profiles)
         .filter(p => p.credit > 0).length;
-
       creditCash += sales
         .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cash'))
-        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+        .reduce((sum, b) => sum + b.creditAmount, 0);
       creditOnline += sales
         .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Online'))
-        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+        .reduce((sum, b) => sum + b.creditAmount, 0);
       creditCheque += sales
         .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cheque'))
-        .reduce((sum, b) => sum + (b.creditAmount || 0), 0);
-
+        .reduce((sum, b) => sum + b.creditAmount, 0);
       advanceCash += sales
         .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cash'))
-        .reduce((sum, b) => sum + (b.advanceRemaining || 0), 0);
+        .reduce((sum, b) => sum + b.advanceRemaining, 0);
       advanceOnline += sales
         .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Online'))
-        .reduce((sum, b) => sum + (b.advanceRemaining || 0), 0);
+        .reduce((sum, b) => sum + b.advanceRemaining, 0);
       advanceCheque += sales
         .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cheque'))
-        .reduce((sum, b) => sum + (b.advanceRemaining || 0), 0);
+        .reduce((sum, b) => sum + b.advanceRemaining, 0);
 
       const expenses = await Expense.find({
         date: date ? convertToYYYYMMDD(date) : { $exists: true },
@@ -2152,8 +2258,8 @@ app.get('/api/summary', async (req, res) => {
       profit,
     });
   } catch (err) {
-    console.error('Fetch overall summary error:', err);
-    res.status(500).json({ error: 'Failed to fetch overall summary: ' + err.message });
+    console.error('Fetch combined summary error:', err);
+    res.status(500).json({ error: 'Failed to fetch combined summary: ' + err.message });
   }
 });
 

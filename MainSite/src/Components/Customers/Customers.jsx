@@ -342,6 +342,10 @@ const Customers = () => {
                 <td colspan="3">Total Amount</td>
                 <td>₹${bill.totalAmount || 0}</td>
               </tr>
+              <tr className="total">
+              <td colspan="3">Profit</td>
+              <td>₹${parseInt(bill.profit || 0)}</td>
+            </tr>
               ${profile && profile.advance?.value && bill.advanceRemaining !== undefined ? `
                 <tr class="total">
                   <td colspan="3">Advance Remaining</td>
@@ -717,6 +721,10 @@ const Customers = () => {
                       <tr className="total">
                         <td colSpan={3}>Total Amount</td>
                         <td>₹{bill.totalAmount}</td>
+                      </tr>
+                      <tr className="total">
+                        <td colspan={3}>Profit</td>
+                        <td>₹{parseInt(bill.profit)}</td>
                       </tr>
                       {bill.advanceRemaining !== undefined && (
                         <tr className="total">

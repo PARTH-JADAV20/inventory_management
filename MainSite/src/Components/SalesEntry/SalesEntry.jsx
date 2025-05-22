@@ -25,7 +25,7 @@ const SalesEntry = () => {
     phoneNumber: "",
     paymentType: "Cash",
     items: [],
-    otherExpenses: "",
+    otherExpenses: "0",
   });
   const [currentItem, setCurrentItem] = useState({
     product: "",
@@ -100,10 +100,6 @@ const SalesEntry = () => {
     };
     loadData();
   }, [shop]);
-
-  useEffect(() => {
-    console.log("Customers updated:", customers);
-  }, [customers]);
 
   useEffect(() => {
     const loadSales = async () => {
@@ -405,6 +401,7 @@ const SalesEntry = () => {
             pricePerUnit: item.pricePerQty,
             amount: item.amount,
             date: newSale.date.split('-').reverse().join('-'),
+            category: item.category,
           })),
           totalAmount,
           otherExpenses: parseFloat(newSale.otherExpenses || 0), // Include otherExpenses
@@ -530,7 +527,6 @@ const SalesEntry = () => {
 
   const handleGenerateBill = async () => {
     const bill = await saveSale();
-    console.log("parth:", bill);
     if (bill) {
       handlePrintBill(bill, bill.profileName, bill.phoneNumber);
     }
@@ -592,6 +588,10 @@ const SalesEntry = () => {
             <tr className="total">
               <td colspan="3">Grand Total</td>
               <td>₹${(bill.totalAmount).toFixed(2)}</td>
+            </tr>
+            <tr className="total">
+              <td colspan="3">Profit</td>
+              <td>₹${parseInt(bill.profit || 0)}</td>
             </tr>
   `;
 
@@ -1052,7 +1052,7 @@ const SalesEntry = () => {
                   {salesByDate[date]
                     .sort((a, b) => a.billNo.localeCompare(b.billNo))
                     .map((sale) => (
-                      <tr key={sale.billNo}>
+                      <tr key={sale.billNo} title={`Profit: ${sale.profit}`}>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           {sale.profileName}
                         </td>
@@ -1091,6 +1091,7 @@ const SalesEntry = () => {
                                     creditAmount: sale.creditAmount,
                                     paymentMethod: sale.paymentMethod,
                                     otherExpenses: sale.otherExpenses,
+                                    profit: sale.profit,
                                   },
                                   sale.profileName,
                                   sale.phoneNumber
