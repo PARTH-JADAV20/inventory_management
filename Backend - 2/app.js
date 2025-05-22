@@ -1889,26 +1889,344 @@ app.get('/api/:shop/low-stock', async (req, res) => {
   }
 });
 
-app.get('/api/:shop/recent-sales', async (req, res) => {
+
+// Dashboard Routes
+app.get('/api/:shop/total-sales', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { period, date } = req.query;
+    const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
+
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
+    }
+
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
+
+    const customers = await Customer.find();
+    const creditSales = await CreditSale.find({
+      shop,
+      isDeleted: false,
+      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+    });
+
+    let totalSales = 0;
+    const salesByMethod = {
+      Cash: 0,
+      Online: 0,
+      Cheque: 0,
+      Credit: 0,
+      Advance: 0,
+    };
+
+    customers.forEach(customer => {
+      customer.profiles.forEach(profile => {
+        if (profile.deleteuser.value) return;
+        profile.bills.forEach(bill => {
+          if (bill.date >= startDateStr && bill.date <= endDateStr) {
+            totalSales += bill.totalAmount;
+            const method = bill.paymentMethod || 'Cash';
+            salesByMethod[method] = (salesByMethod[method] || 0) + bill.totalAmount;
+          }
+        });
+      });
+    });
+
+    creditSales.forEach(sale => {
+      totalSales += sale.totalAmount + sale.paidAmount;
+      salesByMethod.Credit = (salesByMethod.Credit || 0) + sale.totalAmount + sale.paidAmount;
+    });
+
+    res.json({
+      totalSales,
+      ...salesByMethod,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/:shop/total-profit', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { period, date } = req.query;
+    const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
+    const Expense = getExpenseModel(shop);
+
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
+    }
+
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
+    const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
+    const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
+
+    const customers = await Customer.find();
+    const creditSales = await CreditSale.find({
+      shop,
+      isDeleted: false,
+      status: 'Cleared',
+      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+    });
+    const expenses = await Expense.find({
+      date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
+    });
+
+    let totalProfit = 0;
+    const profitByMethod = {
+      Cash: 0,
+      Online: 0,
+      Cheque: 0,
+      Credit: 0,
+      Advance: 0,
+    };
+
+    customers.forEach(customer => {
+      customer.profiles.forEach(profile => {
+        if (profile.deleteuser.value) return;
+        profile.bills.forEach(bill => {
+          if (bill.date >= startDateStr && bill.date <= endDateStr && bill.paymentMethod !== 'Credit') {
+            totalProfit += bill.profit || 0;
+            const method = bill.paymentMethod || 'Cash';
+            profitByMethod[method] = (profitByMethod[method] || 0) + (bill.profit || 0);
+          }
+        });
+      });
+    });
+
+    creditSales.forEach(sale => {
+      totalProfit += sale.profit || 0;
+      const method = sale.finalPaymentMethod || 'Credit';
+      profitByMethod[method] = (profitByMethod[method] || 0) + (sale.profit || 0);
+    });
+
+    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    totalProfit -= totalExpenses;
+
+    res.json({
+      totalProfit: totalProfit < 0 ? 0 : totalProfit,
+      ...profitByMethod,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/:shop/users', async (req, res) => {
   try {
     const { shop } = req.params;
     const Customer = getCustomerModel(shop);
+
     const customers = await Customer.find();
-    const sales = customers
-      .flatMap(c => c.profiles
-        .filter(p => !p.deleteuser.value)
-        .flatMap(p => p.bills.map(b => ({
-          id: b.billNo,
-          customer: p.name,
-          product: b.items[0]?.product || 'Unknown',
-          amount: b.totalAmount,
-          date: b.date,
-          status: b.paymentMethod === 'Credit' ? (b.creditAmount > 0 ? 'Credit' : 'Cleared') : 'Paid',
-          shop: b.shop,
-        }))))
-      .sort((a, b) => new Date(convertToYYYYMMDD(b.date)) - new Date(convertToYYYYMMDD(a.date)))
-      .slice(0, 5);
-    res.json(sales);
+    let totalUsers = 0;
+    let creditUsers = 0;
+    let advanceUsers = 0;
+
+    customers.forEach(customer => {
+      customer.profiles.forEach(profile => {
+        if (profile.deleteuser.value) return;
+        totalUsers++;
+        if ((profile.credit || 0) > 0) creditUsers++;
+        if (profile.advance?.value && profile.advance.currentamount > 0) advanceUsers++;
+      });
+    });
+
+    res.json({
+      totalUsers,
+      creditUsers,
+      advanceUsers,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/:shop/credit-sales', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { period, date } = req.query;
+    const CreditSale = getCreditSaleModel(shop);
+
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
+    }
+
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
+
+    const creditSales = await CreditSale.find({
+      shop,
+      isDeleted: false,
+      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+    });
+
+    let totalCreditGiven = 0;
+    let totalCreditReceived = 0;
+    const creditReceivedByMethod = {
+      Cash: 0,
+      Online: 0,
+      Cheque: 0,
+    };
+
+    creditSales.forEach(sale => {
+      totalCreditGiven += sale.totalAmount + sale.paidAmount;
+      totalCreditReceived += sale.paidAmount;
+      sale.paymentHistory.forEach(payment => {
+        if (payment.amount > 0 && payment.date >= startDateStr && payment.date <= endDateStr) {
+          const method = payment.mode || 'Cash';
+          creditReceivedByMethod[method] = (creditReceivedByMethod[method] || 0) + payment.amount;
+        }
+      });
+    });
+
+    res.json({
+      totalCreditGiven,
+      totalCreditReceived,
+      ...creditReceivedByMethod,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/:shop/advance-payments', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { period, date } = req.query;
+    const Customer = getCustomerModel(shop);
+
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
+    }
+
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
+
+    const customers = await Customer.find();
+    let totalAdvance = 0;
+    const advanceByMethod = {
+      Cash: 0,
+      Online: 0,
+      Cheque: 0,
+    };
+
+    customers.forEach(customer => {
+      customer.profiles.forEach(profile => {
+        if (profile.deleteuser.value || !profile.advance?.value) return;
+        profile.advanceHistory.forEach(history => {
+          if (history.transactionType === 'Deposit' && history.date >= startDateStr && history.date <= endDateStr) {
+            totalAdvance += history.amount;
+            const method = profile.advance.paymentMethod || 'Cash';
+            advanceByMethod[method] = (advanceByMethod[method] || 0) + history.amount;
+          }
+        });
+      });
+    });
+
+    res.json({
+      totalAdvance,
+      ...advanceByMethod,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1917,351 +2235,149 @@ app.get('/api/:shop/recent-sales', async (req, res) => {
 app.get('/api/:shop/recent-purchases', async (req, res) => {
   try {
     const { shop } = req.params;
+    const { period, date } = req.query;
     const Stock = getStockModel(shop);
-    const purchases = await Stock.find()
-      .sort({ addedDate: -1 })
-      .limit(5)
-      .select('name quantity price addedDate')
-      .lean();
-    const formattedPurchases = purchases.map(p => ({
-      id: p.id,
-      product: p.name,
-      amount: p.quantity * p.price,
-      customer: 'Stock Supplier',
-      date: convertToDDMMYYYY(p.addedDate),
-    }));
-    res.json(formattedPurchases);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-app.get('/api/:shop/profit-trend', async (req, res) => {
-  try {
-    const { shop } = req.params;
-    const Customer = getCustomerModel(shop);
-    const Expense = getExpenseModel(shop);
-    const months = 4;
-    const profitData = [];
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    for (let i = 0; i < months; i++) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
-      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
-
-      const customers = await Customer.find();
-      const salesRevenue = customers
-        .flatMap(c => c.profiles.flatMap(p => p.bills))
-        .filter(b => convertToYYYYMMDD(b.date) >= monthStart && convertToYYYYMMDD(b.date) <= monthEnd)
-        .reduce((sum, b) => sum + b.totalAmount, 0);
-
-      const expenses = await Expense.find({
-        date: { $gte: monthStart, $lte: monthEnd },
-      });
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-
-      profitData.push({
-        month: date.toLocaleString('default', { month: 'short' }),
-        profit: salesRevenue - totalExpenses,
-      });
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
     }
 
-    res.json(profitData.reverse());
+    const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
+    const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
+
+    const purchases = await Stock.find({
+      addedDate: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
+    }).sort({ addedDate: -1 }).limit(10);
+
+    if (!purchases.length) {
+      return res.json({ message: 'No recent purchases.' });
+    }
+
+    res.json(purchases.map(p => ({
+      product: p.name,
+      quantity: p.quantity,
+      unit: p.unit,
+      price: p.price,
+      category: p.category,
+      date: convertToDDMMYYYY(p.addedDate),
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/:shop/profit-by-method', async (req, res) => {
+app.get('/api/:shop/recent-sales', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { date } = req.query;
+    const { period, date } = req.query;
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
-    const customers = await Customer.find();
-    const creditSales = await CreditSale.find({ isDeleted: false }).lean();
 
-    const sales = customers
-      .flatMap(c => c.profiles
-        .filter(p => !p.deleteuser.value)
-        .flatMap(p => p.bills.map(b => ({
-          ...b,
-          paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
-          profit: b.profit || 0,
-        }))))
-      .filter(b => !date || b.date === date);
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const creditSalesProfit = creditSales
-      .filter(s => !date || s.lastTransactionDate === date)
-      .map(s => ({
-        profit: s.profit || 0,
-        paymentMethod: s.finalPaymentMethod || 'Credit',
-      }));
-
-    const allSales = [...sales, ...creditSalesProfit];
-
-    const profitByMethod = allSales.reduce((acc, sale) => {
-      const method = sale.paymentMethod;
-      acc[method] = (acc[method] || 0) + sale.profit;
-      return acc;
-    }, { Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
-
-    res.json(profitByMethod);
-  } catch (err) {
-    console.error('Fetch profit by method error:', err);
-    res.status(500).json({ error: 'Failed to fetch profit by method: ' + err.message });
-  }
-});
-
-
-app.get('/api/:shop/summary', async (req, res) => {
-  try {
-    const { shop } = req.params;
-    const { date } = req.query;
-    const Customer = getCustomerModel(shop);
-    const Expense = getExpenseModel(shop);
-    const customers = await Customer.find();
-
-    const sales = customers
-      .flatMap(c => c.profiles
-        .filter(p => !p.deleteuser.value)
-        .flatMap(p => p.bills.map(b => ({
-          ...b,
-          profileName: p.name,
-          phoneNumber: c.phoneNumber,
-          paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
-          profit: b.profit || 0, // Default to 0 if missing
-        }))))
-      .filter(b => !date || b.date === date);
-
-    const totalSales = sales.reduce((sum, b) => sum + b.totalAmount, 0);
-    const totalProfit = sales.reduce((sum, b) => sum + b.profit, 0); // Total profit
-    const users = new Set(customers.flatMap(c => c.profiles.map(p => p.name))).size;
-    const creditSales = sales
-      .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
-      .reduce((sum, b) => sum + b.creditAmount, 0);
-    const advancePayments = customers
-      .flatMap(c => c.profiles)
-      .reduce((sum, p) => sum + (p.advance?.currentamount || 0), 0);
-
-    const expenses = await Expense.find({
-      date: date ? convertToYYYYMMDD(date) : { $exists: true },
-    });
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const profit = totalSales - totalExpenses;
-
-    const cashSales = sales
-      .filter(b => b.paymentMethod === 'Cash')
-      .reduce((sum, b) => sum + b.totalAmount, 0);
-    const onlineSales = sales
-      .filter(b => b.paymentMethod === 'Online')
-      .reduce((sum, b) => sum + b.totalAmount, 0);
-    const chequeSales = sales
-      .filter(b => b.paymentMethod === 'Cheque')
-      .reduce((sum, b) => sum + b.totalAmount, 0);
-    const cashProfit = sales
-      .filter(b => b.paymentMethod === 'Cash')
-      .reduce((sum, b) => sum + b.profit, 0); // Profit for Cash
-    const onlineProfit = sales
-      .filter(b => b.paymentMethod === 'Online')
-      .reduce((sum, b) => sum + b.profit, 0); // Profit for Online
-    const chequeProfit = sales
-      .filter(b => b.paymentMethod === 'Cheque')
-      .reduce((sum, b) => sum + b.profit, 0); // Profit for Cheque
-    const advanceUsers = customers
-      .flatMap(c => c.profiles)
-      .filter(p => p.advance?.value && p.advance.currentamount > 0).length;
-    const creditUsers = customers
-      .flatMap(c => c.profiles)
-      .filter(p => p.credit > 0).length;
-    const creditCash = sales
-      .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cash'))
-      .reduce((sum, b) => sum + b.creditAmount, 0);
-    const creditOnline = sales
-      .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Online'))
-      .reduce((sum, b) => sum + b.creditAmount, 0);
-    const creditCheque = sales
-      .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cheque'))
-      .reduce((sum, b) => sum + b.creditAmount, 0);
-    const advanceCash = sales
-      .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cash'))
-      .reduce((sum, b) => sum + b.advanceRemaining, 0);
-    const advanceOnline = sales
-      .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Online'))
-      .reduce((sum, b) => sum + b.advanceRemaining, 0);
-    const advanceCheque = sales
-      .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cheque'))
-      .reduce((sum, b) => sum + b.advanceRemaining, 0);
-
-    res.json({
-      totalSales,
-      totalProfit, // Added
-      cashProfit, // Added
-      onlineProfit, // Added
-      chequeProfit, // Added
-      users,
-      creditSales,
-      advancePayments,
-      cashSales,
-      onlineSales,
-      chequeSales,
-      advanceUsers,
-      creditUsers,
-      creditCash,
-      creditOnline,
-      creditCheque,
-      advanceCash,
-      advanceOnline,
-      advanceCheque,
-      profit,
-    });
-  } catch (err) {
-    console.error('Fetch summary error:', err);
-    res.status(500).json({ error: 'Failed to fetch summary: ' + err.message });
-  }
-});
-
-app.get('/api/summary', async (req, res) => {
-  try {
-    const { date } = req.query;
-    const shops = ['Shop 1', 'Shop 2'];
-    let totalSales = 0;
-    let totalProfit = 0; // Added
-    let cashProfit = 0; // Added
-    let onlineProfit = 0; // Added
-    let chequeProfit = 0; // Added
-    let users = new Set();
-    let creditSales = 0;
-    let advancePayments = 0;
-    let cashSales = 0;
-    let onlineSales = 0;
-    let chequeSales = 0;
-    let advanceUsers = 0;
-    let creditUsers = 0;
-    let creditCash = 0;
-    let creditOnline = 0;
-    let creditCheque = 0;
-    let advanceCash = 0;
-    let advanceOnline = 0;
-    let advanceCheque = 0;
-    let totalExpenses = 0;
-
-    if (date && !validateDate(date)) {
-      return res.status(400).json({ error: 'Invalid date format' });
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
     }
-    // let profit = 0; // Removed duplicate declaration
 
-    for (const shop of shops) {
-      const Customer = getCustomerModel(shop);
-      const Expense = getExpenseModel(shop);
-      const customers = await Customer.find();
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
 
-      const sales = customers
-        .flatMap(c =>
-          c.profiles
-            .filter(p => !p.deleteuser.value)
-            .flatMap(p =>
-              p.bills.map(b => ({
-                ...b,
-                profileName: p.name,
-                phoneNumber: c.phoneNumber,
-                paymentMethod: b.paymentMethod || p.advance?.paymentMethod || p.paymentMethod || 'Cash',
-                profit: b.profit || 0, // Default to 0 if missing
-              }))
-            )
-        )
-        .filter(b => !date || b.date === date);
+    const customers = await Customer.find();
+    const creditSales = await CreditSale.find({
+      shop,
+      isDeleted: false,
+      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+    });
 
-      totalSales += sales.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-      totalProfit += sales.reduce((sum, b) => sum + b.profit, 0); // Added
-      cashProfit += sales
-        .filter(b => b.paymentMethod === 'Cash')
-        .reduce((sum, b) => sum + b.profit, 0); // Added
-      onlineProfit += sales
-        .filter(b => b.paymentMethod === 'Online')
-        .reduce((sum, b) => sum + b.profit, 0); // Added
-      chequeProfit += sales
-        .filter(b => b.paymentMethod === 'Cheque')
-        .reduce((sum, b) => sum + b.profit, 0); // Added
-      customers
-        .flatMap(c => c.profiles.filter(p => !p.deleteuser.value).map(p => p.name))
-        .forEach(name => users.add(name));
-      creditSales += sales
-        .filter(b => b.paymentMethod === 'Credit' && b.creditAmount > 0)
-        .reduce((sum, b) => sum + b.creditAmount, 0);
-      advancePayments += customers
-        .flatMap(c => c.profiles)
-        .reduce((sum, p) => sum + (p.advance?.currentamount || 0), 0);
-      cashSales += sales
-        .filter(b => b.paymentMethod === 'Cash')
-        .reduce((sum, b) => sum + b.totalAmount, 0);
-      onlineSales += sales
-        .filter(b => b.paymentMethod === 'Online')
-        .reduce((sum, b) => sum + b.totalAmount, 0);
-      chequeSales += sales
-        .filter(b => b.paymentMethod === 'Cheque')
-        .reduce((sum, b) => sum + b.totalAmount, 0);
-      advanceUsers += customers
-        .flatMap(c => c.profiles)
-        .filter(p => p.advance?.value && p.advance.currentamount > 0).length;
-      creditUsers += customers
-        .flatMap(c => c.profiles)
-        .filter(p => p.credit > 0).length;
-      creditCash += sales
-        .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cash'))
-        .reduce((sum, b) => sum + b.creditAmount, 0);
-      creditOnline += sales
-        .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Online'))
-        .reduce((sum, b) => sum + b.creditAmount, 0);
-      creditCheque += sales
-        .filter(b => b.paymentMethod === 'Credit' && b.items.some(i => i.paymentMethod === 'Cheque'))
-        .reduce((sum, b) => sum + b.creditAmount, 0);
-      advanceCash += sales
-        .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cash'))
-        .reduce((sum, b) => sum + b.advanceRemaining, 0);
-      advanceOnline += sales
-        .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Online'))
-        .reduce((sum, b) => sum + b.advanceRemaining, 0);
-      advanceCheque += sales
-        .filter(b => b.paymentMethod === 'Advance' && b.items.some(i => i.paymentMethod === 'Cheque'))
-        .reduce((sum, b) => sum + b.advanceRemaining, 0);
+    const sales = [];
 
-      const expenses = await Expense.find({
-        date: date ? convertToYYYYMMDD(date) : { $exists: true },
+    customers.forEach(customer => {
+      customer.profiles.forEach(profile => {
+        if (profile.deleteuser.value) return;
+        profile.bills.forEach(bill => {
+          if (bill.date >= startDateStr && bill.date <= endDateStr) {
+            sales.push({
+              billNo: bill.billNo,
+              customer: profile.name,
+              amount: bill.totalAmount,
+              paymentMethod: bill.paymentMethod || 'Cash',
+              date: bill.date,
+            });
+          }
+        });
       });
-      totalExpenses += expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    });
+
+    creditSales.forEach(sale => {
+      sales.push({
+        billNo: sale.billNumber,
+        customer: sale.customerName,
+        amount: sale.totalAmount + sale.paidAmount,
+        paymentMethod: 'Credit',
+        date: sale.lastTransactionDate,
+      });
+    });
+
+    sales.sort((a, b) => new Date(b.date.split('-').reverse().join('-')) - new Date(a.date.split('-').reverse().join('-')));
+
+    if (!sales.length) {
+      return res.json({ message: 'No recent sales.' });
     }
 
-    const profit = totalSales - totalExpenses;
-
-    res.json({
-      totalSales,
-      totalProfit, // Added
-      cashProfit, // Added
-      onlineProfit, // Added
-      chequeProfit, // Added
-      users: users.size,
-      creditSales,
-      advancePayments,
-      cashSales,
-      onlineSales,
-      chequeSales,
-      advanceUsers,
-      creditUsers,
-      creditCash,
-      creditOnline,
-      creditCheque,
-      advanceCash,
-      advanceOnline,
-      advanceCheque,
-      profit,
-    });
+    res.json(sales.slice(0, 10));
   } catch (err) {
-    console.error('Fetch combined summary error:', err);
-    res.status(500).json({ error: 'Failed to fetch combined summary: ' + err.message });
+    res.status(500).json({ error: err.message });
   }
 });
+
+
+
 
 // Start Server
 app.listen(PORT, () => {
