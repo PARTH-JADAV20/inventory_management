@@ -19,7 +19,7 @@ function App() {
   const [maskedPhone, setMaskedPhone] = useState("");
   const [statusMsg, setStatusMsg] = useState("");
   const [confirmationResult, setConfirmationResult] = useState(null);
-  const phoneNumber = "+919265517355"; // Replace with a valid number
+  const phoneNumber = import.meta.env.VITE_PHONE; 
   const recaptchaVerifier = useRef(null);
 
   const initializeRecaptcha = async (retryCount = 0, maxRetries = 3) => {
@@ -137,9 +137,9 @@ function App() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post("http://localhost:5000/auth/login", { username, password });
+      const res = await axios.post("https://d3o2vhbxligxnl.cloudfront.net/auth/login", { username, password });
       if (res.data.success) {
-        window.location.href = "http://localhost:5174/salespage?auth=true";
+        window.location.href = "https://inventory-tool-1.netlify.app/salespage?auth=true";
       } else {
         setStatusMsg(res.data.message || "Login failed.");
       }
@@ -165,15 +165,15 @@ function App() {
           setStatusMsg("reCAPTCHA not ready. Please refresh and try again.");
           return;
         }
-        console.log("Verifying reCAPTCHA...");
-        await recaptchaVerifier.current.verify();
-        console.log("Sending OTP to:", phoneNumber);
-        const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier.current);
-        setConfirmationResult(result);
-        setShowReset(true);
-        setStatusMsg(`OTP sent to ${maskedPhone}. Please enter the code.`);
-        console.log("OTP sent successfully");
       }
+      console.log("Verifying reCAPTCHA...");
+      await recaptchaVerifier.current.verify();
+      console.log("Sending OTP to:", phoneNumber);
+      const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier.current);
+      setConfirmationResult(result);
+      setShowReset(true);
+      setStatusMsg(`OTP sent to ${maskedPhone}. Please enter the code.`);
+      console.log("OTP sent successfully");
     } catch (err) {
       console.error("OTP send error:", err, {
         code: err.code,
@@ -220,7 +220,7 @@ function App() {
     setStatusMsg("Verifying OTP...");
     try {
       await confirmationResult.confirm(otp);
-      const res = await axios.post("http://localhost:5000/auth/reset", {
+      const res = await axios.post("https://d3o2vhbxligxnl.cloudfront.net/auth/reset", {
         newUsername,
         newPassword,
         phoneNumber,
@@ -330,7 +330,6 @@ function App() {
                 placeholder="New Username"
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                required
               />
               <input
                 type="password"

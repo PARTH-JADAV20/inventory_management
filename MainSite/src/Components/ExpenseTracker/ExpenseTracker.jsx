@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { ShopContext } from '../ShopContext/ShopContext';
 import { parse, format } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
 import { fetchExpenses, addExpense, updateExpense, deleteExpense } from "../api";
@@ -6,7 +7,7 @@ import "./ExpenseTracker.css";
 
 const ExpenseTracker = () => {
   const today = format(new Date(), "dd-MM-yyyy");
-  const [shop, setShop] = useState("Shop 1");
+  const { shop, setShop } = useContext(ShopContext)
   const [expenses, setExpenses] = useState([]);
   const [formData, setFormData] = useState({
     date: today,
@@ -218,8 +219,8 @@ const ExpenseTracker = () => {
             </thead>
             <tbody>
               ${filteredExpenses
-                .map(
-                  (exp) => `
+        .map(
+          (exp) => `
                 <tr>
                   <td>${format(new Date(exp.date), "dd-MM-yyyy")}</td>
                   <td>${exp.category}</td>
@@ -229,8 +230,8 @@ const ExpenseTracker = () => {
                   <td>${exp.paymentMode}</td>
                 </tr>
               `
-                )
-                .join("")}
+        )
+        .join("")}
             </tbody>
           </table>
         </body>
@@ -277,14 +278,7 @@ const ExpenseTracker = () => {
       {error && <div className="error-message">{error}</div>}
       {loading && <div className="loading-message">Loading...</div>}
       <div className="form-container">
-        <h2>{editingExpense ? "Edit Expense" : "Add Expenses"}</h2>
-        <div className="shop-selector">
-          <label>Shop:</label>
-          <select value={shop} onChange={handleShopChange} disabled={loading}>
-            <option value="Shop 1">Shop 1</option>
-            <option value="Shop 2">Shop 2</option>
-          </select>
-        </div>
+        <h2>{editingExpense ? "Edit Expense" : "Add Expenses"} for {shop}</h2>
         <form className="expense-form" onSubmit={handleSubmit}>
           {/* Rest of the form remains unchanged */}
           <div className="form-group">

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useContext } from "react";
 import { format } from "date-fns";
 import { Search, Plus, Download, AlertCircle, Undo, Delete } from "lucide-react";
 import AddCreditSale from "../Components/CreditSales/AddCreditSale";
 import CreditDetailsModal from "../Components/CreditSales/CreditDetailsModal";
 import { fetchCreditSales, closeCreditSale, fetchCurrentStock, restoreCreditSale, permanentDeleteCreditSale } from "../Components/api";
+import { ShopContext } from "../Components/ShopContext/ShopContext";
 import "./CreditSales.css";
 
 // Custom debounce function
@@ -16,7 +17,7 @@ const debounce = (func, wait) => {
 };
 
 const CreditSalesDashboard = () => {
-  const [shop, setShop] = useState("Shop 1"); // State for selected shop
+  const { shop } = useContext(ShopContext); // State for selected shop
   const [creditSales, setCreditSales] = useState([]);
   const [stock, setStock] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -87,11 +88,6 @@ const CreditSalesDashboard = () => {
     const value = e.target.value;
     setSearchTerm(value);
     debouncedFetchData(value);
-  };
-
-  const handleShopChange = (e) => {
-    setShop(e.target.value);
-    setPage(1); // Reset to first page when shop changes
   };
 
   const filteredSales = creditSales.filter((sale) => {
@@ -333,13 +329,6 @@ const CreditSalesDashboard = () => {
   return (
     <div className="credit-sales-dashboard-dax">
       <h1>Credit Sales Dashboard</h1>
-      <div className="shop-selector-dax">
-        <label>Select Shop: </label>
-        <select value={shop} onChange={handleShopChange} disabled={loading}>
-          <option value="Shop 1">Shop 1</option>
-          <option value="Shop 2">Shop 2</option>
-        </select>
-      </div>
       <div className="summary-cards-dax">
         <div className="summary-card-dax">
           <h3>Active Credit Customers</h3>

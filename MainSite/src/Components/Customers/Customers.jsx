@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import { ShopContext } from '../ShopContext/ShopContext';
 import { Pencil, Save, Trash2 } from "lucide-react";
 import { fetchCustomers as apiGetCustomers, updateCustomerProfile, softDeleteCustomerProfileNew, restoreCustomerProfile, permanentDeleteCustomerProfile } from "../api.js";
 import "./Customers.css";
@@ -6,7 +7,7 @@ import "./Customers.css";
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [deletedProfiles, setDeletedProfiles] = useState([]);
-  const [shop, setShop] = useState("Shop 1");
+  const { shop, setShop } = useContext(ShopContext)
   const [searchTerm, setSearchTerm] = useState("");
   const [editedProfile, setEditedProfile] = useState(null);
   const [selectedBills, setSelectedBills] = useState(null);
@@ -103,6 +104,15 @@ const Customers = () => {
     checkDeletedProfiles();
     const interval = setInterval(checkDeletedProfiles, 24 * 60 * 60 * 1000);
     return () => clearInterval(interval);
+  }, [shop]);
+
+  useEffect(() => {
+    setSearchTerm("");
+    setEditedProfile(null);
+    setSelectedBills(null);
+    setSelectedAdvanceDetails(null);
+    setShowDeleted(false);
+    setPage(1);
   }, [shop]);
 
   const filteredCustomers = customers.filter(
@@ -366,24 +376,6 @@ const Customers = () => {
       {loading && <div className="loading-message">Loading...</div>}
       {error && <div className="error">{error}</div>}
       <div className="customers-header-p2">
-        <div className="shop-selector-p2">
-          <label>Shop</label>
-          <select
-            value={shop}
-            onChange={(e) => {
-              setShop(e.target.value);
-              setSearchTerm("");
-              setEditedProfile(null);
-              setSelectedBills(null);
-              setSelectedAdvanceDetails(null);
-              setShowDeleted(false);
-              setPage(1);
-            }}
-          >
-            <option value="Shop 1">Shop 1</option>
-            <option value="Shop 2">Shop 2</option>
-          </select>
-        </div>
         <h2>Customer Management - {shop}</h2>
         <div className="summary-stats-p2">
           <p>Total Customers: {totalCustomers}</p>

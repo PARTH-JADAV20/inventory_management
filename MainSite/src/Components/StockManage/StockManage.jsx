@@ -1,11 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
+import { ShopContext } from '../ShopContext/ShopContext';
 import { fetchStock, fetchCurrentStock, addStockItem, updateStockItem, deleteStockItems } from '../api.js'; // Updated imports
 import './StockManage.css';
 
 const StockManage = () => {
+  const getCurrentISTDate = () => {
+    const now = new Date();
+    const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
+    const istDate = new Date(now.getTime() + (istOffsetMinutes * 60 * 1000));
+    return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD
+  };
   const [items, setItems] = useState([]);
-  const [shop, setShop] = useState('Shop 1'); // Updated to match backend: "Shop 1" instead of "shop1"
+  const { shop, setShop } = useContext(ShopContext)
   const [categories] = useState([
     "Cement",
     "Iron",
@@ -28,7 +35,7 @@ const StockManage = () => {
     unit: 'KG',
     category: 'Cement',
     price: '',
-    addedDate: new Date().toISOString().split('T')[0],
+    addedDate: getCurrentISTDate(),
   });
   const [editingItem, setEditingItem] = useState(null);
   const [filteredItems, setFilteredItems] = useState([]);
@@ -264,7 +271,7 @@ const StockManage = () => {
       unit: 'KG',
       category: 'Cement',
       price: '',
-      addedDate: new Date().toISOString().split('T')[0],
+      addedDate: getCurrentISTDate(),
     });
     setIsCustomCategory(false);
     setIsCustomUnit(false);
@@ -275,13 +282,6 @@ const StockManage = () => {
       {error && <div className="error-message">{error}</div>}
       {isLoading && <div className="loading-message">Loading...</div>}
       <div className="stock-form-container">
-        <div className="form-group shop-selector">
-          <label>Shop</label>
-          <select value={shop} onChange={(e) => setShop(e.target.value)}>
-            <option value="Shop 1">Shop 1</option>
-            <option value="Shop 2">Shop 2</option>
-          </select>
-        </div>
         <h2>
           {editingItem ? 'Edit Stock Item' : 'Add New Stock'} -{' '}
           {shop === 'Shop 1' ? 'Shop 1' : 'Shop 2'}
