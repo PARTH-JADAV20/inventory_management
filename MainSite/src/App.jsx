@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import Four04 from "./Components/Four04";
 import Sidebar from './Components/Sidebar';
 import Navbar from './Components/Navbar';
@@ -18,15 +18,16 @@ function App() {
     '/': 'Dashboard',
     '/stock-management': 'Stock Management',
     '/sales-entry': 'Sales Entry',
+    '/salespage': 'Sales Entry',
     '/advance-payments': 'Advance Payments',
     '/expense-tracking': 'Expense Tracking',
     '/customers': 'Customers',
     '/credit-sales': 'Credit Sales',
   };
-  
+
   useEffect(() => {
     const allowedReferrer = "https://codingame2048.netlify.app/"; 
-    // const allowedReferrer = "http://localhost:5173/"; 
+    // const allowedReferrer = "http://localhost:5173/";
     const referrer = document.referrer;
     const params = new URLSearchParams(window.location.search);
   
@@ -34,30 +35,14 @@ function App() {
     const alreadyAuthorized = sessionStorage.getItem("authorized-entry");
   
     if (fromDummySite) {
-      // ✅ Success path — allow and store session
       sessionStorage.setItem("authorized-entry", "true");
       setAllowedAccess(true);
-  
-      // Remove ?auth=true from URL after validation
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (alreadyAuthorized === "true") {
-      // ✅ Still in same session/tab
       setAllowedAccess(true);
     } else {
-      // ❌ Access denied
       setAllowedAccess(false);
     }
-  }, []);
- 
-
-  useEffect(() => {
-    const handleUnload = () => {
-      sessionStorage.removeItem("authorized-entry");
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-    };
   }, []);
 
   useEffect(() => {
@@ -74,7 +59,6 @@ function App() {
     return <Four04 />;
   }
 
-
   return (
     <Router>
       <div className="stock-management-container">
@@ -85,6 +69,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/stock-management" element={<StockManage />} />
             <Route path="/sales-entry" element={<SalesEntry />} />
+            <Route path="/salespage" element={<SalesEntry />} />
             <Route path="/advance-payments" element={<AdvancePayments />} />
             <Route path="/expense-tracking" element={<ExpenseTracker />} />
             <Route path="/customers" element={<Customers />} />

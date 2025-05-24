@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { ShopContext } from '../ShopContext/ShopContext.jsx';
 import { Plus, Trash2 } from "lucide-react";
 import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber, addCreditSale } from "../api.js";
 import "./SalesEntry.css";
@@ -12,15 +13,22 @@ const formatDateToDDMMYYYY = (dateStr) => {
   return `${day}-${month}-${year}`;
 };
 
+const getCurrentISTDate = () => {
+  const now = new Date();
+  const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
+  const istDate = new Date(now.getTime() + (istOffsetMinutes * 60 * 1000));
+  return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD
+};
+
 const SalesEntry = () => {
+  const { shop, setShop } = useContext(ShopContext)
   const [customers, setCustomers] = useState([]);
   const [stock, setStock] = useState([]);
   const [groupedStock, setGroupedStock] = useState([]);
   const [sales, setSales] = useState([]);
-  const [shop, setShop] = useState("Shop 1");
   const [newSale, setNewSale] = useState({
     billNo: "",
-    date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
+    date: formatDateToDDMMYYYY(getCurrentISTDate()),
     profileName: "",
     phoneNumber: "",
     paymentType: "Cash",
@@ -39,12 +47,6 @@ const SalesEntry = () => {
   const [isDateEditable, setIsDateEditable] = useState(false);
   const [isItemSearchManual, setIsItemSearchManual] = useState(false);
   const [advanceSearchTerm, setAdvanceSearchTerm] = useState("");
-  const getCurrentISTDate = () => {
-    const now = new Date();
-    const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
-    const istDate = new Date(now.getTime() + (istOffsetMinutes * 60 * 1000));
-    return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD
-  };
   const [filterDate, setFilterDate] = useState(formatDateToDDMMYYYY(getCurrentISTDate()));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -121,6 +123,25 @@ const SalesEntry = () => {
     };
     loadSales();
   }, [shop, filterDate, searchTerm]);
+
+  useEffect(() => {
+    setNewSale({
+      billNo: '',
+      date: formatDateToDDMMYYYY(getCurrentISTDate()),
+      profileName: '',
+      phoneNumber: '',
+      paymentType: 'Cash',
+      items: [],
+      otherExpenses: '0',
+    });
+    setCurrentItem({ product: '', qty: '', unit: '', pricePerQty: '', category: '' });
+    setAdvanceSearchTerm('');
+    setSearchTerm('');
+    setIsCustomUnit(false);
+    setIsDateEditable(false);
+    setIsItemSearchManual(false);
+    setWarning('');
+  }, [shop]);
 
   const getGroupedStock = () => {
     const mergedStock = groupedStock.reduce((acc, item) => {
@@ -589,10 +610,6 @@ const SalesEntry = () => {
               <td colspan="3">Grand Total</td>
               <td>₹${(bill.totalAmount).toFixed(2)}</td>
             </tr>
-            <tr className="total">
-              <td colspan="3">Profit</td>
-              <td>₹${parseInt(bill.profit || 0)}</td>
-            </tr>
   `;
 
     if (bill.advanceRemaining !== undefined) {
@@ -683,28 +700,6 @@ const SalesEntry = () => {
       {warning}
       <div className="sales-form-container-p">
         <div className="form-group-p shop-selector-p">
-          <label>Shop</label>
-          <select value={shop} onChange={(e) => {
-            setShop(e.target.value);
-            setNewSale({
-              billNo: "",
-              date: formatDateToDDMMYYYY(new Date().toISOString().split("T")[0]),
-              profileName: "",
-              phoneNumber: "",
-              paymentType: "Cash",
-              items: [],
-            });
-            setCurrentItem({ product: "", qty: "", unit: "", pricePerQty: "", category: "" });
-            setAdvanceSearchTerm("");
-            setSearchTerm("");
-            setIsCustomUnit(false);
-            setIsDateEditable(false);
-            setIsItemSearchManual(false);
-            setWarning("");
-          }}>
-            <option value="Shop 1">Shop 1</option>
-            <option value="Shop 2">Shop 2</option>
-          </select>
         </div>
         <h2>New Sale Entry - {shop}</h2>
         <div className="sales-form-p">
@@ -1052,7 +1047,7 @@ const SalesEntry = () => {
                   {salesByDate[date]
                     .sort((a, b) => a.billNo.localeCompare(b.billNo))
                     .map((sale) => (
-                      <tr key={sale.billNo} title={`Profit: ${sale.profit}`}>
+                      <tr key={sale.billNo}>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           {sale.profileName}
                         </td>

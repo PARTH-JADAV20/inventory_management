@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { ShopContext } from '../ShopContext/ShopContext';
 import { Pencil, Save, Trash2, MoreVertical, Receipt, History } from "lucide-react";
 import * as apiService from "../api";
 import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
+  const getCurrentISTDate = () => {
+    const now = new Date();
+    const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
+    const istDate = new Date(now.getTime() + (istOffsetMinutes * 60 * 1000));
+    return istDate.toISOString().split("T")[0]; // Returns YYYY-MM-DD
+  };
   const [customers, setCustomers] = useState([]);
-  const [shop, setShop] = useState("Shop 1");
+  const { shop, setShop } = useContext(ShopContext)
   const [newPayment, setNewPayment] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: getCurrentISTDate(),
     customerName: "",
     phoneNumber: "",
     profileId: "",
@@ -25,7 +32,7 @@ const AdvancePayments = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
-  const [limit] = useState(25); 
+  const [limit] = useState(25);
   const [totalCustomersCount, setTotalCustomersCount] = useState(0);
 
   const formatDateToDDMMYYYY = (dateStr) => {
@@ -226,7 +233,7 @@ const AdvancePayments = () => {
 
       await loadCustomers();
       setNewPayment({
-        date: new Date().toISOString().split("T")[0],
+        date: getCurrentISTDate(),
         customerName: "",
         phoneNumber: "",
         profileId: "",
@@ -244,6 +251,25 @@ const AdvancePayments = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setNewPayment({
+      date: getCurrentISTDate(),
+      customerName: "",
+      phoneNumber: "",
+      profileId: "",
+      advanceAmount: "",
+      newProfileName: "",
+      paymentMethod: "Cash",
+    });
+    setSearchTerm("");
+    setSelectedBills(null);
+    setSelectedHistory(null);
+    setIsExistingCustomer(false);
+    setEditingProfile(null);
+    setEditedProfile(null);
+    setPage(1);
+  }, [shop]);
 
   const handleEditStart = (profile, phoneNumber) => {
     if (editingProfile?.profileId === profile.profileId) {
@@ -426,34 +452,6 @@ const AdvancePayments = () => {
       {loading && <div className="loading-message">Loading...</div>}
       {error && <div className="error">{error}</div>}
       <div className="advance-payment-form-container">
-        <div className="form-group shop-selector">
-          <label>Shop</label>
-          <select
-            value={shop}
-            onChange={(e) => {
-              setShop(e.target.value);
-              setNewPayment({
-                date: new Date().toISOString().split("T")[0],
-                customerName: "",
-                phoneNumber: "",
-                profileId: "",
-                advanceAmount: "",
-                newProfileName: "",
-                paymentMethod: "Cash",
-              });
-              setSearchTerm("");
-              setSelectedBills(null);
-              setSelectedHistory(null);
-              setIsExistingCustomer(false);
-              setEditingProfile(null);
-              setEditedProfile(null);
-              setPage(1);
-            }}
-          >
-            <option value="Shop 1">Shop 1</option>
-            <option value="Shop 2">Shop 2</option>
-          </select>
-        </div>
         <h2 className="form-title">Add New Advance Payment - {shop}</h2>
         <div className="advance-payment-form">
           <div className="form-group">
