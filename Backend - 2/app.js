@@ -25,6 +25,12 @@ mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Schemas
+const adminSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  phone: { type: String, required: true, unique: true }
+});
+
 const stockSchema = new mongoose.Schema({
   id: { type: String, default: uuidv4 },
   name: { type: String, required: true },
@@ -167,6 +173,7 @@ const Expense2 = mongoose.model('Expense2', expenseSchema);
 const Counter = mongoose.model('Counter', counterSchema);
 const CreditSale1 = mongoose.model('CreditSale1', creditSaleSchema);
 const CreditSale2 = mongoose.model('CreditSale2', creditSaleSchema);
+const Admin = mongoose.model('Admin', adminSchema);
 
 // Helper Functions
 const getStockModel = (shop) => (shop === 'Shop 1' ? Stock1 : Stock2);
@@ -2376,8 +2383,39 @@ app.get('/api/:shop/recent-sales', async (req, res) => {
   }
 });
 
+app.post('/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const admin = await Admin.findOne({ username });
+    if (!admin) return res.json({ success: false, message: 'User not found' });
 
+    // For simplicity, plain text check (use bcrypt in real apps)
+    if (admin.password !== password) return res.json({ success: false, message: 'Incorrect password' });
 
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Reset credentials route
+app.post('/auth/reset', async (req, res) => {
+  const { newUsername, newPassword, phoneNumber } = req.body;
+  try {
+    const admin = await Admin.findOne({ phone: phoneNumber });
+    if (!admin) return res.json({ success: false, message: 'Admin not found for phoneNumber' });
+    // Update credentials
+    if(newUsername) {admin.username = newUsername;}
+    if(newPassword) {admin.password = newPassword;}
+    await admin.save();
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 // Start Server
 app.listen(PORT, () => {
