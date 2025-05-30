@@ -404,9 +404,10 @@ const Customers = () => {
           <table className="customers-table-p2">
             <thead>
               <tr>
+                <th>Sr.No</th>
                 <th>Contractor</th>
-                <th>Phone Number</th>
                 <th>Profile</th>
+                <th>Phone Number</th>
                 <th>Total Purchased</th>
                 <th>Payment Type</th>
                 <th>Advance</th>
@@ -414,11 +415,12 @@ const Customers = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.map((customer) => {
+              {filteredCustomers.map((customer, index) => {
                 const commonName = getCommonName(customer.profiles);
                 return (
                   <React.Fragment key={customer.phoneNumber}>
                     <tr className="contractor-row">
+                      <td style={{fontWeight:"bolder", color : "#ff6b2c"}}>{(page - 1) * limit + index + 1}</td>
                       <td colSpan={7}>
                         <button className="contractor-toggle">
                           {commonName} ({Array.isArray(customer.profiles) ? customer.profiles.filter((p) => !p.deleteuser?.value).length : 0} profiles)
@@ -430,6 +432,7 @@ const Customers = () => {
                         .filter((profile) => !profile.deleteuser?.value)
                         .map((profile) => (
                           <tr key={profile.profileId}>
+                            <td></td>
                             <td>
                               {editedProfile &&
                                 editedProfile.profileId === profile.profileId ? (
@@ -449,20 +452,6 @@ const Customers = () => {
                                 editedProfile.profileId === profile.profileId ? (
                                 <input
                                   type="text"
-                                  name="phoneNumber"
-                                  value={editedProfile.phoneNumber}
-                                  onChange={handleInputChange}
-                                  className="inline-edit-input-p2"
-                                />
-                              ) : (
-                                customer.phoneNumber
-                              )}
-                            </td>
-                            <td>
-                              {editedProfile &&
-                                editedProfile.profileId === profile.profileId ? (
-                                <input
-                                  type="text"
                                   name="name"
                                   value={editedProfile.name}
                                   onChange={handleInputChange}
@@ -470,6 +459,20 @@ const Customers = () => {
                                 />
                               ) : (
                                 profile.name
+                              )}
+                            </td>
+                            <td>
+                              {editedProfile &&
+                                editedProfile.profileId === profile.profileId ? (
+                                <input
+                                  type="text"
+                                  name="phoneNumber"
+                                  value={editedProfile.phoneNumber}
+                                  onChange={handleInputChange}
+                                  className="inline-edit-input-p2"
+                                />
+                              ) : (
+                                customer.phoneNumber
                               )}
                             </td>
                             <td>₹{calculateTotalPurchased(profile.bills)}</td>
@@ -600,151 +603,161 @@ const Customers = () => {
         </div>
       )}
 
-      {!showDeleted && (
-        <div className="pagination-controls">
-          {filteredCustomers.length > 0 && page * limit < totalCustomersCount && (
-            <button
-              className="load-more-btn"
-              onClick={() => setPage((prev) => prev + 1)}
-              disabled={loading}
-            >
-              Load More
-            </button>
-          )}
-        </div>
-      )}
-
-      {selectedAdvanceDetails && (
-        <div className="modal-overlay">
-          <div className="modal-content advance-modal-content-p2">
-            <button className="close-btn" onClick={handleCloseAdvanceModal}>
-              Close
-            </button>
-            <h2>Advance Details for {selectedAdvanceDetails.name}</h2>
-            <div className="advance-details-content-p2">
-              <p>
-                <strong>Advance Given:</strong> ₹{selectedAdvanceDetails.advanceGiven || 0}
-              </p>
-              <p>
-                <strong>Advance Used:</strong> ₹{selectedAdvanceDetails.advanceUsed || 0}
-              </p>
-              <p>
-                <strong>Balance:</strong> ₹{selectedAdvanceDetails.balance || 0}
-              </p>
-            </div>
-            <h3>Advance History</h3>
-            {Array.isArray(selectedAdvanceDetails.advanceHistory) && selectedAdvanceDetails.advanceHistory.length > 0 ? (
-              <table className="history-table-p2">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Transaction Type</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedAdvanceDetails.advanceHistory.map((entry, index) => (
-                    <tr key={index}>
-                      <td>{formatDate(entry.date)}</td>
-                      <td>{entry.transactionType}</td>
-                      <td>₹{entry.amount}</td>
+      <div className="pagination-controls">
+        {page > 1 && (
+          <button
+            className="load-more-btn"
+            onClick={() => setPage((prev) => prev - 1)}
+            disabled={loading}
+          >
+            Previous Page
+          </button>
+        )}
+        {filteredCustomers.length > 0 && page * limit < totalCustomersCount && (
+          <button
+            className="load-more-btn"
+            onClick={() => setPage((prev) => prev + 1)}
+            disabled={loading}
+          >
+            Load More
+          </button>
+        )}
+      </div>
+      {
+        selectedAdvanceDetails && (
+          <div className="modal-overlay">
+            <div className="modal-content advance-modal-content-p2">
+              <button className="close-btn" onClick={handleCloseAdvanceModal}>
+                Close
+              </button>
+              <h2>Advance Details for {selectedAdvanceDetails.name}</h2>
+              <div className="advance-details-content-p2">
+                <p>
+                  <strong>Advance Given:</strong> ₹{selectedAdvanceDetails.advanceGiven || 0}
+                </p>
+                <p>
+                  <strong>Advance Used:</strong> ₹{selectedAdvanceDetails.advanceUsed || 0}
+                </p>
+                <p>
+                  <strong>Balance:</strong> ₹{selectedAdvanceDetails.balance || 0}
+                </p>
+              </div>
+              <h3>Advance History</h3>
+              {Array.isArray(selectedAdvanceDetails.advanceHistory) && selectedAdvanceDetails.advanceHistory.length > 0 ? (
+                <table className="history-table-p2">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Transaction Type</th>
+                      <th>Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p>No advance history available.</p>
-            )}
-            <button
-              className="show-bills-btn-p2"
-              onClick={() =>
-                handleShowBills(
-                  Array.isArray(selectedAdvanceDetails.bills) ? selectedAdvanceDetails.bills : [],
-                  selectedAdvanceDetails.name,
-                  selectedAdvanceDetails.phoneNumber
-                )
-              }
-              disabled={!Array.isArray(selectedAdvanceDetails.bills) || selectedAdvanceDetails.bills.length === 0}
-            >
-              Show Bills
-            </button>
+                  </thead>
+                  <tbody>
+                    {selectedAdvanceDetails.advanceHistory.map((entry, index) => (
+                      <tr key={index}>
+                        <td>{formatDate(entry.date)}</td>
+                        <td>{entry.transactionType}</td>
+                        <td>₹{entry.amount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p>No advance history available.</p>
+              )}
+              <button
+                className="show-bills-btn-p2"
+                onClick={() =>
+                  handleShowBills(
+                    Array.isArray(selectedAdvanceDetails.bills) ? selectedAdvanceDetails.bills : [],
+                    selectedAdvanceDetails.name,
+                    selectedAdvanceDetails.phoneNumber
+                  )
+                }
+                disabled={!Array.isArray(selectedAdvanceDetails.bills) || selectedAdvanceDetails.bills.length === 0}
+              >
+                Show Bills
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-      {selectedBills && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <button className="close-btn" onClick={handleCloseBillsModal}>
-              Close
-            </button>
-            <h2>Bill Details for {selectedBills.profileName}</h2>
-            <p>Phone Number: {selectedBills.phoneNumber}</p>
-            {!Array.isArray(selectedBills.bills) || selectedBills.bills.length === 0 ? (
-              <p>No bills available for this profile.</p>
-            ) : (
-              selectedBills.bills.map((bill) => (
-                <div key={bill.billNo} className="bill-details">
-                  <h3>Bill No: {bill.billNo}</h3>
-                  <p>Date: {bill.date || "N/A"}</p>
-                  <p>Payment Type: {bill.paymentMethod ?? "N/A"}</p>
-                  <table className="bill-table">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th>Qty</th>
-                        <th>Price/Qty</th>
-                        <th>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.isArray(bill.items) ? bill.items.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.product}</td>
-                          <td>{item.qty}</td>
-                          <td>₹{item.pricePerQty}</td>
-                          <td>₹{item.amount}</td>
+      {
+        selectedBills && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <button className="close-btn" onClick={handleCloseBillsModal}>
+                Close
+              </button>
+              <h2>Bill Details for {selectedBills.profileName}</h2>
+              <p>Phone Number: {selectedBills.phoneNumber}</p>
+              {!Array.isArray(selectedBills.bills) || selectedBills.bills.length === 0 ? (
+                <p>No bills available for this profile.</p>
+              ) : (
+                selectedBills.bills.map((bill) => (
+                  <div key={bill.billNo} className="bill-details">
+                    <h3>Bill No: {bill.billNo}</h3>
+                    <p>Date: {bill.date || "N/A"}</p>
+                    <p>Payment Type: {bill.paymentMethod ?? "N/A"}</p>
+                    <table className="bill-table">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Qty</th>
+                          <th>Price/Qty</th>
+                          <th>Amount</th>
                         </tr>
-                      )) : null}
-                      <tr className="total">
-                        <td colSpan={3}>Other Expenses</td>
-                        <td>₹{bill.otherExpenses}</td>
-                      </tr>
-                      <tr className="total">
-                        <td colSpan={3}>Total Amount</td>
-                        <td>₹{bill.totalAmount}</td>
-                      </tr>
-                      <tr className="total">
-                        <td colspan={3}>Profit</td>
-                        <td>₹{parseInt(bill.profit)}</td>
-                      </tr>
-                      {bill.advanceRemaining !== undefined && (
+                      </thead>
+                      <tbody>
+                        {Array.isArray(bill.items) ? bill.items.map((item, index) => (
+                          <tr key={index}>
+                            <td>{item.product}</td>
+                            <td>{item.qty}</td>
+                            <td>₹{item.pricePerQty}</td>
+                            <td>₹{item.amount}</td>
+                          </tr>
+                        )) : null}
                         <tr className="total">
-                          <td colSpan={3}>Advance Remaining</td>
-                          <td>₹{bill.advanceRemaining}</td>
+                          <td colSpan={3}>Other Expenses</td>
+                          <td>₹{bill.otherExpenses}</td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                  <button
-                    className="print-btn"
-                    onClick={() =>
-                      handlePrintBill(
-                        bill,
-                        selectedBills.profileName,
-                        selectedBills.phoneNumber
-                      )
-                    }
-                  >
-                    Print Bill
-                  </button>
-                </div>
-              ))
-            )}
+                        <tr className="total">
+                          <td colSpan={3}>Total Amount</td>
+                          <td>₹{bill.totalAmount}</td>
+                        </tr>
+                        <tr className="total">
+                          <td colspan={3}>Profit</td>
+                          <td>₹{parseInt(bill.profit)}</td>
+                        </tr>
+                        {bill.advanceRemaining !== undefined && (
+                          <tr className="total">
+                            <td colSpan={3}>Advance Remaining</td>
+                            <td>₹{bill.advanceRemaining}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <button
+                      className="print-btn"
+                      onClick={() =>
+                        handlePrintBill(
+                          bill,
+                          selectedBills.profileName,
+                          selectedBills.phoneNumber
+                        )
+                      }
+                    >
+                      Print Bill
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

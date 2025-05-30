@@ -18,8 +18,8 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // MongoDB Connection
-mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-// mongoose.connect('mongodb://localhost:27017/', {
+// mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -69,7 +69,7 @@ const billSchema = new mongoose.Schema({
 });
 
 const advanceHistorySchema = new mongoose.Schema({
-  transactionType: { type: String, enum: ['Deposit', 'Refund'], required: true },
+  transactionType: { type: String, enum: ['Deposit', 'Refund', 'Return'], required: true },
   amount: { type: Number, required: true },
   date: { type: String, required: true },
 });
@@ -103,6 +103,19 @@ const profileSchema = new mongoose.Schema({
     paymentMethod: String,
     otherExpenses: { type: Number, default: 0 },
     profit: { type: Number, default: 0 },
+  }],
+  returns: [{
+    returnId: { type: String, default: uuidv4 },
+    billNo: { type: String, required: true },
+    date: { type: String, required: true }, 
+    items: [{
+      product: { type: String, required: true },
+      qty: { type: Number, required: true },
+      unit: { type: String, required: true },
+      pricePerQty: { type: Number, required: true }, 
+      purchasePrice: { type: Number, required: true }, 
+    }],
+    returnAmount: { type: Number, required: true }, 
   }],
   deleteuser: {
     value: Boolean,
@@ -376,6 +389,7 @@ app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
     const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
+    console.log(paymentMethod)
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
 
@@ -387,7 +401,7 @@ app.post('/api/:shop/sales', async (req, res) => {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
-        .sort({ addedDate: -1 });
+        .sort({ addedDate: 1 });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
       if (totalQty < item.qty) {
         return res.status(400).json({ error: `Insufficient stock for ${item.product}` });
@@ -428,14 +442,6 @@ app.post('/api/:shop/sales', async (req, res) => {
     let finalPaymentMethod = paymentMethod;
 
     let customer = await Customer.findOne({ phoneNumber });
-    if (customer) {
-      const profile = customer.profiles.find(p => p.name === profileName && !p.deleteuser.value);
-      if (profile && paymentMethod === 'Advance' && profile.advance?.value) {
-        finalPaymentMethod = profile.advance.paymentMethod || paymentMethod;
-      } else if (profile) {
-        finalPaymentMethod = paymentMethod;
-      }
-    }
 
     const bill = {
       billNo,
@@ -540,11 +546,10 @@ app.post('/api/:shop/sales', async (req, res) => {
       await customer.save();
     }
 
-    // Deduct stock using LIFO
     for (const item of items) {
       let qtyToDeduct = item.qty;
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
-        .sort({ addedDate: -1 });
+        .sort({ addedDate: 1 });
       for (const stockItem of stockItems) {
         if (qtyToDeduct <= 0) break;
         const deduct = Math.min(qtyToDeduct, stockItem.quantity);
@@ -594,7 +599,7 @@ app.get('/api/:shop/sales', async (req, res) => {
           phoneNumber: c.phoneNumber,
           paymentMethod: b.paymentMethod || 'Cash',
           profileId: p.profileId,
-          profit: b.profit || 0, // Include profit
+          profit: b.profit || 0,
         }))))
       .filter(s => !date || s.date === date)
       .filter(s => !search || s.profileName.toLowerCase().includes(search.toLowerCase()) || s.phoneNumber.includes(search));
@@ -605,12 +610,161 @@ app.get('/api/:shop/sales', async (req, res) => {
   }
 });
 
+app.post('/api/:shop/returns', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { billNo, phoneNumber, profileName, items, returnAmount, date } = req.body;
+    const Stock = getStockModel(shop);
+    const Customer = getCustomerModel(shop);
+
+    // Validate input
+    if (!billNo || !phoneNumber || !profileName || !items?.length || !returnAmount || returnAmount <= 0 || !date) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (!validateDate(date)) {
+      return res.status(400).json({ error: 'Invalid date format. Use DD-MM-YYYY' });
+    }
+
+    const calculatedReturnAmount = items.reduce((sum, item) => sum + item.qty * item.pricePerQty, 0);
+    if (parseFloat(calculatedReturnAmount.toFixed(2)) !== parseFloat(returnAmount.toFixed(2))) {
+      return res.status(400).json({ error: 'Return amount does not match calculated total' });
+    }
+
+    for (const item of items) {
+      if (!item.product || !item.qty || item.qty <= 0 || !item.unit || !item.pricePerQty || !item.category || !item.purchasePrice || !item.profitAdjustment) {
+        return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}: missing required fields` });
+      }
+      if (item.purchasePrice < 0 || item.profitAdjustment < 0) {
+        return res.status(400).json({ error: `Invalid purchase price or profit adjustment for ${item.product}` });
+      }
+    }
+
+    // Find customer and profile
+    const customer = await Customer.findOne({ phoneNumber });
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const profile = customer.profiles.find(p => p.name.toLowerCase() === profileName.toLowerCase() && !p.deleteuser?.value);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const bill = profile.bills.find(b => b.billNo === billNo);
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+
+    // Validate and restock items using purchasePrice
+    for (const item of items) {
+      const billItem = bill.items.find(
+        bi => bi.product.toLowerCase() === item.product.toLowerCase() &&
+          bi.unit.toLowerCase() === item.unit.toLowerCase()
+      );
+      if (!billItem) {
+        return res.status(400).json({ error: `Item ${item.product} not found in bill` });
+      }
+
+      const validPurchasePrice = billItem.deductions?.some(d => d.price.toFixed(2) === parseFloat(item.purchasePrice).toFixed(2));
+      if (!validPurchasePrice) {
+        return res.status(400).json({ error: `Invalid purchase price ₹${item.purchasePrice} for ${item.product}` });
+      }
+
+      const previousReturns = profile.returns
+        ?.filter(r => r.billNo === billNo)
+        ?.flatMap(r => r.items)
+        ?.filter(ri =>
+          ri.product.toLowerCase() === item.product.toLowerCase() &&
+          ri.unit.toLowerCase() === item.unit.toLowerCase()
+        )?.reduce((sum, ri) => sum + ri.qty, 0) || 0;
+        console.log(previousReturns)
+      const availableQty = billItem.qty - previousReturns;
+      if (availableQty < item.qty) {
+        return res.status(400).json({ error: `Insufficient quantity for ${item.product}: ${availableQty} available` });
+      }
+
+      // Restock using purchasePrice
+      const stockItem = await Stock.findOne({
+        name: { $regex: new RegExp(`^${item.product}$`, 'i') },
+        unit: { $regex: new RegExp(`^${item.unit}$`, 'i') },
+        category: { $regex: new RegExp(`^${item.category}$`, 'i') },
+        price: parseFloat(item.purchasePrice.toFixed(2)),
+      });
+
+      if (stockItem) {
+        await Stock.updateOne(
+          { _id: stockItem._id },
+          { $inc: { quantity: item.qty } }
+        );
+      } else {
+        const newStock = new Stock({
+          id: uuidv4(),
+          name: item.product,
+          quantity: item.qty,
+          unit: item.unit,
+          category: item.category,
+          price: parseFloat(item.purchasePrice.toFixed(2)),
+          addedDate: convertToYYYYMMDD(date),
+        });
+        await newStock.save();
+      }
+    }
+
+    // Update bill profit
+    const totalProfitAdjustment = items.reduce((sum, item) => sum + parseFloat(item.profitAdjustment.toFixed(2)), 0);
+    if (bill.profit) {
+      bill.profit = parseFloat((bill.profit - totalProfitAdjustment).toFixed(2));
+      if (bill.profit < 0) bill.profit = 0;
+    }
+
+    // Handle advance payment using returnAmount
+    if (bill.paymentMethod === 'Advance' && profile.advance?.value) {
+      profile.advance.currentamount = parseFloat(((profile.advance.currentamount || 0) + returnAmount).toFixed(2));
+      profile.advanceHistory.push({
+        transactionType: 'Return',
+        amount: parseFloat(returnAmount.toFixed(2)),
+        date,
+      });
+    }
+
+    // Save return details
+    profile.returns = profile.returns || [];
+    profile.returns.push({
+      returnId: uuidv4(),
+      billNo,
+      date,
+      items: items.map(({ product, qty, unit, pricePerQty, purchasePrice }) => ({
+        product,
+        qty,
+        unit,
+        pricePerQty,
+        purchasePrice: parseFloat(purchasePrice.toFixed(2)),
+      })),
+      returnAmount: parseFloat(returnAmount.toFixed(2)),
+    });
+
+    // Validate document size
+    const customerSize = Buffer.byteLength(JSON.stringify(customer));
+    if (customerSize > 16 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Customer document exceeds 16MB limit' });
+    }
+
+    await customer.save();
+    res.json({ message: 'Return processed successfully', updatedCustomer: customer });
+  } catch (err) {
+    console.error('processReturn error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/:shop/sales/:billNo', async (req, res) => {
   try {
     const { shop, billNo } = req.params;
     const { profileId, phoneNumber, items } = req.body;
     const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
 
     if (!profileId || !phoneNumber || !items) {
       return res.status(400).json({ error: 'profileId, phoneNumber, and items are required' });
@@ -679,7 +833,6 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
             stockItem.quantity += qtyToRestore;
             qtyToRestore = 0;
             await stockItem.save();
-
           }
         }
 
@@ -695,6 +848,20 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
           });
           await newStock.save();
         }
+      }
+    }
+
+    // Handle credit sale deletion if payment method is Credit
+    if (bill.paymentMethod === 'Credit') {
+      const creditSale = await CreditSale.findOne({ billNumber: billNo, shop });
+      if (creditSale) {
+        // Perform soft delete
+        creditSale.isDeleted = true;
+        creditSale.deletedAt = new Date().toISOString().split('T')[0];
+        await creditSale.save();
+
+        // Perform permanent delete
+        await CreditSale.deleteOne({ _id: creditSale._id });
       }
     }
 
@@ -793,7 +960,7 @@ app.delete('/api/:shop/expenses/:id', async (req, res) => {
 app.get('/api/:shop/customers', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { search, deleted, page = 1, limit = 25 } = req.query;
+    const { search, deleted, page, limit } = req.query;
     const Customer = getCustomerModel(shop);
     let query = {};
     if (search) {
@@ -985,9 +1152,19 @@ app.delete('/api/:shop/customers/:phoneNumber/profiles/:profileId/permanent', as
   try {
     const { shop, phoneNumber, profileId } = req.params;
     const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
 
     const customer = await Customer.findOne({ phoneNumber });
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    const profile = customer.profiles.find(p => p.profileId === profileId);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+    await CreditSale.deleteMany({
+      phoneNumber,
+      customerName: profile.name,
+      shop,
+    });
 
     customer.profiles = customer.profiles.filter(p => p.profileId !== profileId);
     if (customer.profiles.length === 0) {
@@ -996,7 +1173,7 @@ app.delete('/api/:shop/customers/:phoneNumber/profiles/:profileId/permanent', as
       await customer.save();
     }
 
-    res.json({ message: 'Profile permanently deleted' });
+    res.json({ message: 'Profile and associated credit sales permanently deleted' });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -2627,23 +2804,23 @@ app.get('/api/:shop/sales-comparison', async (req, res) => {
 
     const yesterdayComparison = yesterdaySales !== null
       ? {
-          difference: todaySales - yesterdaySales,
-          percentage: yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales * 100).toFixed(2) : 'N/A',
-        }
+        difference: todaySales - yesterdaySales,
+        percentage: yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales * 100).toFixed(2) : 'N/A',
+      }
       : 'N/A';
 
     const weeklyComparison = lastWeekSales > 0
       ? {
-          difference: todaySales - lastWeekSales,
-          percentage: ((todaySales - lastWeekSales) / lastWeekSales * 100).toFixed(2),
-        }
+        difference: todaySales - lastWeekSales,
+        percentage: ((todaySales - lastWeekSales) / lastWeekSales * 100).toFixed(2),
+      }
       : { difference: 'N/A', percentage: 'N/A' };
 
     const monthlyComparison = lastMonthSales > 0
       ? {
-          difference: todaySales - lastMonthSales,
-          percentage: ((todaySales - lastMonthSales) / lastMonthSales * 100).toFixed(2),
-        }
+        difference: todaySales - lastMonthSales,
+        percentage: ((todaySales - lastMonthSales) / lastMonthSales * 100).toFixed(2),
+      }
       : { difference: 'N/A', percentage: 'N/A' };
 
     res.json({
@@ -2660,7 +2837,7 @@ app.get('/api/:shop/sales-comparison', async (req, res) => {
 
 
 //Login Realted
-  
+
 app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -2684,10 +2861,10 @@ app.post('/auth/reset', async (req, res) => {
     const admin = await Admin.findOne({ phone: phoneNumber });
     if (!admin) return res.json({ success: false, message: 'Admin not found for phoneNumber' });
     // Update credentials
-    if(newUsername) {admin.username = newUsername;}
-    if(newPassword) {admin.password = newPassword;}
+    if (newUsername) { admin.username = newUsername; }
+    if (newPassword) { admin.password = newPassword; }
     await admin.save();
-    
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);

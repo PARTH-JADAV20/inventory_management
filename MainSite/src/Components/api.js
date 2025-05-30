@@ -1,7 +1,7 @@
 // const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
 // const BASE_URL = 'http://bussinespro-env.eba-37zmk5ee.ap-south-1.elasticbeanstalk.com/api';
-const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
-// const BASE_URL = 'http://localhost:5000/api';
+// const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
+const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
 async function request(method, url, data = null) {
@@ -95,11 +95,13 @@ export const deleteExpense = async (shop, id) => {
 };
 
 // Customer APIs
-export const fetchCustomers = async (shop, search = '', deleted = false, page = 1, limit = 25) => {
+export const fetchCustomers = async (shop, search = '', deleted = false, page , limit) => {
   try {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (deleted) params.append('deleted', deleted);
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
     const data = await request('GET', `/${encodeURIComponent(shop)}/customers?${params}`);
     return data;
   } catch (error) {
@@ -402,5 +404,14 @@ export const fetchDeletedCreditSales = async (shop) => {
     return data;
   } catch (error) {
     throw new Error(`Failed to fetch deleted credit sales for ${shop}: ${error.message}`);
+  }
+};
+
+export const processReturn = async (shop, returnData) => {
+  try {
+    const data = await request('POST', `/${encodeURIComponent(shop)}/returns`, returnData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to process return for ${shop}: ${error.message}`);
   }
 };

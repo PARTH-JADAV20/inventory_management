@@ -5,6 +5,21 @@ import * as apiService from "../api";
 import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
+
+   const formatDateToDDMMYYYY = (dateStr) => {
+    if (!dateStr) return "N/A";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date)) return "N/A";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    } catch {
+      return "N/A";
+    }
+  };
+
   const getCurrentISTDate = () => {
     const now = new Date();
     const istOffsetMinutes = 5.5 * 60; // 5 hours 30 minutes
@@ -14,7 +29,7 @@ const AdvancePayments = () => {
   const [customers, setCustomers] = useState([]);
   const { shop, setShop } = useContext(ShopContext)
   const [newPayment, setNewPayment] = useState({
-    date: getCurrentISTDate(),
+    date: formatDateToDDMMYYYY(getCurrentISTDate()),
     customerName: "",
     phoneNumber: "",
     profileId: "",
@@ -31,24 +46,8 @@ const AdvancePayments = () => {
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [limit] = useState(25);
-  const [totalCustomersCount, setTotalCustomersCount] = useState(0);
 
-  const formatDateToDDMMYYYY = (dateStr) => {
-    if (!dateStr) return "N/A";
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date)) return "N/A";
-      const day = String(date.getDate()).padStart(2, "0");
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${day}-${month}-${year}`;
-    } catch {
-      return "N/A";
-    }
-  };
-
+ 
   const getCommonName = (profiles) => {
     const names = (profiles || []).map((p) => (p.name || "Unknown").replace(/ \[.*\]$/, ""));
     return names[0] || "Unknown";
@@ -57,13 +56,13 @@ const AdvancePayments = () => {
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      const data = await apiService.fetchCustomers(shop, searchTerm, false, page, limit);
-      setCustomers(data.customers || []);
-      // Count customers with advance profiles
-      const advanceCount = (data.customers || []).filter(c =>
-        (c.profiles || []).some(p => p.advance?.value && p.advance?.showinadvance)
-      ).length;
-      setTotalCustomersCount(advanceCount);
+      // Fetch all customers without pagination
+      const data = await apiService.fetchCustomers(shop, searchTerm, false, 1 , 100000);
+      // Filter customers with advance profiles
+      const advanceCustomers = (data.customers || []).filter(c =>
+        (c.profiles || []).some(p => p.advance?.value === true && p.advance?.showinadvance === true)
+      );
+      setCustomers(advanceCustomers);
       setError(null);
     } catch (err) {
       console.error("Error fetching customers:", err);
@@ -75,7 +74,7 @@ const AdvancePayments = () => {
 
   useEffect(() => {
     loadCustomers();
-  }, [shop, searchTerm, page]);
+  }, [shop, searchTerm ]);
 
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
@@ -218,7 +217,7 @@ const AdvancePayments = () => {
             {
               transactionType: "Deposit",
               amount: advanceAmount,
-              date: newPayment.date,
+              date:formatDateToDDMMYYYY(newPayment.date),
             },
           ],
           bills: [],
@@ -268,7 +267,7 @@ const AdvancePayments = () => {
     setIsExistingCustomer(false);
     setEditingProfile(null);
     setEditedProfile(null);
-    setPage(1);
+    loadCustomers();
   }, [shop]);
 
   const handleEditStart = (profile, phoneNumber) => {
@@ -343,12 +342,12 @@ const AdvancePayments = () => {
 
   const filteredCustomers = (customers || []).filter(
     (c) => {
-      const nameOrPhoneMatches = (
-        getCommonName(c.profiles).toLowerCase().includes(searchTerm) ||
-        (c.phoneNumber || "").includes(searchTerm)
+      const searchTermLower = searchTerm.toLowerCase();
+      return (
+        (getCommonName(c.profiles).toLowerCase().includes(searchTermLower) ||
+          (c.phoneNumber || "").includes(searchTermLower)) &&
+        (c.profiles || []).some(p => p.advance?.value === true && p.advance?.showinadvance === true)
       );
-      const hasAdvanceProfiles = (c.profiles || []).some(p => p.advance?.value && p.advance?.showinadvance);
-      return nameOrPhoneMatches && hasAdvanceProfiles;
     }
   );
 
@@ -556,8 +555,7 @@ const AdvancePayments = () => {
             className="search-input"
           />
           <div className="summary-stats">
-            <p>Total Customers: {totalCustomersCount}</p>
-            <p>Showing: {Math.min(page * limit, totalCustomersCount)}/{totalCustomersCount}</p>
+            <p>Advance Customers: {filteredCustomers.length}</p>
           </div>
         </div>
 
@@ -568,6 +566,7 @@ const AdvancePayments = () => {
         <table className="advance-payment-table">
           <thead>
             <tr>
+              <th>Sr.No</th>
               <th>Contractor</th>
               <th>Profile</th>
               <th>Payment Method</th>
@@ -578,9 +577,10 @@ const AdvancePayments = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map((c) => (
+            {filteredCustomers.map((c,index) => (
               <React.Fragment key={c.phoneNumber || Math.random()}>
                 <tr>
+                  <td style={{fontWeight:"bolder", color : "#ff6b2c"}}>{index+1}</td>
                   <td colSpan={7}>
                     <h3 className="contractor-heading">
                       {getCommonName(c.profiles)} (
@@ -602,6 +602,7 @@ const AdvancePayments = () => {
                     const paymentMethod = p.advance?.paymentMethod || "N/A";
                     return (
                       <tr key={p.profileId || Math.random()}>
+                        <td></td>
                         <td>{getCommonName(c.profiles)}</td>
                         <td>
                           {editingProfile?.profileId === p.profileId ? (
@@ -683,17 +684,6 @@ const AdvancePayments = () => {
           </tbody>
         </table>
       </div>
-      <div className="pagination-controls">
-        {filteredCustomers.length > 0 && page * limit < totalCustomersCount && (
-          <button
-            className="load-more-btn"
-            onClick={() => setPage((prev) => prev + 1)}
-            disabled={loading}
-          >
-            Load More
-          </button>
-        )}
-      </div>
       {(selectedBills || selectedHistory) && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -774,7 +764,7 @@ const AdvancePayments = () => {
                 <tbody>
                   {(selectedHistory.history || []).map((h, i) => (
                     <tr key={i}>
-                      <td>{formatDateToDDMMYYYY(h.date)}</td>
+                      <td>{h.date}</td>
                       <td>{h.transactionType || "N/A"}</td>
                       <td>₹{h.amount || 0}</td>
                     </tr>

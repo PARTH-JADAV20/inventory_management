@@ -212,7 +212,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
     if (!date || isNaN(new Date(date).getTime())) {
       return "N/A";
     }
-    return format(new Date(date), "dd MMMM yyyy");
+    return format(new Date(date), "dd-mm-yyyy");
   };
 
   return (
@@ -279,7 +279,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
                 <td>{item.unit}</td>
                 <td>₹{item.pricePerUnit.toFixed(2)}</td>
                 <td>₹{item.amount.toFixed(2)}</td>
-                <td>{formatDate(item.date)}</td> {/* Use safe date formatting */}
+                <td>{item.date}</td> {/* Use safe date formatting */}
               </tr>
             ))}
           </tbody>
@@ -301,7 +301,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
               {creditSale.paymentHistory.map((payment, index) => (
                 <tr key={index}>
                   <td>
-                    {formatDate(payment.date)} {/* Use safe date formatting */}
+                    {payment.date} {/* Use safe date formatting */}
                   </td>
                   <td>₹{payment.amount.toFixed(2)}</td>
                   <td>{payment.mode}</td>

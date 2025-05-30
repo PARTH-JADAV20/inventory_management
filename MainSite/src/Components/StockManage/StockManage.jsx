@@ -321,6 +321,7 @@ const StockManage = () => {
             <div className="quantity-group">
               <input
                 type="number"
+                step="1"
                 name="quantity"
                 placeholder="Qty"
                 value={newItem.quantity}
@@ -388,6 +389,7 @@ const StockManage = () => {
             <label>Purchase Price (₹)</label>
             <input
               type="number"
+              step="1"
               name="price"
               placeholder="0.00"
               value={newItem.price}
@@ -447,6 +449,7 @@ const StockManage = () => {
         <table className="stock-table">
           <thead>
             <tr>
+              <th>Sr.No</th>
               <th>Item Name</th>
               <th>Quantity</th>
               <th>Category</th>
@@ -456,8 +459,9 @@ const StockManage = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredItems.map((item) => (
+            {filteredItems.map((item,index) => (
               <tr key={item.id}>
+                <td style={{fontWeight:"bolder", color : "#ff6b2c"}}>{index + 1}</td>
                 <td>{item.name}</td>
                 <td>
                   {item.quantity} {item.unit}
