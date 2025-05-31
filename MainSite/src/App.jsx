@@ -10,6 +10,7 @@ import AdvancePayments from "./Components/AdvancePayments/AdvancePayments";
 import SalesEntry from "./Components/SalesEntry/SalesEntry";
 import Customers from "./Components/Customers/Customers";
 import ExpenseTracker from "./Components/ExpenseTracker/ExpenseTracker";
+import OutgoingPayments from "./Components/OutgoingPayments/OutgoingPayments";
 
 function App() {
   const [allowedAccess, setAllowedAccess] = useState(null);
@@ -23,6 +24,7 @@ function App() {
     '/expense-tracking': 'Expense Tracking',
     '/customers': 'Customers',
     '/credit-sales': 'Credit Sales',
+    '/outgoing-payments': 'Outgoing Payments'
   };
 
   useEffect(() => {
@@ -74,6 +76,7 @@ function App() {
             <Route path="/expense-tracking" element={<ExpenseTracker />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/credit-sales" element={<CreditSales />} />
+            <Route path="/outgoing-payments" element={<OutgoingPayments />} />
           </Routes>
         </div>
       </div>

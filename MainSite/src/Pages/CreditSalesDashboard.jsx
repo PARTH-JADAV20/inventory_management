@@ -509,9 +509,7 @@ const CreditSalesDashboard = () => {
                   <td
                     className={isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}
                   >
-                    {sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
-                      : "N/A"}
+                    {sale.lastTransactionDate }
                   </td>
                   <td className={`status-${(sale.status ?? "Unknown").toLowerCase()}-dax`}>
                     {sale.status ?? "Unknown"}

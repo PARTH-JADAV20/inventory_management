@@ -19,8 +19,10 @@ function App() {
   const [maskedPhone, setMaskedPhone] = useState("");
   const [statusMsg, setStatusMsg] = useState("");
   const [confirmationResult, setConfirmationResult] = useState(null);
-  const phoneNumber = import.meta.env.VITE_PHONE; 
+  const phoneNumber = import.meta.env.VITE_PHONE;
   const recaptchaVerifier = useRef(null);
+  const serverUrl = import.meta.env.VITE_SERVER_URL;
+  const mainSite = import.meta.env.VITE_MAIN_SITE;
 
   const initializeRecaptcha = async (retryCount = 0, maxRetries = 3) => {
     if (!auth || !document.getElementById("recaptcha-container") || recaptchaVerifier.current) {
@@ -111,8 +113,7 @@ function App() {
 
       const secretPhrase = "open the portal";
       if (transcript.includes(secretPhrase)) {
-        window.location.href = "https://inventory-tool-1.netlify.app/?auth=true";
-        // window.location.href = "http://localhost:5174/?auth=true";
+        window.location.href = `${mainSite}?auth=true`;
       } else {
         setStatusMsg("Incorrect phrase. Try again!");
       }
@@ -137,9 +138,9 @@ function App() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post("https://d3o2vhbxligxnl.cloudfront.net/auth/login", { username, password });
+      const res = await axios.post(`${serverUrl}auth/login`, { username, password });
       if (res.data.success) {
-        window.location.href = "https://inventory-tool-1.netlify.app/salespage?auth=true";
+        window.location.href = `${mainSite}salespage?auth=true`;
       } else {
         setStatusMsg(res.data.message || "Login failed.");
       }
@@ -220,7 +221,7 @@ function App() {
     setStatusMsg("Verifying OTP...");
     try {
       await confirmationResult.confirm(otp);
-      const res = await axios.post("https://d3o2vhbxligxnl.cloudfront.net/auth/reset", {
+      const res = await axios.post(`${serverUrl}auth/reset`, {
         newUsername,
         newPassword,
         phoneNumber,

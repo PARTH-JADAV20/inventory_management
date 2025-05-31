@@ -95,11 +95,13 @@ export const deleteExpense = async (shop, id) => {
 };
 
 // Customer APIs
-export const fetchCustomers = async (shop, search = '', deleted = false, page = 1, limit = 25) => {
+export const fetchCustomers = async (shop, search = '', deleted = false, page , limit) => {
   try {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (deleted) params.append('deleted', deleted);
+    if (page) params.append('page', page);
+    if (limit) params.append('limit', limit);
     const data = await request('GET', `/${encodeURIComponent(shop)}/customers?${params}`);
     return data;
   } catch (error) {
@@ -403,4 +405,41 @@ export const fetchDeletedCreditSales = async (shop) => {
   } catch (error) {
     throw new Error(`Failed to fetch deleted credit sales for ${shop}: ${error.message}`);
   }
+};
+
+export const processReturn = async (shop, returnData) => {
+  try {
+    const data = await request('POST', `/${encodeURIComponent(shop)}/returns`, returnData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to process return for ${shop}: ${error.message}`);
+  }
+};
+
+// Outgoing Payments APIs
+export const fetchOutgoingPayments = async (paidTo = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (paidTo) params.append('paidTo', paidTo);
+    const data = await request('GET', `/outstanding-payments?${params}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch outgoing payments: ${error.message}`);
+  }
+};
+
+export const addOutgoingPayment = async (payment) => {
+  return request('POST', `/outstanding-payments`, payment);
+};
+
+export const updateOutgoingPayment = async (id, payment) => {
+  return request('PUT', `/outstanding-payments/${id}`, payment);
+};
+
+export const clearPaymentAmount = async (id, clearAmount) => {
+  return request('PUT', `/outstanding-payments/${id}/clear`, { clearAmount });
+};
+
+export const deleteOutgoingPayment = async (id) => {
+  return request('DELETE', `/outstanding-payments/${id}`);
 };
