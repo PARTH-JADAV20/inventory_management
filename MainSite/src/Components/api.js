@@ -1,7 +1,7 @@
 // const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
 // const BASE_URL = 'http://bussinespro-env.eba-37zmk5ee.ap-south-1.elasticbeanstalk.com/api';
-// const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
+// const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
 async function request(method, url, data = null) {
@@ -414,4 +414,32 @@ export const processReturn = async (shop, returnData) => {
   } catch (error) {
     throw new Error(`Failed to process return for ${shop}: ${error.message}`);
   }
+};
+
+// Outgoing Payments APIs
+export const fetchOutgoingPayments = async (paidTo = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (paidTo) params.append('paidTo', paidTo);
+    const data = await request('GET', `/outstanding-payments?${params}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch outgoing payments: ${error.message}`);
+  }
+};
+
+export const addOutgoingPayment = async (payment) => {
+  return request('POST', `/outstanding-payments`, payment);
+};
+
+export const updateOutgoingPayment = async (id, payment) => {
+  return request('PUT', `/outstanding-payments/${id}`, payment);
+};
+
+export const clearPaymentAmount = async (id, clearAmount) => {
+  return request('PUT', `/outstanding-payments/${id}/clear`, { clearAmount });
+};
+
+export const deleteOutgoingPayment = async (id) => {
+  return request('DELETE', `/outstanding-payments/${id}`);
 };

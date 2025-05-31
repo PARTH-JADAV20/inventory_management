@@ -18,8 +18,8 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // MongoDB Connection
-// mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-mongoose.connect('mongodb://localhost:27017/', {
+mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+// mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -107,15 +107,15 @@ const profileSchema = new mongoose.Schema({
   returns: [{
     returnId: { type: String, default: uuidv4 },
     billNo: { type: String, required: true },
-    date: { type: String, required: true }, 
+    date: { type: String, required: true },
     items: [{
       product: { type: String, required: true },
       qty: { type: Number, required: true },
       unit: { type: String, required: true },
-      pricePerQty: { type: Number, required: true }, 
-      purchasePrice: { type: Number, required: true }, 
+      pricePerQty: { type: Number, required: true },
+      purchasePrice: { type: Number, required: true },
     }],
-    returnAmount: { type: Number, required: true }, 
+    returnAmount: { type: Number, required: true },
   }],
   deleteuser: {
     value: Boolean,
@@ -214,6 +214,15 @@ const dailySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+const paymentSchema = new mongoose.Schema({
+  id: { type: String, default: uuidv4, unique: true },
+  date: { type: String, required: true }, // DD-MM-YYYY
+  paidTo: { type: String, required: true },
+  amount: { type: Number, required: true },
+  amountPaid: { type: Number, default: 0 },
+  description: { type: String, default: '' },
+}, { collection: 'payments' }); // Explicit collection name to avoid conflicts
+
 // Models
 const Stock1 = mongoose.model('Stock1', stockSchema);
 const Stock2 = mongoose.model('Stock2', stockSchema);
@@ -226,6 +235,7 @@ const CreditSale1 = mongoose.model('CreditSale1', creditSaleSchema);
 const CreditSale2 = mongoose.model('CreditSale2', creditSaleSchema);
 const Admin = mongoose.model('Admin', adminSchema);
 const Daily = mongoose.model('Daily', dailySchema);
+const Payment = mongoose.model('Payment', paymentSchema);
 
 // Helper Functions
 const getStockModel = (shop) => (shop === 'Shop 1' ? Stock1 : Stock2);
@@ -678,7 +688,7 @@ app.post('/api/:shop/returns', async (req, res) => {
           ri.product.toLowerCase() === item.product.toLowerCase() &&
           ri.unit.toLowerCase() === item.unit.toLowerCase()
         )?.reduce((sum, ri) => sum + ri.qty, 0) || 0;
-        console.log(previousReturns)
+      console.log(previousReturns)
       const availableQty = billItem.qty - previousReturns;
       if (availableQty < item.qty) {
         return res.status(400).json({ error: `Insufficient quantity for ${item.product}: ${availableQty} available` });
@@ -3039,6 +3049,125 @@ const saveDailyData = async (shop) => {
     console.error(`Error saving daily data for ${shop}:`, err);
   }
 };
+
+app.get('/api/outstanding-payments', async (req, res) => {
+  try {
+    const { paidTo } = req.query;
+    let query = {};
+    if (paidTo) {
+      query.paidTo = { $regex: paidTo, $options: 'i' };
+    }
+    const payments = await Payment.find(query).sort({ date: -1 });
+    res.json(payments);
+  } catch (err) {
+    console.error('Error fetching payments:', err);
+    res.status(500).json({ error: 'Failed to fetch payments: ' + err.message });
+  }
+});
+
+app.post('/api/outstanding-payments', async (req, res) => {
+  try {
+    const { date, paidTo, amount, description } = req.body;
+
+    // Validation
+    if (!date || !paidTo || !amount) {
+      return res.status(400).json({ error: 'Date, paidTo, and amount are required' });
+    }
+    if (amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+
+    const payment = new Payment({
+      date: convertToDDMMYYYY(date),
+      paidTo,
+      amount: parseFloat(amount),
+      description: description || '',
+      amountPaid: 0,
+    });
+
+    await payment.save();
+    res.status(201).json(payment);
+  } catch (err) {
+    console.error('Error adding payment:', err);
+    res.status(400).json({ error: 'Failed to add payment: ' + err.message });
+  }
+});
+
+app.put('/api/outstanding-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, paidTo, amount, description, amountPaid } = req.body;
+
+    // Validation
+    if (!date || !paidTo || !amount) {
+      return res.status(400).json({ error: 'Date, paidTo, and amount are required' });
+    }
+    if (amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+
+    const payment = await Payment.findOne({ id });
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    payment.date = convertToDDMMYYYY(date);
+    payment.paidTo = paidTo;
+    payment.amount = parseFloat(amount);
+    payment.description = description || '';
+    payment.amountPaid = amountPaid !== undefined ? parseFloat(amountPaid) : payment.amountPaid;
+
+    await payment.save();
+    res.json(payment);
+  } catch (err) {
+    console.error('Error updating payment:', err);
+    res.status(400).json({ error: 'Failed to update payment: ' + err.message });
+  }
+});
+
+app.put('/api/outstanding-payments/:id/clear', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clearAmount } = req.body;
+
+    // Validation
+    if (!clearAmount || clearAmount <= 0) {
+      return res.status(400).json({ error: 'Clear amount must be a positive number' });
+    }
+
+    const payment = await Payment.findOne({ id });
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const remainingAmount = payment.amount - payment.amountPaid;
+    if (clearAmount > remainingAmount) {
+      return res.status(400).json({ error: 'Clear amount exceeds remaining amount' });
+    }
+
+    payment.amountPaid += parseFloat(clearAmount);
+    await payment.save();
+
+    res.json({ id: payment.id, clearAmount: parseFloat(clearAmount) });
+  } catch (err) {
+    console.error('Error clearing payment amount:', err);
+    res.status(400).json({ error: 'Failed to clear payment amount: ' + err.message });
+  }
+});
+
+app.delete('/api/outstanding-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Payment.deleteOne({ id });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+    res.json({ message: 'Payment deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting payment:', err);
+    res.status(400).json({ error: 'Failed to delete payment: ' + err.message });
+  }
+});
 
 // Schedule cron job to run at 11:30 PM daily for both shops
 cron.schedule('30 23 * * *', () => {
