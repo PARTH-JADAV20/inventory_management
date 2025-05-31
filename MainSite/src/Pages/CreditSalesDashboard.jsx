@@ -17,7 +17,7 @@ const debounce = (func, wait) => {
 };
 
 const CreditSalesDashboard = () => {
-  const { shop } = useContext(ShopContext); // State for selected shop
+  const { shop } = useContext(ShopContext);
   const [creditSales, setCreditSales] = useState([]);
   const [stock, setStock] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,7 +70,7 @@ const CreditSalesDashboard = () => {
         setLoading(false);
       }
     },
-    [shop, page, limit, sortBy, sortOrder, showDeleted] // Include shop in dependencies
+    [shop, page, limit, sortBy, sortOrder, showDeleted]
   );
 
   const debouncedFetchData = useCallback(
@@ -244,7 +244,7 @@ const CreditSalesDashboard = () => {
                 .map(
                   (sale) => {
                     const lastTransactionDate = sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+                      ? format(new Date(sale.lastTransactionDate), "dd-MM-yyyy")
                       : "N/A";
                     return `
                     <tr>
@@ -292,7 +292,7 @@ const CreditSalesDashboard = () => {
       (sale.paidAmount || 0).toFixed(2),
       (sale.totalAmount || 0).toFixed(2),
       sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-        ? format(new Date(sale.lastTransactionDate), "yyyy-MM-dd")
+        ? format(new Date(sale.lastTransactionDate), "dd-MM-yyyy")
         : "N/A",
       sale.status ?? "Unknown",
       sale.isDeleted ? "Yes" : "No",
@@ -304,7 +304,7 @@ const CreditSalesDashboard = () => {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `credit_sales_${shop}_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.download = `credit_sales_${shop}_${format(new Date(), "dd-MM-yyyy")}.csv`;
     link.click();
   };
 
@@ -510,7 +510,7 @@ const CreditSalesDashboard = () => {
                     className={isOverdue(sale.lastTransactionDate) ? "overdue-dax" : ""}
                   >
                     {sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
+                      ? format(new Date(sale.lastTransactionDate), "dd-MM-yyyy")
                       : "N/A"}
                   </td>
                   <td className={`status-${(sale.status ?? "Unknown").toLowerCase()}-dax`}>

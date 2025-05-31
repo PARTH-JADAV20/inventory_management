@@ -1940,74 +1940,90 @@ app.get('/api/:shop/low-stock', async (req, res) => {
 app.get('/api/:shop/total-sales', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { period, date } = req.query;
-    const Customer = getCustomerModel(shop);
-    const CreditSale = getCreditSaleModel(shop);
+    const { period } = req.query;
+    let shops = [shop];
+    if (shop === 'All') shops = ['Shop 1', 'Shop 2'];
 
     let startDate, endDate;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (period === 'today') {
-      startDate = today;
-      endDate = new Date(today);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'week') {
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (date) {
-      startDate = new Date(convertToYYYYMMDD(date));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(0);
-      endDate = new Date();
+    switch (period) {
+      case 'today':
+        startDate = today;
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'yesterday':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 1);
+        endDate = new Date(startDate);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'this_week':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - today.getDay() + 1); // Monday
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6); // Sunday
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'this_month':
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'last_month':
+        startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'last_3_months':
+        startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      default:
+        startDate = new Date(0);
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
     }
 
     const startDateStr = convertToDDMMYYYY(startDate);
     const endDateStr = convertToDDMMYYYY(endDate);
 
-    const customers = await Customer.find();
-    const creditSales = await CreditSale.find({
-      shop,
-      isDeleted: false,
-      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
-    });
-
     let totalSales = 0;
-    const salesByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-      Credit: 0,
-      Advance: 0,
-    };
+    const salesByMethod = { Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
 
-    customers.forEach(customer => {
-      customer.profiles.forEach(profile => {
-        if (profile.deleteuser.value) return;
-        profile.bills.forEach(bill => {
-          if (bill.date >= startDateStr && bill.date <= endDateStr) {
-            totalSales += bill.totalAmount;
-            const method = bill.paymentMethod || 'Cash';
-            salesByMethod[method] = (salesByMethod[method] || 0) + bill.totalAmount;
-          }
+    for (const currentShop of shops) {
+      const Customer = getCustomerModel(currentShop);
+      const CreditSale = getCreditSaleModel(currentShop);
+
+      const customers = await Customer.find();
+      const creditSales = await CreditSale.find({
+        shop: currentShop,
+        isDeleted: false,
+        lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+      });
+
+      customers.forEach(customer => {
+        customer.profiles.forEach(profile => {
+          if (profile.deleteuser.value) return;
+          profile.bills.forEach(bill => {
+            if (bill.date >= startDateStr && bill.date <= endDateStr) {
+              totalSales += bill.totalAmount;
+              const method = bill.paymentMethod || 'Cash';
+              salesByMethod[method] = (salesByMethod[method] || 0) + bill.totalAmount;
+            }
+          });
         });
       });
-    });
 
-    creditSales.forEach(sale => {
-      totalSales += sale.totalAmount + sale.paidAmount;
-      salesByMethod.Credit = (salesByMethod.Credit || 0) + sale.totalAmount + sale.paidAmount;
-    });
+      creditSales.forEach(sale => {
+        totalSales += sale.paidAmount; // Count only paid amount for credit sales
+        const method = sale.finalPaymentMethod || 'Credit';
+        salesByMethod[method] = (salesByMethod[method] || 0) + sale.paidAmount;
+      });
+    }
 
     res.json({
       totalSales,
@@ -2018,40 +2034,56 @@ app.get('/api/:shop/total-sales', async (req, res) => {
   }
 });
 
+// Total Profit Route
 app.get('/api/:shop/total-profit', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { period, date } = req.query;
-    const Customer = getCustomerModel(shop);
-    const CreditSale = getCreditSaleModel(shop);
-    const Expense = getExpenseModel(shop);
+    const { period } = req.query;
+    let shops = [shop];
+    if (shop === 'All') shops = ['Shop 1', 'Shop 2'];
 
     let startDate, endDate;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (period === 'today') {
-      startDate = today;
-      endDate = new Date(today);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'week') {
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (date) {
-      startDate = new Date(convertToYYYYMMDD(date));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(0);
-      endDate = new Date();
+    switch (period) {
+      case 'today':
+        startDate = today;
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'yesterday':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 1);
+        endDate = new Date(startDate);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'this_week':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - today.getDay() + 1); // Monday
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6); // Sunday
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'this_month':
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'last_month':
+        startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'last_3_months':
+        startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      default:
+        startDate = new Date(0);
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
     }
 
     const startDateStr = convertToDDMMYYYY(startDate);
@@ -2059,46 +2091,48 @@ app.get('/api/:shop/total-profit', async (req, res) => {
     const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
     const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
 
-    const customers = await Customer.find();
-    const creditSales = await CreditSale.find({
-      shop,
-      isDeleted: false,
-      status: 'Cleared',
-      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
-    });
-    const expenses = await Expense.find({
-      date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
-    });
-
     let totalProfit = 0;
-    const profitByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-      Credit: 0,
-      Advance: 0,
-    };
+    const profitByMethod = { Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
+    let totalExpenses = 0;
 
-    customers.forEach(customer => {
-      customer.profiles.forEach(profile => {
-        if (profile.deleteuser.value) return;
-        profile.bills.forEach(bill => {
-          if (bill.date >= startDateStr && bill.date <= endDateStr && bill.paymentMethod !== 'Credit') {
-            totalProfit += bill.profit || 0;
-            const method = bill.paymentMethod || 'Cash';
-            profitByMethod[method] = (profitByMethod[method] || 0) + (bill.profit || 0);
-          }
+    for (const currentShop of shops) {
+      const Customer = getCustomerModel(currentShop);
+      const CreditSale = getCreditSaleModel(currentShop);
+      const Expense = getExpenseModel(currentShop);
+
+      const customers = await Customer.find();
+      const creditSales = await CreditSale.find({
+        shop: currentShop,
+        isDeleted: false,
+        status: 'Cleared',
+        lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+      });
+      const expenses = await Expense.find({
+        date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
+      });
+
+      customers.forEach(customer => {
+        customer.profiles.forEach(profile => {
+          if (profile.deleteuser.value) return;
+          profile.bills.forEach(bill => {
+            if (bill.date >= startDateStr && bill.date <= endDateStr && bill.paymentMethod !== 'Credit') {
+              totalProfit += bill.profit || 0;
+              const method = bill.paymentMethod || 'Cash';
+              profitByMethod[method] = (profitByMethod[method] || 0) + (bill.profit || 0);
+            }
+          });
         });
       });
-    });
 
-    creditSales.forEach(sale => {
-      totalProfit += sale.profit || 0;
-      const method = sale.finalPaymentMethod || 'Credit';
-      profitByMethod[method] = (profitByMethod[method] || 0) + (sale.profit || 0);
-    });
+      creditSales.forEach(sale => {
+        totalProfit += sale.profit || 0;
+        const method = sale.finalPaymentMethod || 'Credit';
+        profitByMethod[method] = (profitByMethod[method] || 0) + (sale.profit || 0);
+      });
 
-    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+      totalExpenses += expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    }
+
     totalProfit -= totalExpenses;
 
     res.json({
@@ -2133,6 +2167,81 @@ app.get('/api/:shop/users', async (req, res) => {
       totalUsers,
       creditUsers,
       advanceUsers,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/:shop/advance-payments', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { period, date } = req.query;
+    const Customer = getCustomerModel(shop);
+
+    let startDate, endDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (period === 'today') {
+      startDate = today;
+      endDate = new Date(today);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'week') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - today.getDay());
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (date) {
+      startDate = new Date(convertToYYYYMMDD(date));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(0);
+      endDate = new Date();
+    }
+
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
+
+    const customers = await Customer.find();
+    let totalAdvanceBalance = 0;
+    const advanceBalanceByMethod = {
+      Cash: 0,
+      Online: 0,
+      Cheque: 0,
+    };
+
+    customers.forEach(customer => {
+      customer.profiles.forEach(profile => {
+        if (profile.deleteuser.value || !profile.advance?.value) return;
+        let balance = 0;
+        profile.advanceHistory.forEach(history => {
+          if (history.date >= startDateStr && history.date <= endDateStr) {
+            if (history.transactionType === 'Deposit') {
+              balance += history.amount;
+            } else if (history.transactionType === 'Withdrawal') {
+              balance -= history.amount;
+            }
+          }
+        });
+        if (balance > 0) {
+          totalAdvanceBalance += balance;
+          const method = profile.advance.paymentMethod || 'Cash';
+          advanceBalanceByMethod[method] = (advanceBalanceByMethod[method] || 0) + balance;
+        }
+      });
+    });
+
+    res.json({
+      totalAdvanceBalance,
+      ...advanceBalanceByMethod,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2182,40 +2291,39 @@ app.get('/api/:shop/credit-sales', async (req, res) => {
       lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
     });
 
-    let totalCreditGiven = 0;
-    let totalCreditReceived = 0;
-    const creditReceivedByMethod = {
+    let totalOverdueAmount = 0;
+    let overdueCustomerCount = 0;
+    const overdueByMethod = {
       Cash: 0,
       Online: 0,
       Cheque: 0,
     };
 
     creditSales.forEach(sale => {
-      totalCreditGiven += sale.totalAmount + sale.paidAmount;
-      totalCreditReceived += sale.paidAmount;
-      sale.paymentHistory.forEach(payment => {
-        if (payment.amount > 0 && payment.date >= startDateStr && payment.date <= endDateStr) {
-          const method = payment.mode || 'Cash';
-          creditReceivedByMethod[method] = (creditReceivedByMethod[method] || 0) + payment.amount;
-        }
-      });
+      const outstandingAmount = sale.totalAmount - sale.paidAmount;
+      if (outstandingAmount > 1000000) { // 10 lakh
+        totalOverdueAmount += outstandingAmount;
+        overdueCustomerCount++;
+        const method = sale.finalPaymentMethod || 'Cash';
+        overdueByMethod[method] = (overdueByMethod[method] || 0) + outstandingAmount;
+      }
     });
 
     res.json({
-      totalCreditGiven,
-      totalCreditReceived,
-      ...creditReceivedByMethod,
+      totalOverdueAmount,
+      overdueCustomerCount,
+      ...overdueByMethod,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/:shop/advance-payments', async (req, res) => {
+app.get('/api/:shop/total-expenses', async (req, res) => {
   try {
     const { shop } = req.params;
     const { period, date } = req.query;
-    const Customer = getCustomerModel(shop);
+    const Expense = getExpenseModel(shop);
 
     let startDate, endDate;
     const today = new Date();
@@ -2225,14 +2333,27 @@ app.get('/api/:shop/advance-payments', async (req, res) => {
       startDate = today;
       endDate = new Date(today);
       endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'yesterday') {
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() - 1);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
     } else if (period === 'week') {
       startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
+      startDate.setDate(today.getDate() - today.getDay() + 1); // Monday
       endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
+      endDate.setDate(startDate.getDate() + 6); // Sunday
       endDate.setHours(23, 59, 59, 999);
     } else if (period === 'month') {
       startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'last_month') {
+      startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'last_3_months') {
+      startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
       endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       endDate.setHours(23, 59, 59, 999);
     } else if (date) {
@@ -2243,40 +2364,43 @@ app.get('/api/:shop/advance-payments', async (req, res) => {
     } else {
       startDate = new Date(0);
       endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
     }
 
-    const startDateStr = convertToDDMMYYYY(startDate);
-    const endDateStr = convertToDDMMYYYY(endDate);
+    const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
+    const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
 
-    const customers = await Customer.find();
-    let totalAdvance = 0;
-    const advanceByMethod = {
+    const expenses = await Expense.find({
+      date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
+    });
+
+    let totalExpenses = 0;
+    const expensesByMethod = {
       Cash: 0,
       Online: 0,
       Cheque: 0,
     };
+    const expensesByCategory = {};
 
-    customers.forEach(customer => {
-      customer.profiles.forEach(profile => {
-        if (profile.deleteuser.value || !profile.advance?.value) return;
-        profile.advanceHistory.forEach(history => {
-          if (history.transactionType === 'Deposit' && history.date >= startDateStr && history.date <= endDateStr) {
-            totalAdvance += history.amount;
-            const method = profile.advance.paymentMethod || 'Cash';
-            advanceByMethod[method] = (advanceByMethod[method] || 0) + history.amount;
-          }
-        });
-      });
+    expenses.forEach(expense => {
+      totalExpenses += expense.amount;
+      const method = expense.paymentMode || 'Cash';
+      expensesByMethod[method] = (expensesByMethod[method] || 0) + expense.amount;
+      const category = expense.category || 'Uncategorized';
+      expensesByCategory[category] = (expensesByCategory[category] || 0) + expense.amount;
     });
 
     res.json({
-      totalAdvance,
-      ...advanceByMethod,
+      totalExpenses,
+      expensesByMethod,
+      expensesByCategory,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+
 
 app.get('/api/:shop/recent-purchases', async (req, res) => {
   try {
@@ -2456,69 +2580,6 @@ app.get('/api/:shop/pending-advances', async (req, res) => {
   }
 });
 
-app.get('/api/:shop/total-expenses', async (req, res) => {
-  try {
-    const { shop } = req.params;
-    const { period, date } = req.query;
-    const Expense = getExpenseModel(shop);
-
-    let startDate, endDate;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (period === 'today') {
-      startDate = today;
-      endDate = new Date(today);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'week') {
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (date) {
-      startDate = new Date(convertToYYYYMMDD(date));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(0);
-      endDate = new Date();
-    }
-
-    const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
-    const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
-
-    const expenses = await Expense.find({
-      date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
-    });
-
-    let totalExpenses = 0;
-    const expensesByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-    };
-
-    expenses.forEach(expense => {
-      totalExpenses += expense.amount;
-      const method = expense.paymentMode || 'Cash';
-      expensesByMethod[method] = (expensesByMethod[method] || 0) + expense.amount;
-    });
-
-    res.json({
-      totalExpenses,
-      ...expensesByMethod,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/:shop/advance-adjusted', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -2586,72 +2647,161 @@ app.get('/api/:shop/advance-adjusted', async (req, res) => {
   }
 });
 
+
+
 app.get('/api/:shop/sales-comparison', async (req, res) => {
   try {
     const { shop } = req.params;
+    const { period } = req.query;
+    let shops = [shop];
+    if (shop === 'All') shops = ['Shop 1', 'Shop 2'];
+
+    let startDate, endDate, prevStartDate, prevEndDate;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = convertToDDMMYYYY(today);
 
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    const yesterdayStr = convertToDDMMYYYY(yesterday);
+    switch (period) {
+      case 'today':
+        startDate = today;
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        prevStartDate = new Date(today);
+        prevStartDate.setDate(today.getDate() - 1);
+        prevEndDate = new Date(prevStartDate);
+        prevEndDate.setHours(23, 59, 59, 999);
+        break;
+      case 'this_week':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - today.getDay() + 1); // Monday
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6); // Sunday
+        endDate.setHours(23, 59, 59, 999);
+        prevStartDate = new Date(startDate);
+        prevStartDate.setDate(startDate.getDate() - 7);
+        prevEndDate = new Date(prevStartDate);
+        prevEndDate.setDate(prevStartDate.getDate() + 6);
+        prevEndDate.setHours(23, 59, 59, 999);
+        break;
+      case 'this_month':
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        prevStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        prevEndDate = new Date(today.getFullYear(), today.getMonth(), 0);
+        prevEndDate.setHours(23, 59, 59, 999);
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid period. Use today, this_week, or this_month.' });
+    }
 
-    const lastWeekStart = new Date(today);
-    lastWeekStart.setDate(today.getDate() - today.getDay() - 7);
-    const lastWeekEnd = new Date(lastWeekStart);
-    lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
-    const lastWeekStartStr = convertToDDMMYYYY(lastWeekStart);
-    const lastWeekEndStr = convertToDDMMYYYY(lastWeekEnd);
+    const startDateStr = convertToDDMMYYYY(startDate);
+    const endDateStr = convertToDDMMYYYY(endDate);
+    const prevStartDateStr = convertToDDMMYYYY(prevStartDate);
+    const prevEndDateStr = convertToDDMMYYYY(prevEndDate);
+    const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
+    const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
+    const prevStartDateYYYYMMDD = convertToYYYYMMDD(prevStartDate);
+    const prevEndDateYYYYMMDD = convertToYYYYMMDD(prevEndDate);
 
-    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-    const lastMonthStartStr = convertToDDMMYYYY(lastMonthStart);
-    const lastMonthEndStr = convertToDDMMYYYY(lastMonthEnd);
+    let current = { totalSales: 0, totalExpenses: 0, netEarnings: 0 };
+    let previous = { totalSales: 0, totalExpenses: 0, netEarnings: 0 };
 
-    const todayData = await Daily.findOne({ shop, date: todayStr });
-    const yesterdayData = await Daily.findOne({ shop, date: yesterdayStr });
-    const lastWeekData = await Daily.find({
-      shop,
-      date: { $gte: lastWeekStartStr, $lte: lastWeekEndStr },
-    });
-    const lastMonthData = await Daily.find({
-      shop,
-      date: { $gte: lastMonthStartStr, $lte: lastMonthEndStr },
-    });
+    for (const currentShop of shops) {
+      const Customer = getCustomerModel(currentShop);
+      const CreditSale = getCreditSaleModel(currentShop);
+      const Expense = getExpenseModel(currentShop);
 
-    const todaySales = todayData ? todayData.sales.totalSales : 0;
-    const yesterdaySales = yesterdayData ? yesterdayData.sales.totalSales : null;
-    const lastWeekSales = lastWeekData.reduce((sum, d) => sum + d.sales.totalSales, 0);
-    const lastMonthSales = lastMonthData.reduce((sum, d) => sum + d.sales.totalSales, 0);
+      // Current period data
+      const currentCustomers = await Customer.find();
+      const currentCreditSales = await CreditSale.find({
+        shop: currentShop,
+        isDeleted: false,
+        lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
+      });
+      const currentExpenses = await Expense.find({
+        date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
+      });
 
-    const yesterdayComparison = yesterdaySales !== null
-      ? {
-          difference: todaySales - yesterdaySales,
-          percentage: yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales * 100).toFixed(2) : 'N/A',
+      // Previous period data
+      const prevCustomers = await Customer.find();
+      const prevCreditSales = await CreditSale.find({
+        shop: currentShop,
+        isDeleted: false,
+        lastTransactionDate: { $gte: prevStartDateStr, $lte: prevEndDateStr },
+      });
+      const prevExpenses = await Expense.find({
+        date: { $gte: prevStartDateYYYYMMDD, $lte: prevEndDateYYYYMMDD },
+      });
+
+      // Current period calculations
+      currentCustomers.forEach(customer => {
+        customer.profiles.forEach(profile => {
+          if (profile.deleteuser.value) return;
+          profile.bills.forEach(bill => {
+            if (bill.date >= startDateStr && bill.date <= endDateStr) {
+              current.totalSales += bill.totalAmount;
+              current.netEarnings += bill.profit || 0;
+            }
+          });
+        });
+      });
+
+      currentCreditSales.forEach(sale => {
+        current.totalSales += sale.paidAmount;
+        if (sale.status === 'Cleared') {
+          current.netEarnings += sale.profit || 0;
         }
-      : 'N/A';
+      });
 
-    const weeklyComparison = lastWeekSales > 0
-      ? {
-          difference: todaySales - lastWeekSales,
-          percentage: ((todaySales - lastWeekSales) / lastWeekSales * 100).toFixed(2),
+      current.totalExpenses += currentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      current.netEarnings -= current.totalExpenses;
+
+      // Previous period calculations
+      prevCustomers.forEach(customer => {
+        customer.profiles.forEach(profile => {
+          if (profile.deleteuser.value) return;
+          profile.bills.forEach(bill => {
+            if (bill.date >= prevStartDateStr && bill.date <= prevEndDateStr) {
+              previous.totalSales += bill.totalAmount;
+              previous.netEarnings += bill.profit || 0;
+            }
+          });
+        });
+      });
+
+      prevCreditSales.forEach(sale => {
+        previous.totalSales += sale.paidAmount;
+        if (sale.status === 'Cleared') {
+          previous.netEarnings += sale.profit || 0;
         }
-      : { difference: 'N/A', percentage: 'N/A' };
+      });
 
-    const monthlyComparison = lastMonthSales > 0
-      ? {
-          difference: todaySales - lastMonthSales,
-          percentage: ((todaySales - lastMonthSales) / lastMonthSales * 100).toFixed(2),
-        }
-      : { difference: 'N/A', percentage: 'N/A' };
+      previous.totalExpenses += prevExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      previous.netEarnings -= previous.totalExpenses;
+    }
 
-    res.json({
-      todaySales,
-      yesterdayComparison,
-      weeklyComparison,
-      monthlyComparison,
-    });
+    const comparison = {
+      totalSales: {
+        current: current.totalSales,
+        previous: previous.totalSales,
+        difference: current.totalSales - previous.totalSales,
+        percentage: previous.totalSales > 0 ? ((current.totalSales - previous.totalSales) / previous.totalSales * 100).toFixed(2) : 'N/A',
+      },
+      totalExpenses: {
+        current: current.totalExpenses,
+        previous: previous.totalExpenses,
+        difference: current.totalExpenses - previous.totalExpenses,
+        percentage: previous.totalExpenses > 0 ? ((current.totalExpenses - previous.totalExpenses) / previous.totalExpenses * 100).toFixed(2) : 'N/A',
+      },
+      netEarnings: {
+        current: current.netEarnings < 0 ? 0 : current.netEarnings,
+        previous: previous.netEarnings < 0 ? 0 : previous.netEarnings,
+        difference: (current.netEarnings < 0 ? 0 : current.netEarnings) - (previous.netEarnings < 0 ? 0 : previous.netEarnings),
+        percentage: previous.netEarnings > 0 ? (((current.netEarnings < 0 ? 0 : current.netEarnings) - (previous.netEarnings < 0 ? 0 : previous.netEarnings)) / previous.netEarnings * 100).toFixed(2) : 'N/A',
+      },
+    };
+
+    res.json(comparison);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2862,6 +3012,7 @@ const saveDailyData = async (shop) => {
     console.error(`Error saving daily data for ${shop}:`, err);
   }
 };
+
 
 // Schedule cron job to run at 11:30 PM daily for both shops
 cron.schedule('30 23 * * *', () => {

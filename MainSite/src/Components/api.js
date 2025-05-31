@@ -1,7 +1,7 @@
 // const BASE_URL = 'https://inventory-management-1-461p.onrender.com/api';
 // const BASE_URL = 'http://bussinespro-env.eba-37zmk5ee.ap-south-1.elasticbeanstalk.com/api';
-const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
-// const BASE_URL = 'http://localhost:5000/api';
+// const BASE_URL = 'https://d3o2vhbxligxnl.cloudfront.net/api';
+const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to handle fetch requests
 async function request(method, url, data = null) {
@@ -402,5 +402,105 @@ export const fetchDeletedCreditSales = async (shop) => {
     return data;
   } catch (error) {
     throw new Error(`Failed to fetch deleted credit sales for ${shop}: ${error.message}`);
+  }
+};
+
+
+
+// New Dashboard APIs Routes
+
+// Dashboard APIs (Missing Routes)
+
+export const fetchPendingAdvances = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/pending-advances?${params}`);
+    return {
+      totalPendingAdvance: Number(data.totalPendingAdvance) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch pending advances for ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchTotalExpenses = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/total-expenses?${params}`);
+    return {
+      totalExpenses: Number(data.totalExpenses) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch total expenses for ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchAdvanceAdjusted = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/advance-adjusted?${params}`);
+    return {
+      totalAdjusted: Number(data.totalAdjusted) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch advance adjusted for ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchSalesComparison = async (shop) => {
+  try {
+    const data = await request('GET', `/${encodeURIComponent(shop)}/sales-comparison`);
+    return {
+      todaySales: Number(data.todaySales) || 0,
+      yesterdayComparison: data.yesterdayComparison === 'N/A' ? 'N/A' : {
+        difference: Number(data.yesterdayComparison.difference) || 0,
+        percentage: data.yesterdayComparison.percentage === 'N/A' ? 'N/A' : Number(data.yesterdayComparison.percentage) || 0
+      },
+      weeklyComparison: {
+        difference: data.weeklyComparison.difference === 'N/A' ? 'N/A' : Number(data.weeklyComparison.difference) || 0,
+        percentage: data.weeklyComparison.percentage === 'N/A' ? 'N/A' : Number(data.weeklyComparison.percentage) || 0
+      },
+      monthlyComparison: {
+        difference: data.monthlyComparison.difference === 'N/A' ? 'N/A' : Number(data.monthlyComparison.difference) || 0,
+        percentage: data.monthlyComparison.percentage === 'N/A' ? 'N/A' : Number(data.monthlyComparison.percentage) || 0
+      }
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch sales comparison for ${shop}: ${error.message}`);
+  }
+};
+
+// Authentication APIs (Missing Routes)
+
+export const login = async (credentials) => {
+  try {
+    const data = await request('POST', `/auth/login`, credentials);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to login: ${error.message}`);
+  }
+};
+
+export const resetCredentials = async (resetData) => {
+  try {
+    const data = await request('POST', `/auth/reset`, resetData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to reset credentials: ${error.message}`);
   }
 };

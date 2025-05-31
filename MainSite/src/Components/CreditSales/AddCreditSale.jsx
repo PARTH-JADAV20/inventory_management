@@ -29,7 +29,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
       setLoading(true);
       fetchCustomers(shop, customerSearch)
         .then((data) => {
-          console.log("Fetched customers:", data); // Debug log
+          console.log("Fetched customers:", data);
           setCustomers(data || []);
           setLoading(false);
         })
@@ -92,7 +92,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
 
   const parseDate = (date) => {
     try {
-      return format(date, "yyyy-MM-dd");
+      return format(date, "dd-MM-yyyy");
     } catch {
       return null;
     }
@@ -337,7 +337,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
                   <DatePicker
                     selected={item.date}
                     onChange={(date) => handleItemChange(index, "date", date)}
-                    dateFormat="dd MMMM yyyy"
+                    dateFormat="dd-MM-yyyy"
                     className="date-input-dax"
                     placeholderText="Select date"
                     required
