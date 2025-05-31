@@ -78,6 +78,14 @@ const Sidebar = () => {
                 <span className="icon">🧑</span> Customers
               </NavLink>
             </li>
+            <li>
+              <NavLink
+                to="/outgoing-payments"
+                className={({ isActive }) => (isActive ? 'active' : '')}
+              >
+                <span className="icon">💸</span> Outgoing Payments
+              </NavLink>
+            </li>
           </>
         )}
       </ul>

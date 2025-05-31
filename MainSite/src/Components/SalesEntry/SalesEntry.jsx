@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { ShopContext } from '../ShopContext/ShopContext.jsx';
 import { Plus, Trash2 } from "lucide-react";
-import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber, addCreditSale } from "../api.js";
+import { fetchStock, fetchCurrentStock, fetchCustomers, createSale, fetchSales, deleteSale, fetchNextBillNumber, addCreditSale, processReturn } from "../api.js";
 import "./SalesEntry.css";
 
 const formatDateToDDMMYYYY = (dateStr) => {
@@ -50,6 +50,20 @@ const SalesEntry = () => {
   const [filterDate, setFilterDate] = useState(formatDateToDDMMYYYY(getCurrentISTDate()));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [returnForm, setReturnForm] = useState({
+    phoneNumber: "",
+    billNo: "",
+    profileName: "",
+    items: [],
+  });
+  const [currentReturnItem, setCurrentReturnItem] = useState({
+    product: "",
+    qty: "",
+    unit: "",
+    selectedPurchasePrice: ""
+  });
+  const [selectedBill, setSelectedBill] = useState(null);
+  const [isManualBillSearch, setIsManualBillSearch] = useState(true);
 
   useEffect(() => {
     const loadBillNumber = async () => {
@@ -141,6 +155,15 @@ const SalesEntry = () => {
     setIsDateEditable(false);
     setIsItemSearchManual(false);
     setWarning('');
+    // Inside the useEffect for shop change, after setWarning('')
+    setReturnForm({
+      billNo: "",
+      phoneNumber: "",
+      profileName: "",
+      items: [],
+    });
+    setCurrentReturnItem({ product: "", qty: "", unit: "" });
+    setSelectedBill(null);
   }, [shop]);
 
   const getGroupedStock = () => {
@@ -283,14 +306,261 @@ const SalesEntry = () => {
     });
   };
 
-  const getAveragePrice = (product, category, unit) => {
-    const stockItem = getGroupedStock().find(
-      (item) =>
-        item.name.toLowerCase() === product.toLowerCase() &&
-        item.category.toLowerCase() === category.toLowerCase() &&
-        item.unit.toLowerCase() === unit.toLowerCase()
+  const handlePhoneInput = (e) => {
+    const phoneNumber = e.target.value;
+    setReturnForm((prev) => ({
+      ...prev,
+      phoneNumber,
+      billNo: prev.billNo, // Keep billNo unless manually cleared
+      profileName: "",
+      items: [],
+    }));
+    setSelectedBill(null);
+    setCurrentReturnItem({ product: "", qty: "", unit: "" });
+  };
+
+  const handleBillSelect = (e) => {
+    const billNo = e.target.value;
+    const bill = sales.find((sale) =>
+      sale.billNo === billNo &&
+      (!returnForm.phoneNumber || sale.phoneNumber === returnForm.phoneNumber)
     );
-    return stockItem ? stockItem.price.toFixed(2) : "0.00";
+    if (bill) {
+      setSelectedBill(bill);
+      setReturnForm((prev) => ({
+        ...prev,
+        billNo: bill.billNo,
+        phoneNumber: bill.phoneNumber,
+        profileName: bill.profileName,
+        items: [],
+      }));
+      setCurrentReturnItem({ product: "", qty: "", unit: "" });
+    } else {
+      setSelectedBill(null);
+      setReturnForm((prev) => ({
+        ...prev,
+        billNo: "",
+        phoneNumber: prev.phoneNumber,
+        profileName: "",
+        items: [],
+      }));
+    }
+  };
+
+  const handleManualBillSearch = (e) => {
+    const billNo = e.target.value;
+    setReturnForm((prev) => ({ ...prev, billNo }));
+    const bill = sales.find((sale) =>
+      sale.billNo === billNo &&
+      (!returnForm.phoneNumber || sale.phoneNumber === returnForm.phoneNumber)
+    );
+    if (bill) {
+      setSelectedBill(bill);
+      setReturnForm((prev) => ({
+        ...prev,
+        phoneNumber: bill.phoneNumber,
+        profileName: bill.profileName,
+        items: [],
+      }));
+    } else {
+      setSelectedBill(null);
+      setReturnForm((prev) => ({
+        ...prev,
+        phoneNumber: prev.phoneNumber,
+        profileName: "",
+        items: [],
+      }));
+    }
+  };
+
+  const toggleBillSearchMode = () => {
+    setIsManualBillSearch((prev) => !prev);
+    setReturnForm((prev) => ({
+      ...prev,
+      billNo: "",
+      profileName: "",
+      items: [],
+    }));
+    setSelectedBill(null);
+    setCurrentReturnItem({ product: "", qty: "", unit: "" });
+  };
+
+  const handleReturnInputChange = (e) => {
+    const { name, value } = e.target;
+    setReturnForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleReturnItemChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "product") {
+      const billItem = selectedBill?.items.find(
+        (item) => item.product.toLowerCase() === value.toLowerCase()
+      );
+      setCurrentReturnItem((prev) => ({
+        ...prev,
+        product: value,
+        unit: billItem ? billItem.unit : "",
+        selectedPurchasePrice: "",
+      }));
+    } else if (name === "selectedPurchasePrice") {
+      setCurrentReturnItem((prev) => ({ ...prev, [name]: parseFloat(value) }));
+    } else {
+      setCurrentReturnItem((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const addReturnItem = () => {
+    if (!selectedBill) {
+      alert("Please select a valid bill first.");
+      return;
+    }
+    if (!currentReturnItem.product || !currentReturnItem.qty || !currentReturnItem.unit || !currentReturnItem.selectedPurchasePrice) {
+      alert("Please fill all return item fields, including purchase price.");
+      return;
+    }
+
+    const qty = parseFloat(currentReturnItem.qty);
+    const billItem = selectedBill.items.find(
+      (item) =>
+        item.product.toLowerCase() === currentReturnItem.product.toLowerCase() &&
+        item.unit.toLowerCase() === currentReturnItem.unit.toLowerCase()
+    );
+
+    if (!billItem || billItem.qty < qty) {
+      alert("Invalid item or quantity exceeds purchased amount.");
+      return;
+    }
+
+    const customer = customers.find((c) => c.phoneNumber === selectedBill.phoneNumber);
+    const profile = customer?.profiles.find((p) => p.name === selectedBill.profileName);
+    const previousReturns = profile?.returns
+      ?.filter((r) => r.billNo === selectedBill.billNo)
+      ?.flatMap((r) => r.items)
+      ?.filter(
+        (item) =>
+          item.product.toLowerCase() === currentReturnItem.product.toLowerCase() &&
+          item.unit.toLowerCase() === currentReturnItem.unit.toLowerCase()
+      ) || [];
+    const totalReturnedQty = previousReturns.reduce((sum, item) => sum + item.qty, 0);
+    const maxReturnableQty = billItem.qty - totalReturnedQty;
+
+    if (qty > maxReturnableQty) {
+      alert(`Quantity exceeds available returnable amount (${maxReturnableQty}).`);
+      return;
+    }
+
+    setReturnForm((prev) => ({
+      ...prev,
+      items: [...prev.items, {
+        ...currentReturnItem,
+        qty,
+        pricePerQty: billItem.pricePerQty,
+        category: billItem.category || "Unknown",
+        selectedPurchasePrice: currentReturnItem.selectedPurchasePrice, // Include selected purchase price
+      }],
+    }));
+    setCurrentReturnItem({ product: "", qty: "", unit: "", selectedPurchasePrice: "" });
+  };
+
+  const removeReturnItem = (index) => {
+    setReturnForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleProcessReturn = async () => {
+    if (!returnForm.billNo || !returnForm.phoneNumber || !returnForm.profileName) {
+      setWarning("Please select a bill and ensure customer details are filled.");
+      return;
+    }
+    if (returnForm.items.length === 0) {
+      setWarning("Please add at least one item to return.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      setWarning("");
+      const shopApiName = shop === "Shop 1" ? "Shop 1" : "Shop 2";
+      const calculatedReturnAmount = returnForm.items.reduce(
+        (sum, item) => sum + item.qty * item.pricePerQty,
+        0
+      );
+      const returnData = {
+        billNo: returnForm.billNo,
+        phoneNumber: returnForm.phoneNumber,
+        profileName: returnForm.profileName,
+        items: returnForm.items.map((item) => ({
+          product: item.product,
+          qty: item.qty,
+          unit: item.unit,
+          pricePerQty: item.pricePerQty,
+          category: item.category,
+          purchasePrice: item.selectedPurchasePrice,
+          profitAdjustment: item.qty * (item.pricePerQty - item.selectedPurchasePrice),
+        })),
+        returnAmount: parseFloat(calculatedReturnAmount.toFixed(2)),
+        date: formatDateToDDMMYYYY(getCurrentISTDate()),
+      };
+
+      const response = await processReturn(shopApiName, returnData);
+      const { updatedCustomer } = response;
+
+      // Refresh all data
+      const [stockData, groupedStockData, customerData, salesData] = await Promise.all([
+        fetchStock(shopApiName).catch((err) => {
+          console.error("fetchStock error:", err);
+          return [];
+        }),
+        fetchCurrentStock(shopApiName).catch((err) => {
+          console.error("fetchCurrentStock error:", err);
+          return [];
+        }),
+        fetchCustomers(shopApiName).catch((err) => {
+          console.error("fetchCustomers error:", err);
+          return [];
+        }),
+        fetchSales(shopApiName, "", "").catch((err) => {
+          console.error("fetchSales error:", err);
+          return [];
+        }),
+      ]);
+
+      setStock(Array.isArray(stockData) ? stockData : []);
+      setGroupedStock(Array.isArray(groupedStockData) ? groupedStockData : []);
+      setCustomers(Array.isArray(customerData.customers) ? customerData.customers : []);
+      setSales(Array.isArray(salesData) ? salesData : []);
+
+      // Reset return form and related states
+      setReturnForm({
+        phoneNumber: "",
+        billNo: "",
+        profileName: "",
+        items: [],
+      });
+      setSelectedBill(null);
+      setCurrentReturnItem({
+        product: "",
+        qty: "",
+        unit: "",
+        selectedPurchasePrice: "",
+      });
+      setIsManualBillSearch(true);
+      setWarning("Items returned successfully");
+
+      // Debug reset
+      console.log("Return form reset:", {
+        returnForm: { phoneNumber: "", billNo: "", profileName: "", items: [] },
+        selectedBill: null,
+        currentReturnItem: { product: "", qty: "", unit: "", selectedPurchasePrice: "" },
+      });
+    } catch (err) {
+      console.error("Error:", err);
+      setWarning(`Failed to process return: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getItemTotal = () => {
@@ -554,86 +824,125 @@ const SalesEntry = () => {
   };
 
   const handlePrintBill = (bill, profileName, phoneNumber) => {
+    const customer = customers.find((c) => c.phoneNumber === phoneNumber);
+    const profile = customer?.profiles.find((p) => p.name === profileName);
+    const returns = profile?.returns?.filter((r) => r.billNo === bill.billNo) || [];
+
     const printWindow = window.open("", "_blank");
     let billContent = `
     <html>
-      <head>
-        <title>Bill ${bill.billNo}</title>
-        <style>
-          body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
-          h2 { color: #ff6b35; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
-          th { background-color: #2b2b40; color: #a1a5b7; }
-          td { background-color: #1e1e2d; color: #ffffff; }
-          .total { font-weight: bold; }
-          .payment-method { margin-top: 10px; font-style: italic; }
-        </style>
-      </head>
-      <body>
-        <h2>Bill No: ${bill.billNo}</h2>
-        <p>Profile Name: ${profileName}</p>
-        <p>Phone Number: ${phoneNumber}</p>
-        <p>Date: ${bill.date}</p>
-        <p class="payment-method">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Price/Qty</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${bill.items
+    <head>
+      <title>Bill ${bill.billNo}</title>
+      <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+        h2 { color: #ff6b35; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
+        th { background-color: #2b2b40; color: #a1a5b7; }
+        td { background-color: #1e1e2d; color: #ffffff; }
+        .total { font-weight: bold; }
+        .payment-method { margin-top: 10px; font-style: italic; }
+      </style>
+    </head>
+    <body>
+      <h2>Bill No: ${bill.billNo}</h2>
+      <p>Profile Name: ${profileName}</p>
+      <p>Phone Number: ${phoneNumber}</p>
+      <p>Date: ${bill.date}</p>
+      <p class="payment-method">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price/Qty</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bill.items
         .map(
           (item) => `
-              <tr>
-                <td>${item.product}</td>
-                <td>${item.qty}</td>
-                <td>₹${item.pricePerQty}</td>
-                <td>₹${item.amount}</td>
-              </tr>
-            `
+                <tr>
+                  <td>${item.product}</td>
+                  <td>${item.qty}</td>
+                  <td>₹${item.pricePerQty.toFixed(2)}</td>
+                  <td>₹${item.amount.toFixed(2)}</td>
+                </tr>
+              `
         )
         .join("")}
-            <tr className="total">
-              <td colspan="3">Items Total</td>
-              <td>₹${bill.items.reduce((sum, item) => sum + item.amount, 0)}</td>
-            </tr>
-            <tr className="total">
-              <td colspan="3">Other Expenses</td>
-              <td>₹${parseInt(bill.otherExpenses || 0)}</td>
-            </tr>
-            <tr className="total">
-              <td colspan="3">Grand Total</td>
-              <td>₹${(bill.totalAmount).toFixed(2)}</td>
-            </tr>
+          <tr class="total">
+            <td colspan="3">Items Total</td>
+            <td>₹${bill.items
+        .reduce((sum, item) => sum + item.amount, 0)
+        .toFixed(2)}</td>
+          </tr>
+          <tr class="total">
+            <td colspan="3">Other Expenses</td>
+            <td>₹${parseFloat(bill.otherExpenses || 0).toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
   `;
+
+    if (returns.length > 0) {
+      billContent += `
+      <h3>Returned Items</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Return Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${returns
+          .flatMap((r) =>
+            r.items.map(
+              (item) => `
+                  <tr>
+                    <td>${item.product}</td>
+                    <td>${item.qty}</td>
+                    <td>${item.unit}</td>
+                    <td>₹${r.returnAmount.toFixed(2)}</td>
+                  </tr>
+                `
+            )
+          )
+          .join("")}
+          <tr class="total">
+            <td colspan="3">Total Return</td>
+            <td>₹${returns
+          .reduce((sum, r) => sum + r.returnAmount, 0)
+          .toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+    }
 
     if (bill.advanceRemaining !== undefined) {
       billContent += `
-            <tr className="total">
-              <td colspan="3">Advance Remaining</td>
-              <td>₹${bill.advanceRemaining}</td>
-            </tr>
-          `;
+      <tr class="total">
+        <td colspan="3">Advance Remaining</td>
+        <td>₹${bill.advanceRemaining.toFixed(2)}</td>
+      </tr>
+    `;
     }
-
-    if (bill.creditAmount) {
+    if (bill.creditAmount !== undefined) {
       billContent += `
-            <tr className="total">
-              <td colspan="3">Credit Amount</td>
-              <td>₹${bill.creditAmount}</td>
-            </tr>
-          `;
+      <tr class="total">
+        <td colspan="3">Credit Amount</td>
+        <td>₹${bill.creditAmount.toFixed(2)}</td>
+      </tr>
+    `;
     }
 
     billContent += `
-          </tbody>
-        </table>
-      </body>
+    </body>
     </html>
   `;
 
@@ -837,6 +1146,7 @@ const SalesEntry = () => {
             <input
               type="number"
               name="qty"
+              step="1"
               placeholder="Qty"
               value={currentItem.qty}
               onChange={handleItemChange}
@@ -881,6 +1191,7 @@ const SalesEntry = () => {
             </div>
             <input
               type="number"
+              step="1"
               name="pricePerQty"
               placeholder="Price"
               value={currentItem.pricePerQty}
@@ -935,12 +1246,12 @@ const SalesEntry = () => {
                   <td>
                     <input
                       type="number"
+                      step="1"
                       name="otherExpenses"
                       value={newSale.otherExpenses}
                       onChange={handleInputChange}
                       placeholder="0.00"
                       min="0"
-                      step="0.01"
                       style={{ width: '100%', padding: '5px' }}
                     />
                   </td>
@@ -987,6 +1298,260 @@ const SalesEntry = () => {
         </div>
       </div>
 
+      {/* After the sales form container */}
+      <div className="sales-form-container-p">
+        <h2>Return Items - {shop}</h2>
+        <div className="sales-form-p">
+          <div className="form-group-p">
+            <label>Phone Number</label>
+            <input
+              type="text"
+              name="phoneNumber"
+              value={returnForm.phoneNumber}
+              onChange={handlePhoneInput}
+              placeholder="Enter phone number"
+            />
+          </div>
+          <div className="form-group-p">
+            <label>
+              Bill Number
+              <input
+                type="checkbox"
+                checked={isManualBillSearch}
+                onChange={toggleBillSearchMode}
+                style={{ marginLeft: "8px" }}
+              />
+              Manual Search
+            </label>
+            {isManualBillSearch ? (
+              <input
+                type="text"
+                name="billNo"
+                value={returnForm.billNo}
+                onChange={handleManualBillSearch}
+                placeholder="Enter Bill Number"
+              />
+            ) : (
+              <select
+                name="billNo"
+                value={returnForm.billNo}
+                onChange={handleBillSelect}
+              >
+                <option value="">Select bill</option>
+                {sales
+                  .filter((sale) =>
+                    !returnForm.phoneNumber || sale.phoneNumber === returnForm.phoneNumber &&
+                    sale.paymentMethod !== "Credit"
+                  )
+                  .map((sale) => (
+                    <option key={sale.billNo} value={sale.billNo}>
+                      {sale.billNo}
+                    </option>
+                  ))}
+              </select>
+            )}
+          </div>
+          <div className="form-group-p">
+            <label>Profile Name</label>
+            <input
+              type="text"
+              name="profileName"
+              placeholder="Profile Name"
+              value={returnForm.profileName}
+              readOnly
+            />
+          </div>
+          <div className="form-group-p item-row-p">
+            <select
+              name="product"
+              value={currentReturnItem.product}
+              onChange={handleReturnItemChange}
+              style={{ flex: "2", marginRight: "10px" }}
+              disabled={!selectedBill}
+            >
+              <option value="">Select Item</option>
+              {selectedBill?.items.map((item) => (
+                <option key={`${item.product}`} value={item.product}>
+                  {item.product}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              name="qty"
+              placeholder="Qty"
+              value={currentReturnItem.qty}
+              onChange={handleReturnItemChange}
+              min="1"
+              max={
+                selectedBill && currentReturnItem.product && currentReturnItem.unit
+                  ? (() => {
+                    const billItem = selectedBill.items.find(
+                      (item) =>
+                        item.product.toLowerCase() === currentReturnItem.product.toLowerCase() &&
+                        item.unit.toLowerCase() === currentReturnItem.unit.toLowerCase()
+                    );
+                    if (!billItem) return 1;
+                    const customer = customers.find((c) => c.phoneNumber === selectedBill.phoneNumber);
+                    const profile = customer?.profiles.find((p) => p.name === selectedBill.profileName);
+                    const previousReturns = profile?.returns
+                      ?.filter((r) => r.billNo === selectedBill.billNo)
+                      ?.flatMap((r) => r.items)
+                      ?.filter(
+                        (item) =>
+                          item.product.toLowerCase() === currentReturnItem.product.toLowerCase() &&
+                          item.unit.toLowerCase() === currentReturnItem.unit.toLowerCase()
+                      ) || [];
+                    const totalReturnedQty = previousReturns.reduce((sum, item) => sum + item.qty, 0);
+                    return Math.max(1, billItem.qty - totalReturnedQty);
+                  })()
+                  : 1
+              }
+              className="small-input-p"
+            />
+            <input
+              type="text"
+              name="unit"
+              placeholder="Unit"
+              value={currentReturnItem.unit}
+              onChange={handleReturnItemChange}
+              className="small-input-p"
+              readOnly
+            />
+            <select
+              name="selectedPurchasePrice"
+              value={currentReturnItem.selectedPurchasePrice}
+              onChange={handleReturnItemChange}
+              className="small-input-p"
+              disabled={!currentReturnItem.product || !currentReturnItem.qty}
+            >
+              <option value="">Select Purchase Price</option>
+              {selectedBill && currentReturnItem.product && currentReturnItem.qty
+                ? (() => {
+                  const billItem = selectedBill.items.find(
+                    (item) =>
+                      item.product.toLowerCase() === currentReturnItem.product.toLowerCase() &&
+                      item.unit.toLowerCase() === currentReturnItem.unit.toLowerCase()
+                  );
+                  if (!billItem) return [];
+
+                  const customer = customers.find((c) => c.phoneNumber === selectedBill.phoneNumber);
+                  const profile = customer?.profiles.find((p) => p.name === selectedBill.profileName);
+                  const previousReturns = profile?.returns
+                    ?.filter((r) => r.billNo === selectedBill.billNo)
+                    ?.flatMap((r) => r.items)
+                    ?.filter(
+                      (item) =>
+                        item.product.toLowerCase() === currentReturnItem.product.toLowerCase() &&
+                        item.unit.toLowerCase() === currentReturnItem.unit.toLowerCase()
+                    ) || [];
+
+                  return billItem.deductions
+                    ?.filter((deduction) => {
+                      const returnedQtyForPrice = previousReturns
+                        .filter((item) => item.purchasePrice === deduction.price)
+                        .reduce((sum, item) => sum + item.qty, 0);
+                      const availableQty = deduction.quantity - returnedQtyForPrice;
+                      return availableQty >= parseFloat(currentReturnItem.qty);
+                    })
+                    .map((deduction, index) => {
+                      const returnedQtyForPrice = previousReturns
+                        .filter((item) => item.purchasePrice === deduction.price)
+                        .reduce((sum, item) => sum + item.qty, 0);
+                      const availableQty = deduction.quantity - returnedQtyForPrice;
+                      return (
+                        <option key={index} value={deduction.price}>
+                          ₹{deduction.price.toFixed(2)} (Available: {availableQty} {currentReturnItem.unit})
+                        </option>
+                      );
+                    }) || [];
+                })()
+                : []}
+            </select>
+            <input
+              type="text"
+              value={
+                currentReturnItem.qty && currentReturnItem.product
+                  ? `₹${(
+                    parseFloat(currentReturnItem.qty) *
+                    (selectedBill?.items.find(
+                      (item) => item.product.toLowerCase() === currentReturnItem.product.toLowerCase()
+                    )?.pricePerQty || 0)
+                  ).toFixed(2)}`
+                  : "Return Amount"
+              }
+              readOnly
+              disabled
+              className="small-input-p"
+              placeholder="Return Amount"
+            />
+            <button
+              className="generate-btn-p"
+              onClick={addReturnItem}
+              disabled={
+                !currentReturnItem.product ||
+                !currentReturnItem.qty ||
+                !currentReturnItem.unit ||
+                !currentReturnItem.selectedPurchasePrice ||
+                isLoading
+              }
+            >
+              <Plus size={16} /> Add Return Item
+            </button>
+          </div>
+          {selectedBill && returnForm.items.length > 0 && (
+            <table className="items-table-p">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Unit</th>
+                  <th>Original Price/Unit</th>
+                  <th>Purchase Price</th>
+                  <th>Return Amount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnForm.items.map((item, index) => {
+                  const billItem = selectedBill.items.find(
+                    (bi) => bi.product.toLowerCase() === item.product.toLowerCase() && bi.unit.toLowerCase() === item.unit.toLowerCase()
+                  );
+                  return (
+                    <tr key={index}>
+                      <td>{item.product}</td>
+                      <td>{item.qty}</td>
+                      <td>{item.unit}</td>
+                      <td>₹{billItem ? billItem.pricePerQty.toFixed(2) : "N/A"}</td>
+                      <td>₹{item.selectedPurchasePrice.toFixed(2)}</td>
+                      <td>₹{(item.qty * item.pricePerQty).toFixed(2)}</td>
+                      <td>
+                        <button className="delete-btn" onClick={() => removeReturnItem(index)} disabled={isLoading}>
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="total-row-p">
+                  <td colSpan="5">Total Return</td>
+                  <td>₹{returnForm.items.reduce((sum, item) => sum + item.qty * item.pricePerQty, 0).toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+          <div className="form-buttons-p">
+            <button
+              className="generate-btn-p"
+              onClick={handleProcessReturn}
+              disabled={returnForm.items.length === 0 || !returnForm.billNo || isLoading}
+            >
+              Process Return
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="recent-sales-container-p">
         <h2>Today Sales</h2>
         <div className="sales-filter-row-p">
@@ -1005,7 +1570,7 @@ const SalesEntry = () => {
           />
         </div>
         {sortedDates.length > 0 ? (
-          sortedDates.map((date) => (
+          sortedDates.map((date, index) => (
             <div key={date}>
               <h3 style={{ color: "#ff6b35", margin: "20px 0 10px" }}>{date}</h3>
               <table
@@ -1023,6 +1588,7 @@ const SalesEntry = () => {
                       color: "#a1a5b7",
                     }}
                   >
+                    <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>Sr.No</th>
                     <th style={{ border: "1px solid #3a3a5a", padding: "10px", textAlign: "left" }}>
                       Profile
                     </th>
@@ -1045,9 +1611,10 @@ const SalesEntry = () => {
                 </thead>
                 <tbody>
                   {salesByDate[date]
-                    .sort((a, b) => a.billNo.localeCompare(b.billNo))
-                    .map((sale) => (
+                    .sort((a, b) => b.billNo.localeCompare(a.billNo))
+                    .map((sale, index) => (
                       <tr key={sale.billNo}>
+                        <td style={{ border: "1px solid #3a3a5a", padding: "10px", fontWeight: "bolder", color: "#ff6b2c" }}>{index + 1}</td>
                         <td style={{ border: "1px solid #3a3a5a", padding: "10px" }}>
                           {sale.profileName}
                         </td>
@@ -1122,7 +1689,7 @@ const SalesEntry = () => {
           <p>No sales found.</p>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 

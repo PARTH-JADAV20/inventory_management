@@ -5,7 +5,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { Calendar, AlertCircle } from "lucide-react";
 import { fetchCustomers, addCreditSale } from "../api.js";
 import "./AddCreditSale.css";
-
+8
 const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
   const today = new Date();
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
@@ -337,7 +337,7 @@ const AddCreditSale = ({ onAdd, onCancel, shop = "Shop 1", stock = [] }) => {
                   <DatePicker
                     selected={item.date}
                     onChange={(date) => handleItemChange(index, "date", date)}
-                    dateFormat="dd-MM-yyyy"
+                    dateFormat="dd-mm-yyyy"
                     className="date-input-dax"
                     placeholderText="Select date"
                     required

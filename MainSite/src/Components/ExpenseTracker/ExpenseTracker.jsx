@@ -492,6 +492,7 @@ const ExpenseTracker = () => {
         <table className="expense-table">
           <thead>
             <tr>
+              <th>Sr.NO</th>
               <th>Date</th>
               <th>Category</th>
               <th>Description</th>
@@ -507,8 +508,9 @@ const ExpenseTracker = () => {
                 <td colSpan="7">{loading ? "Loading..." : error ? error : "No expenses found."}</td>
               </tr>
             ) : (
-              filteredExpenses.map((expense) => (
+              filteredExpenses.map((expense,index) => (
                 <tr key={expense.id}>
+                  <td style={{fontWeight:"bolder", color : "#ff6b2c"}}>{index+1}</td>
                   <td>{format(new Date(expense.date), "dd-MM-yyyy")}</td>
                   <td>{expense.category}</td>
                   <td>{expense.expenseDescription || '-'}</td>
