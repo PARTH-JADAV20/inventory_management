@@ -211,6 +211,14 @@ const dailySchema = new mongoose.Schema({
     Online: { type: Number, default: 0 },
     Cheque: { type: Number, default: 0 },
   },
+  topSellingItems: [{
+    product: { type: String, required: true },
+    unit: { type: String, required: true },
+    category: { type: String, required: true },
+    quantitySold: { type: Number, required: true },
+    totalRevenue: { type: Number, required: true },
+    totalProfit: { type: Number, required: true }
+  }],
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -307,6 +315,8 @@ const validateDate = (dateStr) => {
   return date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year;
 };
 
+
+
 // Stock Routes
 app.get('/api/:shop/stock', async (req, res) => {
   try {
@@ -393,6 +403,8 @@ app.delete('/api/:shop/stock', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+
 
 // Sales Routes (Unchanged)
 app.post('/api/:shop/sales', async (req, res) => {
@@ -914,6 +926,8 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
   }
 });
 
+
+
 // Expense Routes
 app.get('/api/:shop/expenses', async (req, res) => {
   try {
@@ -965,6 +979,8 @@ app.delete('/api/:shop/expenses/:id', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+
 
 // Customer Routes
 app.get('/api/:shop/customers', async (req, res) => {
@@ -1209,6 +1225,8 @@ app.put('/api/:shop/customers/:phoneNumber/profiles/:profileId/softdelete', asyn
   }
 });
 
+
+
 // Advance Payment Routes
 app.post('/api/:shop/advance/:phoneNumber/:profileId', async (req, res) => {
   try {
@@ -1300,6 +1318,8 @@ app.delete('/api/:shop/advance/:phoneNumber/profiles/:profileId', async (req, re
     res.status(400).json({ error: err.message });
   }
 });
+
+
 
 // Credit Sales Routes
 app.get('/api/:shop/credits', async (req, res) => {
@@ -2093,6 +2113,8 @@ app.get('/api/:shop/credits/deleted', async (req, res) => {
   }
 });
 
+
+
 // Dashboard Routes
 app.get('/api/:shop/low-stock', async (req, res) => {
   try {
@@ -2360,6 +2382,9 @@ app.get('/api/:shop/users', async (req, res) => {
   }
 });
 
+
+
+
 app.get('/api/:shop/advance-payments', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -2587,152 +2612,114 @@ app.get('/api/:shop/total-expenses', async (req, res) => {
   }
 });
 
-
-
-app.get('/api/:shop/recent-purchases', async (req, res) => {
+// Fetch users with advance balance <= 25,000
+app.get('/api/:shop/lowest-advance-users', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { period, date } = req.query;
-    const Stock = getStockModel(shop);
+    let shops = [shop];
+    if (shop === 'All') shops = ['Shop 1', 'Shop 2'];
 
-    let startDate, endDate;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const advanceUsers = [];
 
-    if (period === 'today') {
-      startDate = today;
-      endDate = new Date(today);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'week') {
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (date) {
-      startDate = new Date(convertToYYYYMMDD(date));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(0);
-      endDate = new Date();
-    }
+    for (const currentShop of shops) {
+      const Customer = getCustomerModel(currentShop);
+      const customers = await Customer.find();
 
-    const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
-    const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
-
-    const purchases = await Stock.find({
-      addedDate: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
-    }).sort({ addedDate: -1 }).limit(10);
-
-    if (!purchases.length) {
-      return res.json({ message: 'No recent purchases.' });
-    }
-
-    res.json(purchases.map(p => ({
-      product: p.name,
-      quantity: p.quantity,
-      unit: p.unit,
-      price: p.price,
-      category: p.category,
-      date: convertToDDMMYYYY(p.addedDate),
-    })));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/:shop/recent-sales', async (req, res) => {
-  try {
-    const { shop } = req.params;
-    const { period, date } = req.query;
-    const Customer = getCustomerModel(shop);
-    const CreditSale = getCreditSaleModel(shop);
-
-    let startDate, endDate;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (period === 'today') {
-      startDate = today;
-      endDate = new Date(today);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'week') {
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (date) {
-      startDate = new Date(convertToYYYYMMDD(date));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(0);
-      endDate = new Date();
-    }
-
-    const startDateStr = convertToDDMMYYYY(startDate);
-    const endDateStr = convertToDDMMYYYY(endDate);
-
-    const customers = await Customer.find();
-    const creditSales = await CreditSale.find({
-      shop,
-      isDeleted: false,
-      lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
-    });
-
-    const sales = [];
-
-    customers.forEach(customer => {
-      customer.profiles.forEach(profile => {
-        if (profile.deleteuser.value) return;
-        profile.bills.forEach(bill => {
-          if (bill.date >= startDateStr && bill.date <= endDateStr) {
-            sales.push({
-              billNo: bill.billNo,
-              customer: profile.name,
-              amount: bill.totalAmount,
-              paymentMethod: bill.paymentMethod || 'Cash',
-              date: bill.date,
+      customers.forEach(customer => {
+        customer.profiles.forEach(profile => {
+          if (profile.deleteuser.value || !profile.advance?.value) return;
+          const balance = profile.advance.currentamount || 0;
+          if (balance > 0 && balance <= 25000) {
+            advanceUsers.push({
+              shop: currentShop,
+              name: profile.name || 'Unknown',
+              pending: balance,
+              lastTransactionDate: profile.advanceHistory?.length
+                ? profile.advanceHistory[profile.advanceHistory.length - 1].date
+                : null
             });
           }
         });
       });
-    });
-
-    creditSales.forEach(sale => {
-      sales.push({
-        billNo: sale.billNumber,
-        customer: sale.customerName,
-        amount: sale.totalAmount + sale.paidAmount,
-        paymentMethod: 'Credit',
-        date: sale.lastTransactionDate,
-      });
-    });
-
-    sales.sort((a, b) => new Date(b.date.split('-').reverse().join('-')) - new Date(a.date.split('-').reverse().join('-')));
-
-    if (!sales.length) {
-      return res.json({ message: 'No recent sales.' });
     }
 
-    res.json(sales.slice(0, 10));
+    // Sort by pending balance (ascending)
+    advanceUsers.sort((a, b) => a.pending - b.pending);
+
+    res.json(advanceUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// Fetch top credit users by overdue amount
+app.get('/api/:shop/top-credit-users', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    let shops = [shop];
+    if (shop === 'All') shops = ['Shop 1', 'Shop 2'];
+
+    const creditUsers = [];
+
+    for (const currentShop of shops) {
+      const Customer = getCustomerModel(currentShop);
+      const CreditSale = getCreditSaleModel(currentShop);
+      const customers = await Customer.find();
+      const creditSales = await CreditSale.find({ shop: currentShop, isDeleted: false });
+
+      const overdueByCustomer = {};
+
+      // Aggregate credit sales by customer
+      creditSales.forEach(sale => {
+        const customerId = sale.customerId?.toString();
+        if (!customerId) return;
+        const overdue = sale.totalAmount - sale.paidAmount;
+        if (overdue > 0) {
+          if (!overdueByCustomer[customerId]) {
+            overdueByCustomer[customerId] = {
+              shop: currentShop,
+              overdue: 0,
+              lastTransactionDate: sale.lastTransactionDate
+            };
+          }
+          overdueByCustomer[customerId].overdue += overdue;
+          // Update last transaction date if newer
+          if (sale.lastTransactionDate > overdueByCustomer[customerId].lastTransactionDate) {
+            overdueByCustomer[customerId].lastTransactionDate = sale.lastTransactionDate;
+          }
+        }
+      });
+
+      // Match customer details
+      customers.forEach(customer => {
+        customer.profiles.forEach(profile => {
+          if (profile.deleteuser.value) return;
+          const customerId = customer._id.toString();
+          if (overdueByCustomer[customerId]) {
+            creditUsers.push({
+              shop: currentShop,
+              name: profile.name || 'Unknown',
+              overdue: overdueByCustomer[customerId].overdue,
+              lastTransactionDate: overdueByCustomer[customerId].lastTransactionDate
+            });
+          }
+        });
+      });
+    }
+
+    // Sort by overdue amount (descending) and limit to top 10
+    creditUsers.sort((a, b) => b.overdue - a.overdue);
+    const topCreditUsers = creditUsers.slice(0, 10);
+
+    res.json(topCreditUsers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+//extra - bekar routes client badal badal kare aetle rakhya che
 app.get('/api/:shop/pending-advances', async (req, res) => {
   try {
     const { shop } = req.params;
@@ -2846,6 +2833,7 @@ app.get('/api/:shop/sales-comparison', async (req, res) => {
     let startDate, endDate, prevStartDate, prevEndDate;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    let compare = true;
 
     switch (period) {
       case 'today':
@@ -2877,18 +2865,33 @@ app.get('/api/:shop/sales-comparison', async (req, res) => {
         prevEndDate = new Date(today.getFullYear(), today.getMonth(), 0);
         prevEndDate.setHours(23, 59, 59, 999);
         break;
+      case 'yesterday':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 1);
+        endDate = new Date(startDate);
+        endDate.setHours(23, 59, 59, 999);
+        compare = false;
+        break;
+      case 'last_month':
+        startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+        endDate.setHours(23, 59, 59, 999);
+        compare = false;
+        break;
+      case 'last_3_months':
+        startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+        endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+        endDate.setHours(23, 59, 59, 999);
+        compare = false;
+        break;
       default:
-        return res.status(400).json({ error: 'Invalid period. Use today, this_week, or this_month.' });
+        return res.status(400).json({ error: 'Invalid period. Use today, this_week, this_month, yesterday, last_month, or last_3_months.' });
     }
 
     const startDateStr = convertToDDMMYYYY(startDate);
     const endDateStr = convertToDDMMYYYY(endDate);
-    const prevStartDateStr = convertToDDMMYYYY(prevStartDate);
-    const prevEndDateStr = convertToDDMMYYYY(prevEndDate);
     const startDateYYYYMMDD = convertToYYYYMMDD(startDate);
     const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
-    const prevStartDateYYYYMMDD = convertToYYYYMMDD(prevStartDate);
-    const prevEndDateYYYYMMDD = convertToYYYYMMDD(prevEndDate);
 
     let current = { totalSales: 0, totalExpenses: 0, netEarnings: 0 };
     let previous = { totalSales: 0, totalExpenses: 0, netEarnings: 0 };
@@ -2909,18 +2912,6 @@ app.get('/api/:shop/sales-comparison', async (req, res) => {
         date: { $gte: startDateYYYYMMDD, $lte: endDateYYYYMMDD },
       });
 
-      // Previous period data
-      const prevCustomers = await Customer.find();
-      const prevCreditSales = await CreditSale.find({
-        shop: currentShop,
-        isDeleted: false,
-        lastTransactionDate: { $gte: prevStartDateStr, $lte: prevEndDateStr },
-      });
-      const prevExpenses = await Expense.find({
-        date: { $gte: prevStartDateYYYYMMDD, $lte: prevEndDateYYYYMMDD },
-      });
-
-      // Current period calculations
       currentCustomers.forEach(customer => {
         customer.profiles.forEach(profile => {
           if (profile.deleteuser.value) return;
@@ -2943,56 +2934,208 @@ app.get('/api/:shop/sales-comparison', async (req, res) => {
       current.totalExpenses += currentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
       current.netEarnings -= current.totalExpenses;
 
-      // Previous period calculations
-      prevCustomers.forEach(customer => {
-        customer.profiles.forEach(profile => {
-          if (profile.deleteuser.value) return;
-          profile.bills.forEach(bill => {
-            if (bill.date >= prevStartDateStr && bill.date <= prevEndDateStr) {
-              previous.totalSales += bill.totalAmount;
-              previous.netEarnings += bill.profit || 0;
-            }
+      // Previous period data (only if comparison is needed)
+      if (compare) {
+        const prevStartDateStr = convertToDDMMYYYY(prevStartDate);
+        const prevEndDateStr = convertToDDMMYYYY(prevEndDate);
+        const prevStartDateYYYYMMDD = convertToYYYYMMDD(prevStartDate);
+        const prevEndDateYYYYMMDD = convertToYYYYMMDD(prevEndDate);
+
+        const prevCustomers = await Customer.find();
+        const prevCreditSales = await CreditSale.find({
+          shop: currentShop,
+          isDeleted: false,
+          lastTransactionDate: { $gte: prevStartDateStr, $lte: prevEndDateStr },
+        });
+        const prevExpenses = await Expense.find({
+          date: { $gte: prevStartDateYYYYMMDD, $lte: prevEndDateYYYYMMDD },
+        });
+
+        prevCustomers.forEach(customer => {
+          customer.profiles.forEach(profile => {
+            if (profile.deleteuser.value) return;
+            profile.bills.forEach(bill => {
+              if (bill.date >= prevStartDateStr && bill.date <= prevEndDateStr) {
+                previous.totalSales += bill.totalAmount;
+                previous.netEarnings += bill.profit || 0;
+              }
+            });
           });
         });
-      });
 
-      prevCreditSales.forEach(sale => {
-        previous.totalSales += sale.paidAmount;
-        if (sale.status === 'Cleared') {
-          previous.netEarnings += sale.profit || 0;
-        }
-      });
+        prevCreditSales.forEach(sale => {
+          previous.totalSales += sale.paidAmount;
+          if (sale.status === 'Cleared') {
+            previous.netEarnings += sale.profit || 0;
+          }
+        });
 
-      previous.totalExpenses += prevExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-      previous.netEarnings -= previous.totalExpenses;
+        previous.totalExpenses += prevExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+        previous.netEarnings -= previous.totalExpenses;
+      }
     }
 
-    const comparison = {
-      totalSales: {
-        current: current.totalSales,
-        previous: previous.totalSales,
-        difference: current.totalSales - previous.totalSales,
-        percentage: previous.totalSales > 0 ? ((current.totalSales - previous.totalSales) / previous.totalSales * 100).toFixed(2) : 'N/A',
+    const response = {
+      current: {
+        sales: current.totalSales,
+        expenses: current.totalExpenses,
+        net: current.netEarnings < 0 ? 0 : current.netEarnings
       },
-      totalExpenses: {
-        current: current.totalExpenses,
-        previous: previous.totalExpenses,
-        difference: current.totalExpenses - previous.totalExpenses,
-        percentage: previous.totalExpenses > 0 ? ((current.totalExpenses - previous.totalExpenses) / previous.totalExpenses * 100).toFixed(2) : 'N/A',
-      },
-      netEarnings: {
-        current: current.netEarnings < 0 ? 0 : current.netEarnings,
-        previous: previous.netEarnings < 0 ? 0 : previous.netEarnings,
-        difference: (current.netEarnings < 0 ? 0 : current.netEarnings) - (previous.netEarnings < 0 ? 0 : previous.netEarnings),
-        percentage: previous.netEarnings > 0 ? (((current.netEarnings < 0 ? 0 : current.netEarnings) - (previous.netEarnings < 0 ? 0 : previous.netEarnings)) / previous.netEarnings * 100).toFixed(2) : 'N/A',
-      },
+      previous: compare ? {
+        sales: previous.totalSales,
+        expenses: previous.totalExpenses,
+        net: previous.netEarnings < 0 ? 0 : previous.netEarnings
+      } : {
+        sales: 0,
+        expenses: 0,
+        net: 0
+      }
     };
 
-    res.json(comparison);
+    res.json(response);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+//Item Profitability Route
+app.get('/api/:shop/item-profitability', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { date, startDate, endDate, category, search } = req.query;
+    const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
+
+    // Build date filter
+    let dateFilter = {};
+    if (date) {
+      dateFilter = { date: convertToDDMMYYYY(date) };
+    } else if (startDate && endDate) {
+      dateFilter = {
+        date: {
+          $gte: convertToDDMMYYYY(startDate),
+          $lte: convertToDDMMYYYY(endDate)
+        }
+      };
+    }
+
+    // Build item filter
+    let itemFilter = {};
+    if (category && category !== 'All') {
+      itemFilter['items.category'] = category;
+    }
+    if (search) {
+      itemFilter['items.product'] = { $regex: search, $options: 'i' };
+    }
+
+    // Aggregate from Customer bills
+    const customerItems = await Customer.aggregate([
+      { $unwind: '$profiles' },
+      { $match: { 'profiles.deleteuser.value': false } },
+      { $unwind: '$profiles.bills' },
+      { $match: { ...dateFilter, 'profiles.bills.paymentMethod': { $ne: 'Credit' } } },
+      { $unwind: '$profiles.bills.items' },
+      { $match: itemFilter },
+      {
+        $group: {
+          _id: {
+            product: '$profiles.bills.items.product',
+            unit: '$profiles.bills.items.unit',
+            category: '$profiles.bills.items.category'
+          },
+          totalQty: { $sum: '$profiles.bills.items.qty' },
+          totalRevenue: { $sum: '$profiles.bills.items.amount' },
+          deductions: { $push: '$profiles.bills.items.deductions' }
+        }
+      }
+    ]);
+
+    // Aggregate from CreditSale (cleared only)
+    const creditItems = await CreditSale.aggregate([
+      { $match: { shop, isDeleted: false, status: 'Cleared', ...dateFilter } },
+      { $unwind: '$items' },
+      { $match: itemFilter },
+      {
+        $group: {
+          _id: {
+            product: '$items.product',
+            unit: '$items.unit',
+            category: '$items.category'
+          },
+          totalQty: { $sum: '$items.qty' },
+          totalRevenue: { $sum: '$items.amount' },
+          deductions: { $push: '$items.deductions' }
+        }
+      }
+    ]);
+
+    // Combine and calculate profit
+    const itemMap = new Map();
+    
+    // Process customer items
+    for (const item of customerItems) {
+      const key = `${item._id.product}-${item._id.unit}-${item._id.category}`;
+      let cost = 0;
+      item.deductions.flat().forEach(d => {
+        cost += d.price * d.quantity;
+      });
+      itemMap.set(key, {
+        product: item._id.product,
+        unit: item._id.unit,
+        category: item._id.category,
+        quantity: item.totalQty,
+        revenue: item.totalRevenue,
+        cost,
+        profit: item.totalRevenue - cost
+      });
+    }
+
+    // Process credit items
+    for (const item of creditItems) {
+      const key = `${item._id.product}-${item._id.unit}-${item._id.category}`;
+      let cost = 0;
+      item.deductions.flat().forEach(d => {
+        cost += d.price * d.quantity;
+      });
+      if (itemMap.has(key)) {
+        const existing = itemMap.get(key);
+        itemMap.set(key, {
+          ...existing,
+          quantity: existing.quantity + item.totalQty,
+          revenue: existing.revenue + item.totalRevenue,
+          cost: existing.cost + cost,
+          profit: existing.profit + (item.totalRevenue - cost)
+        });
+      } else {
+        itemMap.set(key, {
+          product: item._id.product,
+          unit: item._id.unit,
+          category: item._id.category,
+          quantity: item.totalQty,
+          revenue: item.totalRevenue,
+          cost,
+          profit: item.totalRevenue - cost
+        });
+      }
+    }
+
+    // Convert map to array and sort
+    const results = Array.from(itemMap.values())
+      .map(item => ({
+        ...item,
+        revenue: parseFloat(item.revenue.toFixed(2)),
+        cost: parseFloat(item.cost.toFixed(2)),
+        profit: parseFloat(item.profit.toFixed(2))
+      }))
+      .sort((a, b) => b.profit - a.profit);
+
+    res.json(results);
+  } catch (err) {
+    console.error('Item profitability error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
@@ -3067,6 +3210,9 @@ const saveDailyData = async (shop) => {
       Advance: 0,
     };
 
+    // Aggregate top-selling items
+    const itemMap = new Map();
+
     customers.forEach(customer => {
       customer.profiles.forEach(profile => {
         if (profile.deleteuser.value) return;
@@ -3075,6 +3221,37 @@ const saveDailyData = async (shop) => {
             totalSales += bill.totalAmount;
             const method = bill.paymentMethod || 'Cash';
             salesByMethod[method] = (salesByMethod[method] || 0) + bill.totalAmount;
+
+            // Process items for top sellers
+            bill.items.forEach(item => {
+              const key = `${item.product}-${item.unit}-${item.category}`;
+              let cost = 0;
+              item.deductions.forEach(d => {
+                cost += d.price * d.quantity;
+              });
+              const profit = item.amount - cost;
+
+              if (itemMap.has(key)) {
+                const existing = itemMap.get(key);
+                itemMap.set(key, {
+                  product: item.product,
+                  unit: item.unit,
+                  category: item.category,
+                  quantitySold: existing.quantitySold + item.qty,
+                  totalRevenue: existing.totalRevenue + item.amount,
+                  totalProfit: existing.totalProfit + profit
+                });
+              } else {
+                itemMap.set(key, {
+                  product: item.product,
+                  unit: item.unit,
+                  category: item.category,
+                  quantitySold: item.qty,
+                  totalRevenue: item.amount,
+                  totalProfit: profit
+                });
+              }
+            });
           }
         });
       });
@@ -3083,7 +3260,51 @@ const saveDailyData = async (shop) => {
     creditSales.forEach(sale => {
       totalSales += sale.totalAmount + sale.paidAmount;
       salesByMethod.Credit = (salesByMethod.Credit || 0) + (sale.totalAmount + sale.paidAmount);
+
+      // Process credit sale items for top sellers
+      sale.items.forEach(item => {
+        const key = `${item.product}-${item.unit}-${item.category}`;
+        let cost = 0;
+        item.deductions.forEach(d => {
+          cost += d.price * d.quantity;
+        });
+        const profit = item.amount - cost;
+
+        if (itemMap.has(key)) {
+          const existing = itemMap.get(key);
+          itemMap.set(key, {
+            product: item.product,
+            unit: item.unit,
+            category: item.category,
+            quantitySold: existing.quantitySold + item.qty,
+            totalRevenue: existing.totalRevenue + item.amount,
+            totalProfit: existing.totalProfit + profit
+          });
+        } else {
+          itemMap.set(key, {
+            product: item.product,
+            unit: item.unit,
+            category: item.category,
+            quantitySold: item.qty,
+            totalRevenue: item.amount,
+            totalProfit: profit
+          });
+        }
+      });
     });
+
+    // Get top 4 selling items
+    const topSellingItems = Array.from(itemMap.values())
+      .sort((a, b) => b.quantitySold - a.quantitySold)
+      .slice(0, 4)
+      .map(item => ({
+        product: item.product,
+        unit: item.unit,
+        category: item.category,
+        quantitySold: item.quantitySold,
+        totalRevenue: parseFloat(item.totalRevenue.toFixed(2)),
+        totalProfit: parseFloat(item.totalProfit.toFixed(2))
+      }));
 
     // Fetch credit received
     let totalCreditReceived = 0;
@@ -3191,6 +3412,7 @@ const saveDailyData = async (shop) => {
         totalAdvance,
         ...advanceByMethod,
       },
+      topSellingItems
     });
 
     await dailyData.save();
@@ -3200,6 +3422,9 @@ const saveDailyData = async (shop) => {
   }
 };
 
+
+
+//out-standing Routes
 
 app.get('/api/outstanding-payments', async (req, res) => {
   try {
@@ -3319,6 +3544,8 @@ app.delete('/api/outstanding-payments/:id', async (req, res) => {
     res.status(400).json({ error: 'Failed to delete payment: ' + err.message });
   }
 });
+
+
 
 
 // Schedule cron job to run at 11:30 PM daily for both shops

@@ -17,8 +17,8 @@ import {
   fetchPendingAdvances, 
   fetchCreditSalesSummary, 
   fetchLowStock, 
-  fetchRecentSales, 
-  fetchSalesComparison 
+  fetchSalesComparison,
+  fetchUsers
 } from '../Components/api';
 
 const MainDashboard = () => {
@@ -27,33 +27,60 @@ const MainDashboard = () => {
   const [salesData, setSalesData] = useState({ totalSales: 0, Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
   const [expensesData, setExpensesData] = useState({ totalExpenses: 0, Cash: 0, Online: 0, Cheque: 0 });
   const [profitData, setProfitData] = useState({ totalProfit: 0, Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
-  const [advanceData, setAdvanceData] = useState({ totalPendingAdvance: 0, Cash: 0, Online: 0, Cheque: 0 });
-  const [creditData, setCreditData] = useState({ totalCreditGiven: 0, Cash: 0, Online: 0, Cheque: 0 });
+  const [advanceData, setAdvanceData] = useState({ totalPending: 0, Cash: 0, Online: 0, Cheque: 0 });
+  const [creditData, setCreditData] = useState({ totalCreditGiven: 0, totalCreditReceived: 0, Cash: 0, Online: 0, Cheque: 0 });
   const [stockAlerts, setStockAlerts] = useState([]);
-  const [recentSales, setRecentSales] = useState([]);
-  const [salesComparison, setSalesComparison] = useState({ yesterdayComparison: { percentage: 'N/A' } });
+  const [usersData, setUsersData] = useState({ totalUsers: 0, creditUsers: 0, advanceUsers: 0 });
+  const [salesComparison, setSalesComparison] = useState({ 
+    current: { sales: 0, expenses: 0, net: 0 }, 
+    previous: { sales: 0, expenses: 0, net: 0 } 
+  });
+
+  // Mock data for advance and credit users (to be replaced with API calls later)
+  const advanceUsers = [
+    { name: 'Rahul Sharma', pending: 10000 },
+    { name: 'Amit Patel', pending: 15000 },
+    { name: 'Vikas Yadav', pending: 20000 }
+  ].sort((a, b) => a.pending - b.pending);
+
+  const creditUsers = [
+    { name: 'Suresh Gupta', overdue: 500000 },
+    { name: 'Ramesh Singh', overdue: 450000 },
+    { name: 'Manoj Kumar', overdue: 400000 },
+    { name: 'Anil Verma', overdue: 350000 },
+    { name: 'Deepak Jain', overdue: 300000 }
+  ].sort((a, b) => b.overdue - a.overdue);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [sales, expenses, profit, advances, credits, stock, salesRecent, comparison] = await Promise.all([
+        const [
+          sales, 
+          expenses, 
+          profit, 
+          pendingAdvances, 
+          credits, 
+          stock, 
+          comparison,
+          users
+        ] = await Promise.all([
           fetchTotalSales(shop, period),
           fetchTotalExpenses(shop, period),
           fetchTotalProfit(shop, period),
           fetchPendingAdvances(shop, period),
           fetchCreditSalesSummary(shop, period),
           fetchLowStock(shop, period),
-          fetchRecentSales(shop, period),
-          fetchSalesComparison(shop)
+          fetchSalesComparison(shop, period),
+          fetchUsers(shop)
         ]);
         setSalesData(sales);
         setExpensesData(expenses);
         setProfitData(profit);
-        setAdvanceData(advances);
+        setAdvanceData(pendingAdvances);
         setCreditData(credits);
         setStockAlerts(stock);
-        setRecentSales(salesRecent);
         setSalesComparison(comparison);
+        setUsersData(users);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       }
@@ -63,6 +90,10 @@ const MainDashboard = () => {
 
   const handleShopChange = (e) => setShop(e.target.value);
   const handlePeriodChange = (value) => setPeriod(value);
+
+  const salesChangePercentage = salesComparison.previous.sales !== 0 
+    ? ((salesComparison.current.sales - salesComparison.previous.sales) / salesComparison.previous.sales * 100).toFixed(2)
+    : 'N/A';
 
   return (
     <main className="main-dax">
@@ -95,8 +126,8 @@ const MainDashboard = () => {
           </div>
           <p className="card-value-dax">₹{salesData.totalSales.toLocaleString()}</p>
           <p className="card-change-green-dax">
-            {salesComparison.yesterdayComparison.percentage !== 'N/A' 
-              ? `${salesComparison.yesterdayComparison.percentage > 0 ? '+' : ''}${salesComparison.yesterdayComparison.percentage}% vs yesterday`
+            {salesChangePercentage !== 'N/A' 
+              ? `${salesChangePercentage > 0 ? '+' : ''}${salesChangePercentage}% vs previous period`
               : 'N/A'}
           </p>
           <div className="card-details-dax">
@@ -113,7 +144,11 @@ const MainDashboard = () => {
             <TrendingDown className="icon-red-dax" />
           </div>
           <p className="card-value-dax">₹{expensesData.totalExpenses.toLocaleString()}</p>
-          <p className="card-change-red-dax">N/A</p>
+          <p className="card-change-red-dax">
+            {salesComparison.previous.expenses !== 0 
+              ? `${((salesComparison.current.expenses - salesComparison.previous.expenses) / salesComparison.previous.expenses * 100).toFixed(2)}% vs previous period`
+              : 'N/A'}
+          </p>
           <div className="card-details-dax">
             <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{expensesData.Cash.toLocaleString()}</span></div>
             <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{expensesData.Online.toLocaleString()}</span></div>
@@ -126,7 +161,11 @@ const MainDashboard = () => {
             <Wallet className="icon-blue-dax" />
           </div>
           <p className="card-value-dax">₹{profitData.totalProfit.toLocaleString()}</p>
-          <p className="card-change-green-dax">N/A</p>
+          <p className="card-change-green-dax">
+            {salesComparison.previous.net !== 0 
+              ? `${((salesComparison.current.net - salesComparison.previous.net) / salesComparison.previous.net * 100).toFixed(2)}% vs previous period`
+              : 'N/A'}
+          </p>
           <div className="card-details-dax">
             <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{profitData.Cash.toLocaleString()}</span></div>
             <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{profitData.Online.toLocaleString()}</span></div>
@@ -137,10 +176,10 @@ const MainDashboard = () => {
         </div>
         <div className="card-dax">
           <div className="card-header-dax">
-            <h3 className="card-title-dax">Advances</h3>
+            <h3 className="card-title-dax">Pending Advances</h3>
             <CreditCard className="icon-yellow-dax" />
           </div>
-          <p className="card-value-dax">₹{advanceData.totalPendingAdvance.toLocaleString()}</p>
+          <p className="card-value-dax">₹{advanceData.totalPending.toLocaleString()}</p>
           <p className="card-change-yellow-dax">N/A</p>
           <div className="card-details-dax">
             <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{advanceData.Cash.toLocaleString()}</span></div>
@@ -247,16 +286,16 @@ const MainDashboard = () => {
         </div>
         <div className="card-dax">
           <div className="card-header-large-dax">
-            <h3 className="card-title-large-dax">Recent Sales</h3>
+            <h3 className="card-title-large-dax">Lowest Advance Users</h3>
             <a className="link-dax" href="/advance-payments">View All</a>
           </div>
           <div className="customer-list-dax">
-            {recentSales.slice(0, 3).map((sale, index) => (
+            {advanceUsers.slice(0, 3).map((user, index) => (
               <div key={index} className="customer-item-dax">
                 <CreditCard className="icon-yellow-dax" />
                 <div className="customer-info-dax">
-                  <p className="customer-name-dax">{sale.customerName || 'Unknown'}</p>
-                  <p className="customer-detail-dax">Sale: ₹{sale.amount.toLocaleString()} ({sale.date})</p>
+                  <p className="customer-name-dax">{user.name}</p>
+                  <p className="customer-detail-dax">Pending: ₹{user.pending.toLocaleString()}</p>
                 </div>
                 <a href="/advance-payments" className="view-profile-dax">View Profile</a>
               </div>
@@ -278,7 +317,7 @@ const MainDashboard = () => {
                     {item.stock === 0 ? 'Out of Stock' : 'Low Stock'}: {item.itemName}
                   </p>
                   <p className="stock-detail-dax">
-                    Current: {item.stock} {item.unit} | Min. Level: {item.minStockLevel} {item.unit}
+                    Current: {item.stock} {item.unit} | Min. Level: {item.minStockLevel || 10} {item.unit}
                   </p>
                 </div>
                 <button className={`reorder-button-dax ${item.stock === 0 ? 'reorder-red-dax' : 'reorder-yellow-dax'}`}>
@@ -290,7 +329,7 @@ const MainDashboard = () => {
         </div>
         <div className="card-dax">
           <div className="card-header-large-dax">
-            <h3 className="card-title-large-dax">Credit Overdue</h3>
+            <h3 className="card-title-large-dax">Top Credit Users</h3>
             <select className="select-dropdown-small-dax">
               <option>This Month</option>
               <option>Last Month</option>
@@ -298,12 +337,12 @@ const MainDashboard = () => {
             </select>
           </div>
           <div className="customer-list-dax">
-            {recentSales.filter(sale => sale.paymentMethod === 'Credit').slice(0, 5).map((sale, index) => (
+            {creditUsers.slice(0, 5).map((user, index) => (
               <div key={index} className="customer-item-dax">
                 <AlertTriangle className="icon-orange-dax" />
                 <div className="customer-info-dax">
-                  <p className="customer-name-dax">{sale.customerName || 'Unknown'}</p>
-                  <p className="customer-detail-dax">Overdue: ₹{sale.amount.toLocaleString()} ({sale.date})</p>
+                  <p className="customer-name-dax">{user.name}</p>
+                  <p className="customer-detail-dax">Overdue: ₹{user.overdue.toLocaleString()}</p>
                 </div>
                 <a href="/credit-sales" className="view-profile-dax">View Profile</a>
               </div>
