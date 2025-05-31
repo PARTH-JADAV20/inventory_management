@@ -71,7 +71,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
       const refundData = {
         amount,
         note: refund.note || "Customer refund",
-        date: format(new Date(), "yyyy-MM-dd"),
+        date: format(new Date(), "dd-MM-yyyy"),
       };
       const updatedSale = await addCreditRefund(shop, creditSale._id, refundData);
       onUpdate(updatedSale);
@@ -207,7 +207,6 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
   const remainingBalance = creditSale.totalAmount || 0;
   const originalBillAmount = totalPaid + remainingBalance;
 
-  // Helper function to format date safely
   const formatDate = (date) => {
     if (!date || isNaN(new Date(date).getTime())) {
       return "N/A";
@@ -301,7 +300,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
               {creditSale.paymentHistory.map((payment, index) => (
                 <tr key={index}>
                   <td>
-                    {payment.date} {/* Use safe date formatting */}
+                    {payment.date} {/* Use safe date formatting */}2
                   </td>
                   <td>₹{payment.amount.toFixed(2)}</td>
                   <td>{payment.mode}</td>

@@ -296,6 +296,80 @@ export const fetchRecentSales = async (shop, period = '', date = '') => {
   }
 };
 
+export const fetchTotalExpenses = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/total-expenses?${params}`);
+    return {
+      totalExpenses: Number(data.totalExpenses) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch total expenses for ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchPendingAdvances = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/pending-advances?${params}`);
+    return {
+      totalPending: Number(data.totalPending) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch pending advances for ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchAdvanceAdjusted = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/advance-adjusted?${params}`);
+    return {
+      totalAdjusted: Number(data.totalAdjusted) || 0,
+      Cash: Number(data.Cash) || 0,
+      Online: Number(data.Online) || 0,
+      Cheque: Number(data.Cheque) || 0
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch adjusted advances for ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchSalesComparison = async (shop, period = '', date = '') => {
+  try {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (date) params.append('date', date);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/sales-comparison?${params}`);
+    return {
+      current: {
+        sales: Number(data.current.sales) || 0,
+        expenses: Number(data.current.expenses) || 0,
+        net: Number(data.current.net) || 0
+      },
+      previous: {
+        sales: Number(data.previous.sales) || 0,
+        expenses: Number(data.previous.expenses) || 0,
+        net: Number(data.previous.net) || 0
+      }
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch sales comparison for ${shop}: ${error.message}`);
+  }
+};
+
 // Credit Sales APIs
 export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false) => {
   try {
