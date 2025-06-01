@@ -18,8 +18,8 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // MongoDB Connection
-mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-// mongoose.connect('mongodb://localhost:27017/', {
+// mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -2201,7 +2201,7 @@ app.get('/api/:shop/total-sales', async (req, res) => {
     const endDateStr = convertToDDMMYYYY(endDate);
 
     let totalSales = 0;
-    const salesByMethod = { Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
+    const salesByMethod = { Cash: 0, Card: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
 
     for (const currentShop of shops) {
       const Customer = getCustomerModel(currentShop);
@@ -2301,7 +2301,7 @@ app.get('/api/:shop/total-profit', async (req, res) => {
     const endDateYYYYMMDD = convertToYYYYMMDD(endDate);
 
     let totalProfit = 0;
-    const profitByMethod = { Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
+    const profitByMethod = { Cash: 0, Card: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
     let totalExpenses = 0;
 
     for (const currentShop of shops) {
@@ -2426,6 +2426,7 @@ app.get('/api/:shop/advance-payments', async (req, res) => {
     let totalAdvanceBalance = 0;
     const advanceBalanceByMethod = {
       Cash: 0,
+      Card: 0,
       Online: 0,
       Cheque: 0,
     };
@@ -2503,28 +2504,20 @@ app.get('/api/:shop/credit-sales', async (req, res) => {
       lastTransactionDate: { $gte: startDateStr, $lte: endDateStr },
     });
 
-    let totalOverdueAmount = 0;
-    let overdueCustomerCount = 0;
-    const overdueByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-    };
+    let totalOutstandingAmount = 0;
+    let customerCount = 0;
 
     creditSales.forEach(sale => {
       const outstandingAmount = sale.totalAmount - sale.paidAmount;
-      if (outstandingAmount > 1000000) { // 10 lakh
-        totalOverdueAmount += outstandingAmount;
-        overdueCustomerCount++;
-        const method = sale.finalPaymentMethod || 'Cash';
-        overdueByMethod[method] = (overdueByMethod[method] || 0) + outstandingAmount;
+      totalOutstandingAmount += outstandingAmount;
+      if (outstandingAmount > 0) {
+        customerCount++;
       }
     });
 
     res.json({
-      totalOverdueAmount,
-      overdueCustomerCount,
-      ...overdueByMethod,
+      totalOutstandingAmount,
+      customerCount,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2587,24 +2580,16 @@ app.get('/api/:shop/total-expenses', async (req, res) => {
     });
 
     let totalExpenses = 0;
-    const expensesByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-    };
     const expensesByCategory = {};
 
     expenses.forEach(expense => {
       totalExpenses += expense.amount;
-      const method = expense.paymentMode || 'Cash';
-      expensesByMethod[method] = (expensesByMethod[method] || 0) + expense.amount;
       const category = expense.category || 'Uncategorized';
       expensesByCategory[category] = (expensesByCategory[category] || 0) + expense.amount;
     });
 
     res.json({
       totalExpenses,
-      expensesByMethod,
       expensesByCategory,
     });
   } catch (err) {
@@ -2660,51 +2645,57 @@ app.get('/api/:shop/top-credit-users', async (req, res) => {
     if (shop === 'All') shops = ['Shop 1', 'Shop 2'];
 
     const creditUsers = [];
+    const twentyDaysAgo = new Date();
+    twentyDaysAgo.setDate(twentyDaysAgo.getDate() - 20);
 
     for (const currentShop of shops) {
       const Customer = getCustomerModel(currentShop);
       const CreditSale = getCreditSaleModel(currentShop);
-      const customers = await Customer.find();
-      const creditSales = await CreditSale.find({ shop: currentShop, isDeleted: false });
 
-      const overdueByCustomer = {};
-
-      // Aggregate credit sales by customer
-      creditSales.forEach(sale => {
-        const customerId = sale.customerId?.toString();
-        if (!customerId) return;
-        const overdue = sale.totalAmount - sale.paidAmount;
-        if (overdue > 0) {
-          if (!overdueByCustomer[customerId]) {
-            overdueByCustomer[customerId] = {
-              shop: currentShop,
-              overdue: 0,
-              lastTransactionDate: sale.lastTransactionDate
-            };
+      // Aggregate overdue amounts from CreditSale
+      const overdueSales = await CreditSale.aggregate([
+        {
+          $match: {
+            shop: currentShop,
+            isDeleted: false,
+            status: 'Open', // Only consider open credit sales
+            lastTransactionDate: {
+              $lte: convertToYYYYMMDD(twentyDaysAgo.toISOString().split('T')[0])
+            }
           }
-          overdueByCustomer[customerId].overdue += overdue;
-          // Update last transaction date if newer
-          if (sale.lastTransactionDate > overdueByCustomer[customerId].lastTransactionDate) {
-            overdueByCustomer[customerId].lastTransactionDate = sale.lastTransactionDate;
+        },
+        {
+          $group: {
+            _id: {
+              phoneNumber: '$phoneNumber',
+              customerName: '$customerName'
+            },
+            overdue: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } },
+            lastTransactionDate: { $max: '$lastTransactionDate' }
           }
+        },
+        {
+          $match: { overdue: { $gt: 0 } } // Only include customers with overdue amounts
         }
-      });
+      ]);
 
-      // Match customer details
-      customers.forEach(customer => {
-        customer.profiles.forEach(profile => {
-          if (profile.deleteuser.value) return;
-          const customerId = customer._id.toString();
-          if (overdueByCustomer[customerId]) {
-            creditUsers.push({
-              shop: currentShop,
-              name: profile.name || 'Unknown',
-              overdue: overdueByCustomer[customerId].overdue,
-              lastTransactionDate: overdueByCustomer[customerId].lastTransactionDate
-            });
-          }
+      // Fetch customer details and match with overdue sales
+      for (const sale of overdueSales) {
+        const customer = await Customer.findOne({ phoneNumber: sale._id.phoneNumber });
+        if (!customer) continue;
+
+        const profile = customer.profiles.find(
+          p => p.name === sale._id.customerName && !p.deleteuser.value
+        );
+        if (!profile) continue;
+
+        creditUsers.push({
+          shop: currentShop,
+          name: profile.name || 'Unknown',
+          overdue: sale.overdue,
+          lastTransactionDate: sale.lastTransactionDate
         });
-      });
+      }
     }
 
     // Sort by overdue amount (descending) and limit to top 10
@@ -2713,115 +2704,15 @@ app.get('/api/:shop/top-credit-users', async (req, res) => {
 
     res.json(topCreditUsers);
   } catch (err) {
+    console.error('Error fetching top credit users:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 
 
-//extra - bekar routes client badal badal kare aetle rakhya che
-app.get('/api/:shop/pending-advances', async (req, res) => {
-  try {
-    const { shop } = req.params;
-    const Customer = getCustomerModel(shop);
 
-    const customers = await Customer.find();
-    let totalPendingAdvance = 0;
-    const pendingByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-    };
-
-    customers.forEach(customer => {
-      customer.profiles.forEach(profile => {
-        if (profile.deleteuser.value || !profile.advance?.value || !profile.advance.showinadvance) return;
-        const remainingAdvance = profile.advance.currentamount || 0;
-        if (remainingAdvance > 0) {
-          totalPendingAdvance += remainingAdvance;
-          const method = profile.advance.paymentMethod || 'Cash';
-          pendingByMethod[method] = (pendingByMethod[method] || 0) + remainingAdvance;
-        }
-      });
-    });
-
-    res.json({
-      totalPendingAdvance,
-      ...pendingByMethod,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/:shop/advance-adjusted', async (req, res) => {
-  try {
-    const { shop } = req.params;
-    const { period, date } = req.query;
-    const Customer = getCustomerModel(shop);
-
-    let startDate, endDate;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (period === 'today') {
-      startDate = today;
-      endDate = new Date(today);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'week') {
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - today.getDay());
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (period === 'month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (date) {
-      startDate = new Date(convertToYYYYMMDD(date));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      startDate = new Date(0);
-      endDate = new Date();
-    }
-
-    const startDateStr = convertToDDMMYYYY(startDate);
-    const endDateStr = convertToDDMMYYYY(endDate);
-
-    const customers = await Customer.find();
-    let totalAdjusted = 0;
-    const adjustedByMethod = {
-      Cash: 0,
-      Online: 0,
-      Cheque: 0,
-    };
-
-    customers.forEach(customer => {
-      customer.profiles.forEach(profile => {
-        if (profile.deleteuser.value) return;
-        profile.bills.forEach(bill => {
-          if (bill.paymentMethod === 'Advance' && bill.date >= startDateStr && bill.date <= endDateStr) {
-            totalAdjusted += bill.totalAmount;
-            const method = bill.paymentMethod === 'Advance' && profile.advance?.paymentMethod ? profile.advance.paymentMethod : 'Cash';
-            adjustedByMethod[method] = (adjustedByMethod[method] || 0) + bill.totalAmount;
-          }
-        });
-      });
-    });
-
-    res.json({
-      totalAdjusted,
-      ...adjustedByMethod,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
+//IMP Routes
 
 app.get('/api/:shop/sales-comparison', async (req, res) => {
   try {

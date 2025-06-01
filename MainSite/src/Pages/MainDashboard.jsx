@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
-import { 
+import {
   TrendingUp,
   TrendingDown,
   Wallet,
@@ -10,90 +10,103 @@ import {
   Package,
   Users
 } from 'lucide-react';
-import { 
-  fetchTotalSales, 
-  fetchTotalExpenses, 
-  fetchTotalProfit, 
-  fetchPendingAdvances, 
-  fetchCreditSalesSummary, 
-  fetchLowStock, 
+import {
+  fetchTotalSales,
+  fetchTotalExpenses,
+  fetchTotalProfit,
+  fetchCreditSalesSummary,
+  fetchLowStock,
   fetchSalesComparison,
-  fetchUsers
+  fetchUsers,
+  fetchLowestAdvanceUsers,
+  fetchTopCreditUsers,
+  fetchAdvancePayments
 } from '../Components/api';
 
 const MainDashboard = () => {
-  const [shop, setShop] = useState('all');
+  const [shop, setShop] = useState('All');
   const [period, setPeriod] = useState('today');
-  const [salesData, setSalesData] = useState({ totalSales: 0, Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
-  const [expensesData, setExpensesData] = useState({ totalExpenses: 0, Cash: 0, Online: 0, Cheque: 0 });
-  const [profitData, setProfitData] = useState({ totalProfit: 0, Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
-  const [advanceData, setAdvanceData] = useState({ totalPending: 0, Cash: 0, Online: 0, Cheque: 0 });
-  const [creditData, setCreditData] = useState({ totalCreditGiven: 0, totalCreditReceived: 0, Cash: 0, Online: 0, Cheque: 0 });
+  const [salesData, setSalesData] = useState({ totalSales: 0, Cash: 0, Card: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
+  const [expensesData, setExpensesData] = useState({ totalExpenses: 0, categories: [] });
+  const [profitData, setProfitData] = useState({ totalProfit: 0, Cash: 0, Card: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 });
+  const [creditData, setCreditData] = useState({ totalCreditGiven: 0, Cash: 0, Card: 0, Online: 0, Cheque: 0 });
   const [stockAlerts, setStockAlerts] = useState([]);
   const [usersData, setUsersData] = useState({ totalUsers: 0, creditUsers: 0, advanceUsers: 0 });
-  const [salesComparison, setSalesComparison] = useState({ 
-    current: { sales: 0, expenses: 0, net: 0 }, 
-    previous: { sales: 0, expenses: 0, net: 0 } 
+  const [salesComparison, setSalesComparison] = useState({
+    current: { sales: 0, expenses: 0, net: 0 },
+    previous: { sales: 0, expenses: 0, net: 0 }
   });
-
-  // Mock data for advance and credit users (to be replaced with API calls later)
-  const advanceUsers = [
-    { name: 'Rahul Sharma', pending: 10000 },
-    { name: 'Amit Patel', pending: 15000 },
-    { name: 'Vikas Yadav', pending: 20000 }
-  ].sort((a, b) => a.pending - b.pending);
-
-  const creditUsers = [
-    { name: 'Suresh Gupta', overdue: 500000 },
-    { name: 'Ramesh Singh', overdue: 450000 },
-    { name: 'Manoj Kumar', overdue: 400000 },
-    { name: 'Anil Verma', overdue: 350000 },
-    { name: 'Deepak Jain', overdue: 300000 }
-  ].sort((a, b) => b.overdue - a.overdue);
+  const [lowestAdvanceUsers, setLowestAdvanceUsers] = useState([]);
+  const [topCreditUsers, setTopCreditUsers] = useState([]);
+  const [advancePayments, setAdvancePayments] = useState({ totalAdvance: 0, usedAdvance: 0, Cash: 0, Card: 0, Online: 0, Cheque: 0 });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const shopValue = shop === 'All' ? 'All' : shop === 'shop1' ? 'Shop 1' : 'Shop 2';
+        console.log(`Fetching data for shop: ${shopValue}, period: ${period}`);
         const [
-          sales, 
-          expenses, 
-          profit, 
-          pendingAdvances, 
-          credits, 
-          stock, 
+          sales,
+          expenses,
+          profit,
+          credits,
+          stock,
           comparison,
-          users
+          users,
+          lowestAdvance,
+          topCredit,
+          advances
         ] = await Promise.all([
-          fetchTotalSales(shop, period),
-          fetchTotalExpenses(shop, period),
-          fetchTotalProfit(shop, period),
-          fetchPendingAdvances(shop, period),
-          fetchCreditSalesSummary(shop, period),
-          fetchLowStock(shop, period),
-          fetchSalesComparison(shop, period),
-          fetchUsers(shop)
+          fetchTotalSales(shopValue, period),
+          fetchTotalExpenses(shopValue, period),
+          fetchTotalProfit(shopValue, period),
+          fetchCreditSalesSummary(shopValue, period),
+          fetchLowStock(shopValue, period),
+          fetchSalesComparison(shopValue, period),
+          fetchUsers(shopValue),
+          fetchLowestAdvanceUsers(shopValue),
+          fetchTopCreditUsers(shopValue),
+          fetchAdvancePayments(shopValue, period)
         ]);
-        setSalesData(sales);
-        setExpensesData(expenses);
-        setProfitData(profit);
-        setAdvanceData(pendingAdvances);
-        setCreditData(credits);
-        setStockAlerts(stock);
-        setSalesComparison(comparison);
-        setUsersData(users);
+
+        console.log('API Responses:', { sales, expenses, profit, credits });
+
+        setSalesData({ ...sales, Card: sales.Card || 0 });
+        setExpensesData({
+          totalExpenses: expenses.totalExpenses || 0,
+          categories: expenses.expensesByCategory ? Object.entries(expenses.expensesByCategory).map(([name, amount]) => ({ name, amount })) : []
+        });
+        setProfitData({ ...profit, Credit: profit.Credit || 0, Card: profit.Card || 0 });
+        setCreditData({ ...credits, totalCreditGiven: credits.totalCreditGiven || 0, Card: credits.Card || 0 });
+        setStockAlerts(stock || []);
+        setSalesComparison(comparison || { current: { sales: 0, expenses: 0, net: 0 }, previous: { sales: 0, expenses: 0, net: 0 } });
+        setUsersData(users || { totalUsers: 0, creditUsers: 0, advanceUsers: 0 });
+        setLowestAdvanceUsers(lowestAdvance || []);
+        setTopCreditUsers(topCredit || []);
+        setAdvancePayments({
+          totalAdvance: advances.totalAdvance || 0,
+          usedAdvance: advances.usedAdvance || 0,
+          Cash: advances.Cash || 0,
+          Card: advances.Card || 0,
+          Online: advances.Online || 0,
+          Cheque: advances.Cheque || 0
+        });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       }
     };
+
     fetchData();
   }, [shop, period]);
 
   const handleShopChange = (e) => setShop(e.target.value);
   const handlePeriodChange = (value) => setPeriod(value);
 
-  const salesChangePercentage = salesComparison.previous.sales !== 0 
+  const salesChangePercentage = salesComparison.previous.sales !== 0
     ? ((salesComparison.current.sales - salesComparison.previous.sales) / salesComparison.previous.sales * 100).toFixed(2)
     : 'N/A';
+
+  const formatNumber = (value) => (value ?? 0).toLocaleString();
 
   return (
     <main className="main-dax">
@@ -102,7 +115,7 @@ const MainDashboard = () => {
         <div className="controls-dax">
           <div className="select-container-dax">
             <select className="select-dropdown-dax" value={shop} onChange={handleShopChange}>
-              <option value="all">All Shops</option>
+              <option value="All">All Shops</option>
               <option value="shop1">Shop 1</option>
               <option value="shop2">Shop 2</option>
             </select>
@@ -124,18 +137,19 @@ const MainDashboard = () => {
             <h3 className="card-title-dax">Total Sales</h3>
             <TrendingUp className="icon-green-dax" />
           </div>
-          <p className="card-value-dax">₹{salesData.totalSales.toLocaleString()}</p>
+          <p className="card-value-dax">₹{formatNumber(salesData.totalSales)}</p>
           <p className="card-change-green-dax">
-            {salesChangePercentage !== 'N/A' 
+            {salesChangePercentage !== 'N/A'
               ? `${salesChangePercentage > 0 ? '+' : ''}${salesChangePercentage}% vs previous period`
               : 'N/A'}
           </p>
           <div className="card-details-dax">
-            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{salesData.Cash.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{salesData.Online.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Card:</span><span className="detail-value-dax">₹{salesData.Credit.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{salesData.Cheque.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Advance:</span><span className="detail-value-dax">₹{salesData.Advance.toLocaleString()}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{formatNumber(salesData.Cash)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Card:</span><span className="detail-value-dax">₹{formatNumber(salesData.Card)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{formatNumber(salesData.Online)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{formatNumber(salesData.Cheque)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Credit:</span><span className="detail-value-dax">₹{formatNumber(salesData.Credit)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Advance:</span><span className="detail-value-dax">₹{formatNumber(salesData.Advance)}</span></div>
           </div>
         </div>
         <div className="card-dax">
@@ -143,16 +157,19 @@ const MainDashboard = () => {
             <h3 className="card-title-dax">Total Expenses</h3>
             <TrendingDown className="icon-red-dax" />
           </div>
-          <p className="card-value-dax">₹{expensesData.totalExpenses.toLocaleString()}</p>
+          <p className="card-value-dax">₹{formatNumber(expensesData.totalExpenses)}</p>
           <p className="card-change-red-dax">
-            {salesComparison.previous.expenses !== 0 
+            {salesComparison.previous.expenses !== 0
               ? `${((salesComparison.current.expenses - salesComparison.previous.expenses) / salesComparison.previous.expenses * 100).toFixed(2)}% vs previous period`
               : 'N/A'}
           </p>
           <div className="card-details-dax">
-            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{expensesData.Cash.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{expensesData.Online.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{expensesData.Cheque.toLocaleString()}</span></div>
+            {expensesData.categories.map((cat, idx) => (
+              <div key={idx} className="detail-row-dax">
+                <span className="detail-label-dax">{cat.name}:</span>
+                <span className="detail-value-dax">₹{formatNumber(cat.amount)}</span>
+              </div>
+            ))}
           </div>
         </div>
         <div className="card-dax">
@@ -160,56 +177,54 @@ const MainDashboard = () => {
             <h3 className="card-title-dax">Net Earnings</h3>
             <Wallet className="icon-blue-dax" />
           </div>
-          <p className="card-value-dax">₹{profitData.totalProfit.toLocaleString()}</p>
+          <p className="card-value-dax">₹{formatNumber(profitData.totalProfit)}</p>
           <p className="card-change-green-dax">
-            {salesComparison.previous.net !== 0 
+            {salesComparison.previous.net !== 0
               ? `${((salesComparison.current.net - salesComparison.previous.net) / salesComparison.previous.net * 100).toFixed(2)}% vs previous period`
               : 'N/A'}
           </p>
           <div className="card-details-dax">
-            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{profitData.Cash.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{profitData.Online.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{profitData.Cheque.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Credit:</span><span className="detail-value-dax">₹{profitData.Credit.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Advance:</span><span className="detail-value-dax">₹{profitData.Advance.toLocaleString()}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{formatNumber(profitData.Cash)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Card:</span><span className="detail-value-dax">₹{formatNumber(profitData.Card)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{formatNumber(profitData.Online)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{formatNumber(profitData.Cheque)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Credit:</span><span className="detail-value-dax">₹{formatNumber(profitData.Credit)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Advance:</span><span className="detail-value-dax">₹{formatNumber(profitData.Advance)}</span></div>
           </div>
         </div>
         <div className="card-dax">
           <div className="card-header-dax">
-            <h3 className="card-title-dax">Pending Advances</h3>
+            <h3 className="card-title-dax">Advance Payments</h3>
             <CreditCard className="icon-yellow-dax" />
           </div>
-          <p className="card-value-dax">₹{advanceData.totalPending.toLocaleString()}</p>
-          <p className="card-change-yellow-dax">N/A</p>
+          <p className="card-value-dax">₹{formatNumber(advancePayments.totalAdvance)}</p>
+          <p className="card-change-yellow-dax">Used: ₹{formatNumber(advancePayments.usedAdvance)}</p>
           <div className="card-details-dax">
-            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{advanceData.Cash.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{advanceData.Online.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{advanceData.Cheque.toLocaleString()}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{formatNumber(advancePayments.Cash)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Card:</span><span className="detail-value-dax">₹{formatNumber(advancePayments.Card)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{formatNumber(advancePayments.Online)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{formatNumber(advancePayments.Cheque)}</span></div>
           </div>
         </div>
         <div className="card-dax">
           <div className="card-header-dax">
-            <h3 className="card-title-dax">Credit Overdue</h3>
+            <h3 className="card-title-dax">Credit Outstanding</h3>
             <AlertTriangle className="icon-orange-dax" />
           </div>
-          <p className="card-value-dax">₹{creditData.totalCreditGiven.toLocaleString()}</p>
+          <p className="card-value-dax">₹{formatNumber(creditData.totalCreditGiven)}</p>
           <p className="card-change-orange-dax">N/A</p>
           <div className="card-details-dax">
-            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{creditData.Cash.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{creditData.Online.toLocaleString()}</span></div>
-            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{creditData.Cheque.toLocaleString()}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cash:</span><span className="detail-value-dax">₹{formatNumber(creditData.Cash)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Card:</span><span className="detail-value-dax">₹{formatNumber(creditData.Card)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Online:</span><span className="detail-value-dax">₹{formatNumber(creditData.Online)}</span></div>
+            <div className="detail-row-dax"><span className="detail-label-dax">Cheque:</span><span className="detail-value-dax">₹{formatNumber(creditData.Cheque)}</span></div>
           </div>
         </div>
       </div>
       <div className="grid-3-dax">
         <div className="card-large-dax">
           <div className="card-header-large-dax">
-            <h3 className="card-title-large-dax">Sales & Profit Trends</h3>
-            <div className="button-group-dax">
-              <button className="button-dax button-primary-dax">Monthly</button>
-              <button className="button-dax button-secondary-dax">Quarterly</button>
-              <button className="button-dax button-secondary-dax">Yearly</button>
-            </div>
+            <h3 className="card-title-large-dax">Profit Graph</h3>
           </div>
           <div className="chart-container-dax">
             <img
@@ -290,12 +305,12 @@ const MainDashboard = () => {
             <a className="link-dax" href="/advance-payments">View All</a>
           </div>
           <div className="customer-list-dax">
-            {advanceUsers.slice(0, 3).map((user, index) => (
+            {lowestAdvanceUsers.slice(0, 3).map((user, index) => (
               <div key={index} className="customer-item-dax">
                 <CreditCard className="icon-yellow-dax" />
                 <div className="customer-info-dax">
                   <p className="customer-name-dax">{user.name}</p>
-                  <p className="customer-detail-dax">Pending: ₹{user.pending.toLocaleString()}</p>
+                  <p className="customer-detail-dax">Pending: ₹{formatNumber(user.pending)}</p>
                 </div>
                 <a href="/advance-payments" className="view-profile-dax">View Profile</a>
               </div>
@@ -330,19 +345,15 @@ const MainDashboard = () => {
         <div className="card-dax">
           <div className="card-header-large-dax">
             <h3 className="card-title-large-dax">Top Credit Users</h3>
-            <select className="select-dropdown-small-dax">
-              <option>This Month</option>
-              <option>Last Month</option>
-              <option>This Quarter</option>
-            </select>
+            <a className="link-dax" href="/credit-sales">View All</a>
           </div>
           <div className="customer-list-dax">
-            {creditUsers.slice(0, 5).map((user, index) => (
+            {topCreditUsers.slice(0, 5).map((user, index) => (
               <div key={index} className="customer-item-dax">
                 <AlertTriangle className="icon-orange-dax" />
                 <div className="customer-info-dax">
                   <p className="customer-name-dax">{user.name}</p>
-                  <p className="customer-detail-dax">Overdue: ₹{user.overdue.toLocaleString()}</p>
+                  <p className="customer-detail-dax">Overdue: ₹{formatNumber(user.overdue)}</p>
                 </div>
                 <a href="/credit-sales" className="view-profile-dax">View Profile</a>
               </div>
