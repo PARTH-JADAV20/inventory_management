@@ -256,6 +256,10 @@ body {
   font-size: 12px;
 }
 
+/* .card-details-dax, .detail-row-dax {
+  background: transparent !important;
+} */
+
 .detail-row-dax {
   display: flex;
   justify-content: space-between;

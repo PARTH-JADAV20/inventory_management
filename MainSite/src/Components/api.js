@@ -95,7 +95,7 @@ export const deleteExpense = async (shop, id) => {
 };
 
 // Customer APIs
-export const fetchCustomers = async (shop, search = '', deleted = false, page , limit) => {
+export const fetchCustomers = async (shop, search = '', deleted = false, page, limit) => {
   try {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
@@ -159,58 +159,59 @@ export const deleteAdvanceProfile = async (shop, phoneNumber, profileId) => {
   return request('DELETE', `/${encodeURIComponent(shop)}/advance/${encodeURIComponent(phoneNumber)}/profiles/${encodeURIComponent(profileId)}`);
 };
 
+
 // Dashboard APIs
-export const fetchLowStock = async (shop, period = '', date = '') => {
+export const fetchLowStock = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/low-stock?${params}`);
-    return data.map(item => ({
-      ...item,
-      stock: Math.max(0, item.stock),
-      unit: item.unit || 'Unknown'
-    }));
+    return Array.isArray(data) ? data.map(item => ({
+      itemName: item.itemName || 'Unknown',
+      stock: Math.max(0, Number(item.stock) || 0),
+      unit: item.unit || 'Unit',
+      minStockLevel: Number(item.minStockLevel) || 10
+    })) : [];
   } catch (error) {
-    throw new Error(`Failed to fetch low stock for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch low stock for ${shop}:`, error.message);
+    return [];
   }
 };
 
-export const fetchTotalSales = async (shop, period = '', date = '') => {
+export const fetchTotalSales = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/total-sales?${params}`);
     return {
       totalSales: Number(data.totalSales) || 0,
       Cash: Number(data.Cash) || 0,
+      Card: Number(data.Card) || 0,
       Online: Number(data.Online) || 0,
       Cheque: Number(data.Cheque) || 0,
       Credit: Number(data.Credit) || 0,
       Advance: Number(data.Advance) || 0
     };
   } catch (error) {
-    throw new Error(`Failed to fetch total sales for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch total sales for ${shop}:`, error.message);
+    return { totalSales: 0, Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
   }
 };
 
-export const fetchTotalProfit = async (shop, period = '', date = '') => {
+export const fetchTotalProfit = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/total-profit?${params}`);
     return {
       totalProfit: Number(data.totalProfit) || 0,
       Cash: Number(data.Cash) || 0,
+      Card: Number(data.Card) || 0,
       Online: Number(data.Online) || 0,
       Cheque: Number(data.Cheque) || 0,
       Credit: Number(data.Credit) || 0,
       Advance: Number(data.Advance) || 0
     };
   } catch (error) {
-    throw new Error(`Failed to fetch total profit for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch total profit for ${shop}:`, error.message);
+    return { totalProfit: 0, Cash: 0, Online: 0, Cheque: 0, Credit: 0, Advance: 0 };
   }
 };
 
@@ -223,135 +224,64 @@ export const fetchUsers = async (shop) => {
       advanceUsers: Number(data.advanceUsers) || 0
     };
   } catch (error) {
-    throw new Error(`Failed to fetch users for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch users for ${shop}:`, error.message);
+    return { totalUsers: 0, creditUsers: 0, advanceUsers: 0 };
   }
 };
 
-export const fetchCreditSalesSummary = async (shop, period = '', date = '') => {
+export const fetchCreditSalesSummary = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/credit-sales?${params}`);
     return {
-      totalCreditGiven: Number(data.totalCreditGiven) || 0,
-      totalCreditReceived: Number(data.totalCreditReceived) || 0,
-      Cash: Number(data.Cash) || 0,
-      Online: Number(data.Online) || 0,
-      Cheque: Number(data.Cheque) || 0
+      totalCreditGiven: Number(data.totalOutstandingAmount) || 0,
+      totalCreditReceived: 0, // Backend doesn't provide this, keeping for compatibility
+      Cash: 0, // Adjust based on backend response if needed
+      Online: 0,
+      Cheque: 0
     };
   } catch (error) {
-    throw new Error(`Failed to fetch credit sales summary for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch credit sales summary for ${shop}:`, error.message);
+    return { totalCreditGiven: 0, totalCreditReceived: 0, Cash: 0, Online: 0, Cheque: 0 };
   }
 };
 
-export const fetchAdvancePayments = async (shop, period = '', date = '') => {
+export const fetchAdvancePayments = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/advance-payments?${params}`);
     return {
-      totalAdvance: Number(data.totalAdvance) || 0,
+      totalAdvance: Number(data.totalAdvanceBalance) || 0,
       Cash: Number(data.Cash) || 0,
+      Card: Number(data.Card) || 0,
       Online: Number(data.Online) || 0,
       Cheque: Number(data.Cheque) || 0
     };
   } catch (error) {
-    throw new Error(`Failed to fetch advance payments for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch advance payments for ${shop}:`, error.message);
+    return { totalAdvance: 0, Cash: 0, Online: 0, Cheque: 0 };
   }
 };
 
-export const fetchRecentPurchases = async (shop, period = '', date = '') => {
+export const fetchTotalExpenses = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
-    const data = await request('GET', `/${encodeURIComponent(shop)}/recent-purchases?${params}`);
-    return Array.isArray(data) ? data.map(purchase => ({
-      ...purchase,
-      quantity: Number(purchase.quantity) || 0,
-      price: Number(purchase.price) || 0,
-      date: purchase.date || new Date().toLocaleDateString('en-GB').split('/').join('-')
-    })) : [];
-  } catch (error) {
-    throw new Error(`Failed to fetch recent purchases for ${shop}: ${error.message}`);
-  }
-};
-
-export const fetchRecentSales = async (shop, period = '', date = '') => {
-  try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
-    const data = await request('GET', `/${encodeURIComponent(shop)}/recent-sales?${params}`);
-    return Array.isArray(data) ? data.map(sale => ({
-      ...sale,
-      amount: Number(sale.amount) || 0,
-      date: sale.date || new Date().toLocaleDateString('en-GB').split('/').join('-'),
-      paymentMethod: sale.paymentMethod || 'Cash'
-    })) : [];
-  } catch (error) {
-    throw new Error(`Failed to fetch recent sales for ${shop}: ${error.message}`);
-  }
-};
-
-export const fetchTotalExpenses = async (shop, period = '', date = '') => {
-  try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/total-expenses?${params}`);
     return {
       totalExpenses: Number(data.totalExpenses) || 0,
-      Cash: Number(data.Cash) || 0,
-      Online: Number(data.Online) || 0,
-      Cheque: Number(data.Cheque) || 0
+      Cash: Number(data.expensesByCategory?.Cash) || 0,
+      Online: Number(data.expensesByCategory?.Online) || 0,
+      Cheque: Number(data.expensesByCategory?.Cheque) || 0
     };
   } catch (error) {
-    throw new Error(`Failed to fetch total expenses for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch total expenses for ${shop}:`, error.message);
+    return { totalExpenses: 0, Cash: 0, Online: 0, Cheque: 0 };
   }
 };
 
-export const fetchPendingAdvances = async (shop, period = '', date = '') => {
+export const fetchSalesComparison = async (shop, period = '') => {
   try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
-    const data = await request('GET', `/${encodeURIComponent(shop)}/pending-advances?${params}`);
-    return {
-      totalPending: Number(data.totalPending) || 0,
-      Cash: Number(data.Cash) || 0,
-      Online: Number(data.Online) || 0,
-      Cheque: Number(data.Cheque) || 0
-    };
-  } catch (error) {
-    throw new Error(`Failed to fetch pending advances for ${shop}: ${error.message}`);
-  }
-};
-
-export const fetchAdvanceAdjusted = async (shop, period = '', date = '') => {
-  try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
-    const data = await request('GET', `/${encodeURIComponent(shop)}/advance-adjusted?${params}`);
-    return {
-      totalAdjusted: Number(data.totalAdjusted) || 0,
-      Cash: Number(data.Cash) || 0,
-      Online: Number(data.Online) || 0,
-      Cheque: Number(data.Cheque) || 0
-    };
-  } catch (error) {
-    throw new Error(`Failed to fetch adjusted advances for ${shop}: ${error.message}`);
-  }
-};
-
-export const fetchSalesComparison = async (shop, period = '', date = '') => {
-  try {
-    const params = new URLSearchParams();
-    if (period) params.append('period', period);
-    if (date) params.append('date', date);
+    const params = new URLSearchParams({ period });
     const data = await request('GET', `/${encodeURIComponent(shop)}/sales-comparison?${params}`);
     return {
       current: {
@@ -366,9 +296,46 @@ export const fetchSalesComparison = async (shop, period = '', date = '') => {
       }
     };
   } catch (error) {
-    throw new Error(`Failed to fetch sales comparison for ${shop}: ${error.message}`);
+    console.error(`Failed to fetch sales comparison for ${shop}:`, error.message);
+    return {
+      current: { sales: 0, expenses: 0, net: 0 },
+      previous: { sales: 0, expenses: 0, net: 0 }
+    };
   }
 };
+
+export const fetchLowestAdvanceUsers = async (shop) => {
+  try {
+    const data = await request('GET', `/${encodeURIComponent(shop)}/lowest-advance-users`);
+    return Array.isArray(data) ? data.map(user => ({
+      shop: user.shop || 'Unknown',
+      name: user.name || 'Unknown',
+      pending: Number(user.pending) || 0,
+      lastTransactionDate: user.lastTransactionDate || null
+    })) : [];
+  } catch (error) {
+    console.error(`Failed to fetch lowest advance users for ${shop}:`, error.message);
+    return [];
+  }
+};
+
+export const fetchTopCreditUsers = async (shop) => {
+  try {
+    const data = await request('GET', `/${encodeURIComponent(shop)}/top-credit-users`);
+    return Array.isArray(data) ? data.map(user => ({
+      shop: user.shop || 'Unknown',
+      name: user.name || 'Unknown',
+      overdue: Number(user.overdue) || 0,
+      lastTransactionDate: user.lastTransactionDate || null
+    })) : [];
+  } catch (error) {
+    console.error(`Failed to fetch top credit users for ${shop}:`, error.message);
+    return [];
+  }
+};
+
+
+
 
 // Credit Sales APIs
 export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false) => {
