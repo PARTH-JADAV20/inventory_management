@@ -18,8 +18,8 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // MongoDB Connection
-// mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-mongoose.connect('mongodb://localhost:27017/', {
+mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+  // mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -39,12 +39,14 @@ const stockSchema = new mongoose.Schema({
   unit: { type: String, required: true },
   category: { type: String, required: true },
   price: { type: Number, required: true },
-  addedDate: { type: String, required: true }, // YYYY-MM-DD
+  addedDate: { type: String, required: true },
+  shop: { type: String, required: true }, // Add shop field
 });
 
 const deductionSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   quantity: { type: Number, required: true },
+  shop: { type: String, required: true }, // Add shop field
 });
 
 const billSchema = new mongoose.Schema({
@@ -324,8 +326,20 @@ const validateDate = (dateStr) => {
 app.get('/api/:shop/stock', async (req, res) => {
   try {
     const { shop } = req.params;
-    const Stock = getStockModel(shop);
-    const items = await Stock.find();
+    let items = [];
+    if (shop === 'Shop 1') {
+      // Fetch stock from both shops
+      const stock1 = await Stock1.find().lean();
+      const stock2 = await Stock2.find().lean();
+      items = [
+        ...stock1.map(item => ({ ...item, shop: 'Shop 1' })),
+        ...stock2.map(item => ({ ...item, shop: 'Shop 2' })),
+      ];
+    } else {
+      const Stock = getStockModel(shop);
+      items = await Stock.find().lean();
+      items = items.map(item => ({ ...item, shop }));
+    }
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -336,32 +350,91 @@ app.get('/api/:shop/stock/current', async (req, res) => {
   try {
     const { shop } = req.params;
     const { category, search } = req.query;
-    const Stock = getStockModel(shop);
-    let query = {};
-    if (category && category !== 'All') query.category = category;
-    if (search) query.name = { $regex: search, $options: 'i' };
-
-    const items = await Stock.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: { name: '$name', category: '$category', unit: '$unit' },
-          quantity: { $sum: '$quantity' },
-          price: { $avg: '$price' },
-          id: { $first: '$id' },
+    let items = [];
+    if (shop === 'Shop 1') {
+      // Aggregate stock from both shops
+      let query1 = {}, query2 = {};
+      if (category && category !== 'All') {
+        query1.category = category;
+        query2.category = category;
+      }
+      if (search) {
+        query1.name = { $regex: search, $options: 'i' };
+        query2.name = { $regex: search, $options: 'i' };
+      }
+      const stock1 = await Stock1.aggregate([
+        { $match: query1 },
+        {
+          $group: {
+            _id: { name: '$name', category: '$category', unit: '$unit' },
+            quantity: { $sum: '$quantity' },
+            price: { $avg: '$price' },
+            id: { $first: '$id' },
+          },
         },
-      },
-      {
-        $project: {
-          id: { $concat: ['$_id.name', '-', '$_id.category', '-', '$_id.unit', '-', { $toString: new Date().getTime() }] },
-          name: '$_id.name',
-          category: '$_id.category',
-          unit: '$_id.unit',
-          quantity: 1,
-          price: { $round: ['$price', 2] },
+        {
+          $project: {
+            id: { $concat: ['$_id.name', '-', '$_id.category', '-', '$_id.unit', '-', { $toString: new Date().getTime() }] },
+            name: '$_id.name',
+            category: '$_id.category',
+            unit: '$_id.unit',
+            quantity: 1,
+            price: { $round: ['$price', 2] },
+            shop: { $literal: 'Shop 1' },
+          },
         },
-      },
-    ]);
+      ]);
+      const stock2 = await Stock2.aggregate([
+        { $match: query2 },
+        {
+          $group: {
+            _id: { name: '$name', category: '$category', unit: '$unit' },
+            quantity: { $sum: '$quantity' },
+            price: { $avg: '$price' },
+            id: { $first: '$id' },
+          },
+        },
+        {
+          $project: {
+            id: { $concat: ['$_id.name', '-', '$_id.category', '-', '$_id.unit', '-', { $toString: new Date().getTime() }] },
+            name: '$_id.name',
+            category: '$_id.category',
+            unit: '$_id.unit',
+            quantity: 1,
+            price: { $round: ['$price', 2] },
+            shop: { $literal: 'Shop 2' },
+          },
+        },
+      ]);
+      items = [...stock1, ...stock2];
+    } else {
+      const Stock = getStockModel(shop);
+      let query = {};
+      if (category && category !== 'All') query.category = category;
+      if (search) query.name = { $regex: search, $options: 'i' };
+      items = await Stock.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: { name: '$name', category: '$category', unit: '$unit' },
+            quantity: { $sum: '$quantity' },
+            price: { $avg: '$price' },
+            id: { $first: '$id' },
+          },
+        },
+        {
+          $project: {
+            id: { $concat: ['$_id.name', '-', '$_id.category', '-', '$_id.unit', '-', { $toString: new Date().getTime() }] },
+            name: '$_id.name',
+            category: '$_id.category',
+            unit: '$_id.unit',
+            quantity: 1,
+            price: { $round: ['$price', 2] },
+            shop: { $literal: shop },
+          },
+        },
+      ]);
+    }
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -414,22 +487,21 @@ app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
     const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
-    console.log(paymentMethod)
-    const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
 
     // Validate stock availability and calculate profit
     let totalProfit = 0;
     const billItems = [];
     for (const item of items) {
-      if (!item.product || !item.qty || !item.unit || !item.pricePerQty || !item.amount || !item.category) {
+      if (!item.product || !item.qty || !item.unit || !item.pricePerQty || !item.amount || !item.category || !item.shop) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
+      const Stock = getStockModel(item.shop); // Use item.shop
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
         .sort({ addedDate: 1 });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
       if (totalQty < item.qty) {
-        return res.status(400).json({ error: `Insufficient stock for ${item.product}` });
+        return res.status(400).json({ error: `Insufficient stock for ${item.product} in ${item.shop}` });
       }
       let qtyToDeduct = item.qty;
       let itemProfit = 0;
@@ -438,7 +510,7 @@ app.post('/api/:shop/sales', async (req, res) => {
         if (qtyToDeduct <= 0) break;
         const deduct = Math.min(qtyToDeduct, stockItem.quantity);
         itemProfit += (item.pricePerQty - stockItem.price) * deduct;
-        deductions.push({ price: stockItem.price, quantity: deduct });
+        deductions.push({ price: stockItem.price, quantity: deduct, shop: item.shop });
         qtyToDeduct -= deduct;
       }
       totalProfit += itemProfit;
@@ -449,7 +521,7 @@ app.post('/api/:shop/sales', async (req, res) => {
         pricePerQty: item.pricePerQty,
         amount: item.amount,
         category: item.category,
-        deductions, // Add deductions
+        deductions,
       });
     }
 
@@ -458,7 +530,7 @@ app.post('/api/:shop/sales', async (req, res) => {
       return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
     }
 
-    // Generate bill number (unchanged)
+    // Generate bill number
     const billNo = await getNextBillNumber(shop);
     const itemsTotal = items.reduce((sum, item) => sum + item.amount, 0);
     const totalAmount = itemsTotal + parseFloat(otherExpenses);
@@ -505,11 +577,6 @@ app.post('/api/:shop/sales', async (req, res) => {
           deleteuser: { value: false, date: '' },
         }],
       });
-      // Validate document size
-      const customerSize = Buffer.byteLength(JSON.stringify(customer));
-      if (customerSize > 16 * 1024 * 1024) {
-        throw new Error('Customer document exceeds 16MB limit');
-      }
       await customer.save();
     } else {
       let profile = customer.profiles.find(p => p.name === profileName && !p.deleteuser.value);
@@ -563,15 +630,12 @@ app.post('/api/:shop/sales', async (req, res) => {
               : bill
         );
       }
-      // Validate document size
-      const customerSize = Buffer.byteLength(JSON.stringify(customer));
-      if (customerSize > 16 * 1024 * 1024) {
-        throw new Error('Customer document exceeds 16MB limit');
-      }
       await customer.save();
     }
 
+    // Deduct stock
     for (const item of items) {
+      const Stock = getStockModel(item.shop); // Use item.shop
       let qtyToDeduct = item.qty;
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
         .sort({ addedDate: 1 });
@@ -587,7 +651,7 @@ app.post('/api/:shop/sales', async (req, res) => {
         }
       }
       if (qtyToDeduct > 0) {
-        throw new Error(`Failed to deduct stock for ${item.product} (${item.unit})`);
+        throw new Error(`Failed to deduct stock for ${item.product} (${item.unit}) in ${item.shop}`);
       }
     }
 
@@ -639,7 +703,6 @@ app.post('/api/:shop/returns', async (req, res) => {
   try {
     const { shop } = req.params;
     const { billNo, phoneNumber, profileName, items, returnAmount, date } = req.body;
-    const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
 
     // Validate input
@@ -657,7 +720,7 @@ app.post('/api/:shop/returns', async (req, res) => {
     }
 
     for (const item of items) {
-      if (!item.product || !item.qty || item.qty <= 0 || !item.unit || !item.pricePerQty || !item.category || !item.purchasePrice || !item.profitAdjustment) {
+      if (!item.product || !item.qty || item.qty <= 0 || !item.unit || !item.pricePerQty || !item.category || !item.purchasePrice || !item.profitAdjustment || !item.shop) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}: missing required fields` });
       }
       if (item.purchasePrice < 0 || item.profitAdjustment < 0) {
@@ -681,7 +744,7 @@ app.post('/api/:shop/returns', async (req, res) => {
       return res.status(404).json({ error: 'Bill not found' });
     }
 
-    // Validate and restock items using purchasePrice
+    // Validate and restock items
     for (const item of items) {
       const billItem = bill.items.find(
         bi => bi.product.toLowerCase() === item.product.toLowerCase() &&
@@ -691,9 +754,11 @@ app.post('/api/:shop/returns', async (req, res) => {
         return res.status(400).json({ error: `Item ${item.product} not found in bill` });
       }
 
-      const validPurchasePrice = billItem.deductions?.some(d => d.price.toFixed(2) === parseFloat(item.purchasePrice).toFixed(2));
+      const validPurchasePrice = billItem.deductions?.some(
+        d => d.price.toFixed(2) === parseFloat(item.purchasePrice).toFixed(2) && d.shop === item.shop
+      );
       if (!validPurchasePrice) {
-        return res.status(400).json({ error: `Invalid purchase price ₹${item.purchasePrice} for ${item.product}` });
+        return res.status(400).json({ error: `Invalid purchase price ₹${item.purchasePrice} or shop ${item.shop} for ${item.product}` });
       }
 
       const previousReturns = profile.returns
@@ -703,18 +768,19 @@ app.post('/api/:shop/returns', async (req, res) => {
           ri.product.toLowerCase() === item.product.toLowerCase() &&
           ri.unit.toLowerCase() === item.unit.toLowerCase()
         )?.reduce((sum, ri) => sum + ri.qty, 0) || 0;
-      console.log(previousReturns)
       const availableQty = billItem.qty - previousReturns;
       if (availableQty < item.qty) {
         return res.status(400).json({ error: `Insufficient quantity for ${item.product}: ${availableQty} available` });
       }
 
-      // Restock using purchasePrice
+      // Restock to correct shop
+      const Stock = getStockModel(item.shop);
       const stockItem = await Stock.findOne({
         name: { $regex: new RegExp(`^${item.product}$`, 'i') },
         unit: { $regex: new RegExp(`^${item.unit}$`, 'i') },
         category: { $regex: new RegExp(`^${item.category}$`, 'i') },
         price: parseFloat(item.purchasePrice.toFixed(2)),
+        shop: item.shop,
       });
 
       if (stockItem) {
@@ -731,6 +797,7 @@ app.post('/api/:shop/returns', async (req, res) => {
           category: item.category,
           price: parseFloat(item.purchasePrice.toFixed(2)),
           addedDate: convertToYYYYMMDD(date),
+          shop: item.shop,
         });
         await newStock.save();
       }
@@ -743,7 +810,7 @@ app.post('/api/:shop/returns', async (req, res) => {
       if (bill.profit < 0) bill.profit = 0;
     }
 
-    // Handle advance payment using returnAmount
+    // Handle advance payment
     if (bill.paymentMethod === 'Advance' && profile.advance?.value) {
       profile.advance.currentamount = parseFloat(((profile.advance.currentamount || 0) + returnAmount).toFixed(2));
       profile.advanceHistory.push({
@@ -759,21 +826,16 @@ app.post('/api/:shop/returns', async (req, res) => {
       returnId: uuidv4(),
       billNo,
       date,
-      items: items.map(({ product, qty, unit, pricePerQty, purchasePrice }) => ({
+      items: items.map(({ product, qty, unit, pricePerQty, purchasePrice, shop }) => ({
         product,
         qty,
         unit,
         pricePerQty,
         purchasePrice: parseFloat(purchasePrice.toFixed(2)),
+        shop,
       })),
       returnAmount: parseFloat(returnAmount.toFixed(2)),
     });
-
-    // Validate document size
-    const customerSize = Buffer.byteLength(JSON.stringify(customer));
-    if (customerSize > 16 * 1024 * 1024) {
-      return res.status(400).json({ error: 'Customer document exceeds 16MB limit' });
-    }
 
     await customer.save();
     res.json({ message: 'Return processed successfully', updatedCustomer: customer });
@@ -787,7 +849,6 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
   try {
     const { shop, billNo } = req.params;
     const { profileId, phoneNumber, items } = req.body;
-    const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
 
@@ -815,15 +876,15 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
     for (const item of bill.items) {
       const category = item.category || 'Unknown';
       const deductions = item.deductions || [];
-
       if (deductions.length > 0) {
-        // Use deductions for precise restoration
         for (const deduction of deductions) {
+          const Stock = getStockModel(deduction.shop);
           const stockItem = await Stock.findOne({
             name: item.product,
             unit: item.unit,
             category: category,
             price: deduction.price,
+            shop: deduction.shop,
           });
 
           if (stockItem) {
@@ -838,15 +899,16 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
               category: category,
               price: deduction.price,
               addedDate: new Date().toISOString().split('T')[0],
+              shop: deduction.shop,
             });
             await newStock.save();
           }
         }
       } else {
-        // Fallback for legacy bills without deductions
+        // Fallback for legacy bills
         let qtyToRestore = item.qty;
         const costPrice = item.costPrice || item.pricePerQty;
-
+        const Stock = getStockModel(shop); // Default to current shop
         const stockItems = await Stock.find({
           name: item.product,
           unit: item.unit,
@@ -860,7 +922,6 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
             await stockItem.save();
           }
         }
-
         if (qtyToRestore > 0) {
           const newStock = new Stock({
             id: uuidv4(),
@@ -870,22 +931,20 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
             category: category,
             price: costPrice,
             addedDate: new Date().toISOString().split('T')[0],
+            shop,
           });
           await newStock.save();
         }
       }
     }
 
-    // Handle credit sale deletion if payment method is Credit
+    // Handle credit sale deletion
     if (bill.paymentMethod === 'Credit') {
       const creditSale = await CreditSale.findOne({ billNumber: billNo, shop });
       if (creditSale) {
-        // Perform soft delete
         creditSale.isDeleted = true;
         creditSale.deletedAt = new Date().toISOString().split('T')[0];
         await creditSale.save();
-
-        // Perform permanent delete
         await CreditSale.deleteOne({ _id: creditSale._id });
       }
     }
@@ -914,22 +973,13 @@ app.delete('/api/:shop/sales/:billNo', async (req, res) => {
       }
     }
 
-    // Validate document size before saving
-    const customerSize = Buffer.byteLength(JSON.stringify(customer));
-    if (customerSize > 16 * 1024 * 1024) {
-      throw new Error('Customer document exceeds 16MB limit');
-    }
-
     await customer.save();
-
     res.json({ message: 'Sale deleted successfully', updatedCustomer: customer });
   } catch (err) {
     console.error('Delete sale error:', err);
     res.status(400).json({ error: err.message });
   }
 });
-
-
 
 // Expense Routes
 app.get('/api/:shop/expenses', async (req, res) => {
@@ -1386,10 +1436,10 @@ app.post('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
     const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0, isOld = false } = req.body;
-    const Stock = getStockModel(shop);
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
 
+    // Validate input
     if (!customerName || !phoneNumber || !items || !Array.isArray(items) || !totalAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -1398,7 +1448,7 @@ app.post('/api/:shop/credits', async (req, res) => {
     }
 
     for (const item of items) {
-      if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date || !item.category) {
+      if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.date || !item.category || !item.shop) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
       if (!validateDate(item.date)) {
@@ -1411,18 +1461,20 @@ app.post('/api/:shop/credits', async (req, res) => {
 
     let totalProfit = 0;
     const billItems = [];
+
     if (!isOld) {
-      // Stock deduction only for non-old bills
+      // Stock deduction for non-old bills
       for (const item of items) {
+        const Stock = getStockModel(item.shop);
         const stockItems = await Stock.find({
           name: item.product,
           unit: item.unit,
-          category: item.category,
+          category: item.category || 'Unknown',
         }).sort({ addedDate: -1 });
 
         const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
         if (totalQty < item.qty) {
-          return res.status(400).json({ error: `Insufficient stock for ${item.product} (${item.unit})` });
+          return res.status(400).json({ error: `Insufficient stock for ${item.product} (${item.unit}) in ${item.shop}` });
         }
 
         let qtyToDeduct = item.qty;
@@ -1431,11 +1483,11 @@ app.post('/api/:shop/credits', async (req, res) => {
         for (const stockItem of stockItems) {
           if (qtyToDeduct <= 0) break;
           const deduct = Math.min(qtyToDeduct, stockItem.quantity);
-          itemProfit += (item.pricePerUnit - item.stockItem.price) * deduct;
-          deductions.push({ price: stockItem.price, quantity: deduction.quantity });
+          itemProfit += (item.pricePerUnit - stockItem.price) * deduct;
+          deductions.push({ price: stockItem.price, quantity: deduct, shop: item.shop });
           qtyToDeduct -= deduct;
 
-          stockItem.quantity -= deduction;
+          stockItem.quantity -= deduct;
           if (stockItem.quantity === 0) {
             await Stock.deleteOne({ _id: stockItem._id });
           } else {
@@ -1446,34 +1498,38 @@ app.post('/api/:shop/credits', async (req, res) => {
         totalProfit += itemProfit;
         billItems.push({
           product: item.product,
-          qty: item.quantity,
+          qty: item.qty,
           unit: item.unit,
           pricePerUnit: item.pricePerUnit,
           amount: item.amount,
           date: item.date,
-          category: item.category,
-          deductions: deductions,
+          category: item.category || 'Unknown',
+          deductions,
         });
       }
     } else {
-      // For old bills, no stock deduction
-      billItems = items.map(item => ({
-        product: item.product,
-        qty: item.quantity,
-        unit: item.unit,
-        pricePerUnit: item.pricePerUnit,
-        amount: item.amount,
-        date: item.date,
-        category: item.category,
-        deductions: [],
-      }));
+      // No stock deduction for old bills
+      for (const item of items) {
+        billItems.push({
+          product: item.product,
+          qty: item.qty,
+          unit: item.unit,
+          pricePerUnit: item.pricePerUnit,
+          amount: item.amount,
+          date: item.date,
+          category: item.category || 'Unknown',
+          deductions: [],
+        });
+      }
     }
 
-    const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
+    // Validate total amount
+    const calculatedTotal = billItems.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
     if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
       return res.status(400).json({ error: 'Total amount does not match item amounts plus other expenses' });
     }
 
+    // Create credit sale
     const billNumber = await getNextBillNumber(shop);
     const creditSale = new CreditSale({
       billNumber,
@@ -1483,7 +1539,7 @@ app.post('/api/:shop/credits', async (req, res) => {
       totalAmount,
       paidAmount: 0,
       status: 'Open',
-      lastTransactionDate: items[0].date,
+      lastTransactionDate: billItems[0].date,
       shop,
       paymentHistory: [],
       isDeleted: false,
@@ -1501,6 +1557,7 @@ app.post('/api/:shop/credits', async (req, res) => {
     }
     await creditSale.save();
 
+    // Update customer profile
     let customer = await Customer.findOne({ phoneNumber });
     if (!customer) {
       customer = new Customer({
@@ -1514,16 +1571,8 @@ app.post('/api/:shop/credits', async (req, res) => {
           paymentMethod: 'Credit',
           bills: [{
             billNo: billNumber,
-            date: items[0].date,
-            items: billItems.map(item => ({
-              product: item.product,
-              qty: item.qty,
-              unit: item.unit,
-              pricePerQty: item.pricePerUnit,
-              amount: item.amount,
-              category: item.category,
-              deductions: item.deductions,
-            })),
+            date: billItems[0].date,
+            items: billItems,
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
@@ -1546,16 +1595,8 @@ app.post('/api/:shop/credits', async (req, res) => {
           paymentMethod: 'Credit',
           bills: [{
             billNo: billNumber,
-            date: items[0].date,
-            items: billItems.map(item => ({
-              product: item.product,
-              qty: item.qty,
-              unit: item.unit,
-              pricePerQty: item.pricePerUnit,
-              amount: item.amount,
-              category: item.category,
-              deductions: item.deductions,
-            })),
+            date: billItems[0].date,
+            items: billItems,
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
@@ -1571,16 +1612,8 @@ app.post('/api/:shop/credits', async (req, res) => {
         profile.paymentMethod = 'Credit';
         profile.bills.push({
           billNo: billNumber,
-          date: items[0].date,
-          items: billItems.map(item => ({
-            product: item.product,
-            qty: item.qty,
-            unit: item.unit,
-            pricePerQty: item.pricePerUnit,
-            amount: item.amount,
-            category: item.category,
-            deductions: item.deductions,
-          })),
+          date: billItems[0].date,
+          items: billItems,
           totalAmount,
           creditAmount: totalAmount,
           paymentMethod: 'Credit',
@@ -1898,59 +1931,54 @@ app.delete('/api/:shop/credits/:id', async (req, res) => {
     const { shop, id } = req.params;
     const CreditSale = getCreditSaleModel(shop);
     const Customer = getCustomerModel(shop);
-    const Stock = getStockModel(shop);
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is already deleted' });
 
-    // Restore stock only for non-old bills
+    // Restore stock for non-old bills
     if (!creditSale.isOld) {
       for (const item of creditSale.items) {
-        console.log(`Restoring stock for item: ${item.product}, qty: ${item.qty}, unit: ${item.unit}`);
         const category = item.category || 'Unknown';
         const deductions = item.deductions || [];
-
         if (deductions.length > 0) {
           for (const deduction of deductions) {
-            console.log(`Restoring: ${deduction.quantity} units at ₹${deduction.price}`);
+            const Stock = getStockModel(deduction.shop);
             const stockItem = await Stock.findOne({
               name: item.product,
               unit: item.unit,
-              category: category,
+              category,
               price: deduction.price,
+              shop: deduction.shop,
             });
 
             if (stockItem) {
               stockItem.quantity += deduction.quantity;
               await stockItem.save();
-              console.log(`Updated stock item ${stockItem._id}: new quantity ${stockItem.quantity}`);
             } else {
               const newStock = new Stock({
                 id: uuidv4(),
                 name: item.product,
                 quantity: deduction.quantity,
                 unit: item.unit,
-                category: category,
+                category,
                 price: deduction.price,
                 addedDate: new Date().toISOString().split('T')[0],
+                shop: deduction.shop,
               });
               await newStock.save();
-              console.log(`Created new stock item: ${item.product}, qty: ${deduction.quantity}, price: ${deduction.price}`);
             }
           }
         } else {
+          // Fallback for legacy credit sales
           let qtyToRestore = item.qty;
-          console.log(`No deductions found, using fallback for ${item.product}`);
           const costPrice = item.costPrice || item.pricePerUnit;
-
+          const Stock = getStockModel(shop);
           const stockItems = await Stock.find({
             name: item.product,
             unit: item.unit,
-            category: category,
+            category,
           }).sort({ addedDate: -1 });
-
-          console.log(`Found ${stockItems.length} matching stock items for ${item.product}, category: ${category}, unit: ${item.unit}`);
 
           if (stockItems.length > 0) {
             for (const stockItem of stockItems) {
@@ -1958,31 +1986,31 @@ app.delete('/api/:shop/credits/:id', async (req, res) => {
               stockItem.quantity += qtyToRestore;
               qtyToRestore = 0;
               await stockItem.save();
-              console.log(`Updated stock item ${stockItem._id}: new quantity ${stockItem.quantity}`);
             }
           }
-
           if (qtyToRestore > 0) {
             const newStock = new Stock({
               id: uuidv4(),
               name: item.product,
               quantity: qtyToRestore,
               unit: item.unit,
-              category: category,
+              category,
               price: costPrice,
               addedDate: new Date().toISOString().split('T')[0],
+              shop,
             });
             await newStock.save();
-            console.log(`Created new stock item: ${item.product}, qty: ${qtyToRestore}, category: ${category}, price: ${costPrice}`);
           }
         }
       }
     }
 
+    // Mark as deleted
     creditSale.isDeleted = true;
     creditSale.deletedAt = new Date().toISOString().split('T')[0];
     await creditSale.save();
 
+    // Remove bill from customer profile
     const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
     if (customer) {
       const profile = customer.profiles.find(p => p.name === creditSale.customerName && !p.deleteuser.value);
@@ -2013,44 +2041,102 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
     const { shop, id } = req.params;
     const CreditSale = getCreditSaleModel(shop);
     const Customer = getCustomerModel(shop);
-    const Stock = getStockModel(shop);
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (!creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is not deleted' });
 
-    // Only check and deduct stock for non-old bills
+    // Validate and deduct stock for non-old bills
     if (!creditSale.isOld) {
       for (const item of creditSale.items) {
-        const stockItems = await Stock.find({ name: item.product, unit: item.unit });
-        const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
-        if (totalQty < item.qty) {
-          return res.status(400).json({ error: `Insufficient stock to restore ${item.product} (${item.unit})` });
+        const category = item.category || 'Unknown';
+        const deductions = item.deductions || [];
+        if (deductions.length > 0) {
+          for (const deduction of deductions) {
+            const Stock = getStockModel(deduction.shop);
+            const stockItem = await Stock.findOne({
+              name: item.product,
+              unit: item.unit,
+              category,
+              price: deduction.price,
+              shop: deduction.shop,
+            });
+            if (!stockItem || stockItem.quantity < deduction.quantity) {
+              return res.status(400).json({
+                error: `Insufficient stock for ${item.product} (${item.unit}) in ${deduction.shop}`,
+              });
+            }
+          }
+        } else {
+          // Fallback for legacy credit sales
+          const Stock = getStockModel(shop);
+          const stockItems = await Stock.find({
+            name: item.product,
+            unit: item.unit,
+            category,
+          });
+          const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
+          if (totalQty < item.qty) {
+            return res.status(400).json({
+              error: `Insufficient stock for ${item.product} (${item.unit}) in ${shop}`,
+            });
+          }
         }
       }
 
+      // Deduct stock
       for (const item of creditSale.items) {
-        let qtyToDeduct = item.qty;
-        const stockItems = await Stock.find({ name: item.product, unit: item.unit })
-          .sort({ addedDate: -1 });
-        for (const stockItem of stockItems) {
-          if (qtyToDeduct <= 0) break;
-          const deduct = Math.min(qtyToDeduct, stockItem.quantity);
-          stockItem.quantity -= deduct;
-          qtyToDeduct -= deduct;
-          if (stockItem.quantity === 0) {
-            await Stock.deleteOne({ _id: stockItem._id });
-          } else {
-            await stockItem.save();
+        const category = item.category || 'Unknown';
+        const deductions = item.deductions || [];
+        if (deductions.length > 0) {
+          for (const deduction of deductions) {
+            const Stock = getStockModel(deduction.shop);
+            const stockItem = await Stock.findOne({
+              name: item.product,
+              unit: item.unit,
+              category,
+              price: deduction.price,
+              shop: deduction.shop,
+            });
+            if (stockItem) {
+              stockItem.quantity -= deduction.quantity;
+              if (stockItem.quantity === 0) {
+                await Stock.deleteOne({ _id: stockItem._id });
+              } else {
+                await stockItem.save();
+              }
+            }
+          }
+        } else {
+          // Fallback for legacy credit sales
+          let qtyToDeduct = item.qty;
+          const Stock = getStockModel(shop);
+          const stockItems = await Stock.find({
+            name: item.product,
+            unit: item.unit,
+            category,
+          }).sort({ addedDate: 1 });
+          for (const stockItem of stockItems) {
+            if (qtyToDeduct <= 0) break;
+            const deduct = Math.min(qtyToDeduct, stockItem.quantity);
+            stockItem.quantity -= deduct;
+            qtyToDeduct -= deduct;
+            if (stockItem.quantity === 0) {
+              await Stock.deleteOne({ _id: stockItem._id });
+            } else {
+              await stockItem.save();
+            }
           }
         }
       }
     }
 
+    // Restore credit sale
     creditSale.isDeleted = false;
     creditSale.deletedAt = null;
     await creditSale.save();
 
+    // Restore bill in customer profile
     const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
     if (customer) {
       const profile = customer.profiles.find(p => p.name === creditSale.customerName && !p.deleteuser.value);
@@ -2064,6 +2150,8 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
             unit: item.unit,
             pricePerQty: item.pricePerUnit,
             amount: item.amount,
+            category: item.category || 'Unknown',
+            deductions: item.deductions || [],
           })),
           totalAmount: creditSale.totalAmount,
           creditAmount: creditSale.totalAmount,
@@ -3258,7 +3346,7 @@ app.get('/api/:shop/item-profitability', async (req, res) => {
 
     // Combine and calculate profit
     const itemMap = new Map();
-    
+
     // Process customer items
     for (const item of customerItems) {
       const key = `${item._id.product}-${item._id.unit}-${item._id.category}`;
@@ -3731,9 +3819,6 @@ app.delete('/api/outstanding-payments/:id', async (req, res) => {
     res.status(400).json({ error: 'Failed to delete payment: ' + err.message });
   }
 });
-
-
-
 
 // Schedule cron job to run at 11:30 PM daily for both shops
 cron.schedule('30 23 * * *', () => {
