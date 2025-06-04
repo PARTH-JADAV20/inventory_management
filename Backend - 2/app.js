@@ -19,7 +19,7 @@ app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-// mongoose.connect('mongodb://localhost:27017/', {
+  // mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -177,6 +177,9 @@ const creditSaleSchema = new mongoose.Schema({
   otherExpenses: { type: Number, default: 0 },
   profit: { type: Number, default: 0 },
   finalPaymentMethod: { type: String, default: null },
+  isOld: { type: Boolean, default: false }, // Marks if bill is old
+  isTrash: { type: Boolean, default: false }, // Marks if bill is moved to trash
+  trashedAt: { type: String, default: null }, // Date when moved to trash (DD-MM-YYYY)
 });
 
 const dailySchema = new mongoose.Schema({
@@ -1375,10 +1378,13 @@ app.delete('/api/:shop/advance/:phoneNumber/profiles/:profileId', async (req, re
 app.get('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search, showDeleted = 'false' } = req.query;
+    const { page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search, showDeleted = 'false', showOld = 'false' } = req.query;
     const CreditSale = getCreditSaleModel(shop);
 
-    const query = { isDeleted: showDeleted === 'true' };
+    const query = { isDeleted: showDeleted === 'true', isTrash: false }; // Exclude trashed bills by default
+    if (showOld === 'true') {
+      query.isOld = true; // Filter for old bills if requested
+    }
     if (search) {
       query.$or = [
         { billNumber: { $regex: search, $options: 'i' } },
@@ -1406,6 +1412,7 @@ app.get('/api/:shop/credits', async (req, res) => {
       })),
       lastTransactionDate: convertToDDMMYYYY(sale.lastTransactionDate),
       deletedAt: sale.deletedAt ? convertToDDMMYYYY(sale.deletedAt) : null,
+      trashedAt: sale.trashedAt ? convertToDDMMYYYY(sale.trashedAt) : null,
       paymentHistory: sale.paymentHistory.map(payment => ({
         ...payment,
         date: convertToDDMMYYYY(payment.date),
@@ -1428,10 +1435,11 @@ app.get('/api/:shop/credits', async (req, res) => {
 app.post('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0 } = req.body;
+    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0, isOld = false } = req.body;
     const Customer = getCustomerModel(shop);
     const CreditSale = getCreditSaleModel(shop);
 
+    // Validate input
     if (!customerName || !phoneNumber || !items || !Array.isArray(items) || !totalAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -1453,55 +1461,75 @@ app.post('/api/:shop/credits', async (req, res) => {
 
     let totalProfit = 0;
     const billItems = [];
-    for (const item of items) {
-      const Stock = getStockModel(item.shop);
-      const stockItems = await Stock.find({
-        name: item.product,
-        unit: item.unit,
-        category: item.category,
-      }).sort({ addedDate: -1 });
 
-      const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
-      if (totalQty < item.qty) {
-        return res.status(400).json({ error: `Insufficient stock for ${item.product} (${item.unit}) in ${item.shop}` });
-      }
+    if (!isOld) {
+      // Stock deduction for non-old bills
+      for (const item of items) {
+        const Stock = getStockModel(item.shop);
+        const stockItems = await Stock.find({
+          name: item.product,
+          unit: item.unit,
+          category: item.category || 'Unknown',
+        }).sort({ addedDate: -1 });
 
-      let qtyToDeduct = item.qty;
-      const deductions = [];
-      let itemProfit = 0;
-      for (const stockItem of stockItems) {
-        if (qtyToDeduct <= 0) break;
-        const deduct = Math.min(qtyToDeduct, stockItem.quantity);
-        itemProfit += (item.pricePerUnit - stockItem.price) * deduct;
-        deductions.push({ price: stockItem.price, quantity: deduct, shop: item.shop });
-        qtyToDeduct -= deduct;
-
-        stockItem.quantity -= deduct;
-        if (stockItem.quantity === 0) {
-          await Stock.deleteOne({ _id: stockItem._id });
-        } else {
-          await stockItem.save();
+        const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
+        if (totalQty < item.qty) {
+          return res.status(400).json({ error: `Insufficient stock for ${item.product} (${item.unit}) in ${item.shop}` });
         }
-      }
 
-      totalProfit += itemProfit;
-      billItems.push({
-        product: item.product,
-        qty: item.qty,
-        unit: item.unit,
-        pricePerUnit: item.pricePerUnit,
-        amount: item.amount,
-        date: item.date,
-        category: item.category,
-        deductions,
-      });
+        let qtyToDeduct = item.qty;
+        const deductions = [];
+        let itemProfit = 0;
+        for (const stockItem of stockItems) {
+          if (qtyToDeduct <= 0) break;
+          const deduct = Math.min(qtyToDeduct, stockItem.quantity);
+          itemProfit += (item.pricePerUnit - stockItem.price) * deduct;
+          deductions.push({ price: stockItem.price, quantity: deduct, shop: item.shop });
+          qtyToDeduct -= deduct;
+
+          stockItem.quantity -= deduct;
+          if (stockItem.quantity === 0) {
+            await Stock.deleteOne({ _id: stockItem._id });
+          } else {
+            await stockItem.save();
+          }
+        }
+
+        totalProfit += itemProfit;
+        billItems.push({
+          product: item.product,
+          qty: item.qty,
+          unit: item.unit,
+          pricePerUnit: item.pricePerUnit,
+          amount: item.amount,
+          date: item.date,
+          category: item.category || 'Unknown',
+          deductions,
+        });
+      }
+    } else {
+      // No stock deduction for old bills
+      for (const item of items) {
+        billItems.push({
+          product: item.product,
+          qty: item.qty,
+          unit: item.unit,
+          pricePerUnit: item.pricePerUnit,
+          amount: item.amount,
+          date: item.date,
+          category: item.category || 'Unknown',
+          deductions: [],
+        });
+      }
     }
 
-    const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
+    // Validate total amount
+    const calculatedTotal = billItems.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
     if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
       return res.status(400).json({ error: 'Total amount does not match item amounts plus other expenses' });
     }
 
+    // Create credit sale
     const billNumber = await getNextBillNumber(shop);
     const creditSale = new CreditSale({
       billNumber,
@@ -1511,17 +1539,25 @@ app.post('/api/:shop/credits', async (req, res) => {
       totalAmount,
       paidAmount: 0,
       status: 'Open',
-      lastTransactionDate: items[0].date,
+      lastTransactionDate: billItems[0].date,
       shop,
       paymentHistory: [],
       isDeleted: false,
       deletedAt: null,
       otherExpenses: parseFloat(otherExpenses),
       profit: totalProfit,
+      isOld,
+      isTrash: false,
+      trashedAt: null,
     });
 
+    const creditSaleSize = Buffer.byteLength(JSON.stringify(creditSale));
+    if (creditSaleSize > 16 * 1024 * 1024) {
+      throw new Error('Credit sale document exceeds 16MB limit');
+    }
     await creditSale.save();
 
+    // Update customer profile
     let customer = await Customer.findOne({ phoneNumber });
     if (!customer) {
       customer = new Customer({
@@ -1535,16 +1571,8 @@ app.post('/api/:shop/credits', async (req, res) => {
           paymentMethod: 'Credit',
           bills: [{
             billNo: billNumber,
-            date: items[0].date,
-            items: billItems.map(item => ({
-              product: item.product,
-              qty: item.qty,
-              unit: item.unit,
-              pricePerQty: item.pricePerUnit,
-              amount: item.amount,
-              category: item.category,
-              deductions: item.deductions,
-            })),
+            date: billItems[0].date,
+            items: billItems,
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
@@ -1567,16 +1595,8 @@ app.post('/api/:shop/credits', async (req, res) => {
           paymentMethod: 'Credit',
           bills: [{
             billNo: billNumber,
-            date: items[0].date,
-            items: billItems.map(item => ({
-              product: item.product,
-              qty: item.qty,
-              unit: item.unit,
-              pricePerQty: item.pricePerUnit,
-              amount: item.amount,
-              category: item.category,
-              deductions: item.deductions,
-            })),
+            date: billItems[0].date,
+            items: billItems,
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',
@@ -1592,16 +1612,8 @@ app.post('/api/:shop/credits', async (req, res) => {
         profile.paymentMethod = 'Credit';
         profile.bills.push({
           billNo: billNumber,
-          date: items[0].date,
-          items: billItems.map(item => ({
-            product: item.product,
-            qty: item.qty,
-            unit: item.unit,
-            pricePerQty: item.pricePerUnit,
-            amount: item.amount,
-            category: item.category,
-            deductions: item.deductions,
-          })),
+          date: billItems[0].date,
+          items: billItems,
           totalAmount,
           creditAmount: totalAmount,
           paymentMethod: 'Credit',
@@ -1612,7 +1624,12 @@ app.post('/api/:shop/credits', async (req, res) => {
       }
     }
 
+    const customerSize = Buffer.byteLength(JSON.stringify(customer));
+    if (customerSize > 16 * 1024 * 1024) {
+      throw new Error('Customer document exceeds 16MB limit');
+    }
     await customer.save();
+
     res.status(201).json({ creditSale, customer });
   } catch (err) {
     console.error('Create credit sale error:', err);
@@ -1908,86 +1925,92 @@ app.delete('/api/:shop/credits/:id/payment/:paymentId', async (req, res) => {
   }
 });
 
+// DELETE /api/:shop/credits/:id
 app.delete('/api/:shop/credits/:id', async (req, res) => {
   try {
     const { shop, id } = req.params;
-    const CreditSale = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
     const Customer = getCustomerModel(shop);
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is already deleted' });
 
-    // Restore stock using deductions
-    for (const item of creditSale.items) {
-      const category = item.category || 'Unknown';
-      const deductions = item.deductions || [];
-      if (deductions.length > 0) {
-        for (const deduction of deductions) {
-          const Stock = getStockModel(deduction.shop);
-          const stockItem = await Stock.findOne({
+    // Restore stock for non-old bills
+    if (!creditSale.isOld) {
+      for (const item of creditSale.items) {
+        const category = item.category || 'Unknown';
+        const deductions = item.deductions || [];
+        if (deductions.length > 0) {
+          for (const deduction of deductions) {
+            const Stock = getStockModel(deduction.shop);
+            const stockItem = await Stock.findOne({
+              name: item.product,
+              unit: item.unit,
+              category,
+              price: deduction.price,
+              shop: deduction.shop,
+            });
+
+            if (stockItem) {
+              stockItem.quantity += deduction.quantity;
+              await stockItem.save();
+            } else {
+              const newStock = new Stock({
+                id: uuidv4(),
+                name: item.product,
+                quantity: deduction.quantity,
+                unit: item.unit,
+                category,
+                price: deduction.price,
+                addedDate: new Date().toISOString().split('T')[0],
+                shop: deduction.shop,
+              });
+              await newStock.save();
+            }
+          }
+        } else {
+          // Fallback for legacy credit sales
+          let qtyToRestore = item.qty;
+          const costPrice = item.costPrice || item.pricePerUnit;
+          const Stock = getStockModel(shop);
+          const stockItems = await Stock.find({
             name: item.product,
             unit: item.unit,
-            category: category,
-            price: deduction.price,
-            shop: deduction.shop,
-          });
+            category,
+          }).sort({ addedDate: -1 });
 
-          if (stockItem) {
-            stockItem.quantity += deduction.quantity;
-            await stockItem.save();
-          } else {
+          if (stockItems.length > 0) {
+            for (const stockItem of stockItems) {
+              if (qtyToRestore <= 0) break;
+              stockItem.quantity += qtyToRestore;
+              qtyToRestore = 0;
+              await stockItem.save();
+            }
+          }
+          if (qtyToRestore > 0) {
             const newStock = new Stock({
               id: uuidv4(),
               name: item.product,
-              quantity: deduction.quantity,
+              quantity: qtyToRestore,
               unit: item.unit,
-              category: category,
-              price: deduction.price,
+              category,
+              price: costPrice,
               addedDate: new Date().toISOString().split('T')[0],
-              shop: deduction.shop,
+              shop,
             });
             await newStock.save();
           }
         }
-      } else {
-        // Fallback for legacy credit sales
-        let qtyToRestore = item.qty;
-        const costPrice = item.costPrice || item.pricePerUnit;
-        const Stock = getStockModel(shop);
-        const stockItems = await Stock.find({
-          name: item.product,
-          unit: item.unit,
-          category: category,
-        }).sort({ addedDate: -1 });
-        if (stockItems.length > 0) {
-          for (const stockItem of stockItems) {
-            if (qtyToRestore <= 0) break;
-            stockItem.quantity += qtyToRestore;
-            qtyToRestore = 0;
-            await stockItem.save();
-          }
-        }
-        if (qtyToRestore > 0) {
-          const newStock = new Stock({
-            id: uuidv4(),
-            name: item.product,
-            quantity: qtyToRestore,
-            unit: item.unit,
-            category: category,
-            price: costPrice,
-            addedDate: new Date().toISOString().split('T')[0],
-            shop,
-          });
-          await newStock.save();
-        }
       }
     }
 
+    // Mark as deleted
     creditSale.isDeleted = true;
     creditSale.deletedAt = new Date().toISOString().split('T')[0];
     await creditSale.save();
 
+    // Remove bill from customer profile
     const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
     if (customer) {
       const profile = customer.profiles.find(p => p.name === creditSale.customerName && !p.deleteuser.value);
@@ -1996,6 +2019,11 @@ app.delete('/api/:shop/credits/:id', async (req, res) => {
         if (billIndex !== -1) {
           profile.bills.splice(billIndex, 1);
           profile.credit = profile.bills.reduce((sum, b) => sum + (b.creditAmount || 0), 0);
+
+          const customerSize = Buffer.byteLength(JSON.stringify(customer));
+          if (customerSize > 16 * 1024 * 1024) {
+            throw new Error('Customer document exceeds 16MB limit');
+          }
           await customer.save();
         }
       }
@@ -2018,84 +2046,86 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (!creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is not deleted' });
 
-    // Validate stock availability
-    for (const item of creditSale.items) {
-      const category = item.category || 'Unknown';
-      const deductions = item.deductions || [];
-      if (deductions.length > 0) {
-        for (const deduction of deductions) {
-          const Stock = getStockModel(deduction.shop);
-          const stockItem = await Stock.findOne({
+    // Validate and deduct stock for non-old bills
+    if (!creditSale.isOld) {
+      for (const item of creditSale.items) {
+        const category = item.category || 'Unknown';
+        const deductions = item.deductions || [];
+        if (deductions.length > 0) {
+          for (const deduction of deductions) {
+            const Stock = getStockModel(deduction.shop);
+            const stockItem = await Stock.findOne({
+              name: item.product,
+              unit: item.unit,
+              category,
+              price: deduction.price,
+              shop: deduction.shop,
+            });
+            if (!stockItem || stockItem.quantity < deduction.quantity) {
+              return res.status(400).json({
+                error: `Insufficient stock for ${item.product} (${item.unit}) in ${deduction.shop}`,
+              });
+            }
+          }
+        } else {
+          // Fallback for legacy credit sales
+          const Stock = getStockModel(shop);
+          const stockItems = await Stock.find({
             name: item.product,
             unit: item.unit,
-            category: category,
-            price: deduction.price,
-            shop: deduction.shop,
+            category,
           });
-          if (!stockItem || stockItem.quantity < deduction.quantity) {
+          const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
+          if (totalQty < item.qty) {
             return res.status(400).json({
-              error: `Insufficient stock for ${item.product} (${item.unit}) in ${deduction.shop}`,
+              error: `Insufficient stock for ${item.product} (${item.unit}) in ${shop}`,
             });
           }
         }
-      } else {
-        // Fallback for legacy credit sales
-        const Stock = getStockModel(shop);
-        const stockItems = await Stock.find({
-          name: item.product,
-          unit: item.unit,
-          category: category,
-        });
-        const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
-        if (totalQty < item.qty) {
-          return res.status(400).json({
-            error: `Insufficient stock for ${item.product} (${item.unit}) in ${shop}`,
-          });
-        }
       }
-    }
 
-    // Deduct stock
-    for (const item of creditSale.items) {
-      const category = item.category || 'Unknown';
-      const deductions = item.deductions || [];
-      if (deductions.length > 0) {
-        for (const deduction of deductions) {
-          const Stock = getStockModel(deduction.shop);
-          const stockItem = await Stock.findOne({
+      // Deduct stock
+      for (const item of creditSale.items) {
+        const category = item.category || 'Unknown';
+        const deductions = item.deductions || [];
+        if (deductions.length > 0) {
+          for (const deduction of deductions) {
+            const Stock = getStockModel(deduction.shop);
+            const stockItem = await Stock.findOne({
+              name: item.product,
+              unit: item.unit,
+              category,
+              price: deduction.price,
+              shop: deduction.shop,
+            });
+            if (stockItem) {
+              stockItem.quantity -= deduction.quantity;
+              if (stockItem.quantity === 0) {
+                await Stock.deleteOne({ _id: stockItem._id });
+              } else {
+                await stockItem.save();
+              }
+            }
+          }
+        } else {
+          // Fallback for legacy credit sales
+          let qtyToDeduct = item.qty;
+          const Stock = getStockModel(shop);
+          const stockItems = await Stock.find({
             name: item.product,
             unit: item.unit,
-            category: category,
-            price: deduction.price,
-            shop: deduction.shop,
-          });
-          if (stockItem) {
-            stockItem.quantity -= deduction.quantity;
+            category,
+          }).sort({ addedDate: 1 });
+          for (const stockItem of stockItems) {
+            if (qtyToDeduct <= 0) break;
+            const deduct = Math.min(qtyToDeduct, stockItem.quantity);
+            stockItem.quantity -= deduct;
+            qtyToDeduct -= deduct;
             if (stockItem.quantity === 0) {
               await Stock.deleteOne({ _id: stockItem._id });
             } else {
               await stockItem.save();
             }
-          }
-        }
-      } else {
-        // Fallback for legacy credit sales
-        let qtyToDeduct = item.qty;
-        const Stock = getStockModel(shop);
-        const stockItems = await Stock.find({
-          name: item.product,
-          unit: item.unit,
-          category: category,
-        }).sort({ addedDate: 1 });
-        for (const stockItem of stockItems) {
-          if (qtyToDeduct <= 0) break;
-          const deduct = Math.min(qtyToDeduct, stockItem.quantity);
-          stockItem.quantity -= deduct;
-          qtyToDeduct -= deduct;
-          if (stockItem.quantity === 0) {
-            await Stock.deleteOne({ _id: stockItem._id });
-          } else {
-            await stockItem.save();
           }
         }
       }
@@ -2109,21 +2139,19 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
     // Restore bill in customer profile
     const customer = await Customer.findOne({ phoneNumber: creditSale.phoneNumber });
     if (customer) {
-      const profile = customer.profiles.find(
-        (p) => p.name === creditSale.customerName && !p.deleteuser.value
-      );
+      const profile = customer.profiles.find(p => p.name === creditSale.customerName && !p.deleteuser.value);
       if (profile) {
         profile.bills.push({
           billNo: creditSale.billNumber,
           date: creditSale.items[0].date,
-          items: creditSale.items.map((item) => ({
+          items: creditSale.items.map(item => ({
             product: item.product,
             qty: item.qty,
             unit: item.unit,
             pricePerQty: item.pricePerUnit,
             amount: item.amount,
-            category: item.category,
-            deductions: item.deductions ,
+            category: item.category || 'Unknown',
+            deductions: item.deductions || [],
           })),
           totalAmount: creditSale.totalAmount,
           creditAmount: creditSale.totalAmount,
@@ -2198,6 +2226,276 @@ app.get('/api/:shop/credits/deleted', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch deleted credit sales: ' + err.message });
   }
 });
+
+
+//Modified credit-sales Routes
+
+app.post('/api/:shop/credits/old', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { customerName, phoneNumber, items, totalAmount, otherExpenses = 0, date } = req.body;
+    const Customer = getCustomerModel(shop);
+    const CreditSale = getCreditSaleModel(shop);
+
+    if (!customerName || !phoneNumber || !items || !Array.isArray(items) || !totalAmount || !date) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (isNaN(otherExpenses) || otherExpenses < 0) {
+      return res.status(400).json({ error: 'Other expenses must be a non-negative number' });
+    }
+
+    const billDate = convertToDDMMYYYY(date);
+    if (!validateDate(billDate)) {
+      return res.status(400).json({ error: `Invalid date: ${date}` });
+    }
+
+    for (const item of items) {
+      if (!item.product || !item.qty || !item.unit || !item.pricePerUnit || !item.amount || !item.category) {
+        return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
+      }
+    }
+
+    const calculatedTotal = items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(otherExpenses);
+    if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
+      return res.status(400).json({ error: 'Total amount does not match item amounts plus other expenses' });
+    }
+
+    const billNumber = await getNextBillNumber(shop);
+    const billItems = items.map(item => ({
+      product: item.product,
+      qty: item.qty,
+      unit: item.unit,
+      pricePerUnit: item.pricePerUnit,
+      amount: item.amount,
+      date: billDate,
+      category: item.category,
+      deductions: [],
+    }));
+
+    const creditSale = new CreditSale({
+      billNumber,
+      customerName,
+      phoneNumber,
+      items: billItems,
+      totalAmount,
+      paidAmount: 0,
+      status: 'Open',
+      lastTransactionDate: billDate,
+      shop,
+      paymentHistory: [],
+      isDeleted: false,
+      deletedAt: null,
+      otherExpenses: parseFloat(otherExpenses),
+      profit: 0, // No profit for old bills
+      isOld: true,
+      isTrash: false,
+      trashedAt: null,
+    });
+
+    const creditSaleSize = Buffer.byteLength(JSON.stringify(creditSale));
+    if (creditSaleSize > 16 * 1024 * 1024) {
+      throw new Error('Credit sale document exceeds 16MB limit');
+    }
+    await creditSale.save();
+
+    let customer = await Customer.findOne({ phoneNumber });
+    if (!customer) {
+      customer = new Customer({
+        phoneNumber,
+        profiles: [{
+          profileId: uuidv4(),
+          name: customerName,
+          advance: { value: false, currentamount: 0, showinadvance: false },
+          advanceHistory: [],
+          credit: totalAmount,
+          paymentMethod: 'Credit',
+          bills: [{
+            billNo: billNumber,
+            date: billDate,
+            items: billItems.map(item => ({
+              product: item.product,
+              qty: item.qty,
+              unit: item.unit,
+              pricePerQty: item.pricePerUnit,
+              amount: item.amount,
+              category: item.category,
+              deductions: [],
+            })),
+            totalAmount,
+            creditAmount: totalAmount,
+            paymentMethod: 'Credit',
+            shop,
+            otherExpenses: parseFloat(otherExpenses),
+            profit: 0,
+          }],
+          deleteuser: { value: false, date: '' },
+        }],
+      });
+    } else {
+      let profile = customer.profiles.find(p => p.name === customerName && !p.deleteuser.value);
+      if (!profile) {
+        profile = {
+          profileId: uuidv4(),
+          name: customerName,
+          advance: { value: false, currentamount: 0, showinadvance: false },
+          advanceHistory: [],
+          credit: totalAmount,
+          paymentMethod: 'Credit',
+          bills: [{
+            billNo: billNumber,
+            date: billDate,
+            items: billItems.map(item => ({
+              product: item.product,
+              qty: item.qty,
+              unit: item.unit,
+              pricePerQty: item.pricePerUnit,
+              amount: item.amount,
+              category: item.category,
+              deductions: [],
+            })),
+            totalAmount,
+            creditAmount: totalAmount,
+            paymentMethod: 'Credit',
+            shop,
+            otherExpenses: parseFloat(otherExpenses),
+            profit: 0,
+          }],
+          deleteuser: { value: false, date: '' },
+        };
+        customer.profiles.push(profile);
+      } else {
+        profile.credit = (profile.credit || 0) + totalAmount;
+        profile.paymentMethod = 'Credit';
+        profile.bills.push({
+          billNo: billNumber,
+          date: billDate,
+          items: billItems.map(item => ({
+            product: item.product,
+            qty: item.qty,
+            unit: item.unit,
+            pricePerQty: item.pricePerUnit,
+            amount: item.amount,
+            category: item.category,
+            deductions: [],
+          })),
+          totalAmount,
+          creditAmount: totalAmount,
+          paymentMethod: 'Credit',
+          shop,
+          otherExpenses: parseFloat(otherExpenses),
+          profit: 0,
+        });
+      }
+    }
+
+    const customerSize = Buffer.byteLength(JSON.stringify(customer));
+    if (customerSize > 16 * 1024 * 1024) {
+      throw new Error('Customer document exceeds 16MB limit');
+    }
+    await customer.save();
+
+    res.status(201).json({ creditSale, customer });
+  } catch (err) {
+    console.error('Create old credit sale error:', err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/:shop/credits/:id/trash', async (req, res) => {
+  try {
+    const { shop, id } = req.params;
+    const CreditSale = getCreditSaleModel(shop);
+
+    const creditSale = await CreditSale.findById(id);
+    if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (creditSale.isTrash) return res.status(400).json({ error: 'Credit sale is already in trash' });
+    if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is deleted' });
+
+    creditSale.isTrash = true;
+    creditSale.trashedAt = convertToDDMMYYYY(new Date().toISOString().split('T')[0]);
+    await creditSale.save();
+
+    res.json({ message: 'Credit sale moved to trash successfully', creditSale });
+  } catch (err) {
+    console.error('Move to trash error:', err);
+    res.status(400).json({ error: 'Failed to move credit sale to trash: ' + err.message });
+  }
+});
+
+app.put('/api/:shop/credits/:id/restore-trash', async (req, res) => {
+  try {
+    const { shop, id } = req.params;
+    const CreditSale = getCreditSaleModel(shop);
+
+    const creditSale = await CreditSale.findById(id);
+    if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
+    if (!creditSale.isTrash) return res.status(400).json({ error: 'Credit sale is not in trash' });
+
+    creditSale.isTrash = false;
+    creditSale.trashedAt = null;
+    await creditSale.save();
+
+    res.json({ message: 'Credit sale restored from trash successfully', creditSale });
+  } catch (err) {
+    console.error('Restore from trash error:', err);
+    res.status(400).json({ error: 'Failed to restore credit sale from trash: ' + err.message });
+  }
+});
+
+app.get('/api/:shop/credits/trash', async (req, res) => {
+  try {
+    const { shop } = req.params;
+    const { page = 1, limit = 10, sortBy = 'trashedAt', sortOrder = 'desc', search } = req.query;
+    const CreditSale = getCreditSaleModel(shop);
+
+    const query = { isTrash: true, isDeleted: false };
+    if (search) {
+      query.$or = [
+        { billNumber: { $regex: search, $options: 'i' } },
+        { customerName: { $regex: search, $options: 'i' } },
+        { phoneNumber: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    const total = await CreditSale.countDocuments(query);
+    const trashedCreditSales = await CreditSale.find(query)
+      .sort(sortOptions)
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
+
+    const formattedTrashedCreditSales = trashedCreditSales.map(sale => ({
+      ...sale,
+      profit: sale.profit || 0,
+      items: sale.items.map(item => ({
+        ...item,
+        date: convertToDDMMYYYY(item.date),
+      })),
+      lastTransactionDate: convertToDDMMYYYY(sale.lastTransactionDate),
+      trashedAt: sale.trashedAt ? convertToDDMMYYYY(sale.trashedAt) : null,
+      paymentHistory: sale.paymentHistory.map(payment => ({
+        ...payment,
+        date: convertToDDMMYYYY(payment.date),
+      })),
+    }));
+
+    res.json({
+      data: formattedTrashedCreditSales,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    console.error('Fetch trashed credit sales error:', err);
+    res.status(500).json({ error: 'Failed to fetch trashed credit sales: ' + err.message });
+  }
+});
+
+
 
 
 
