@@ -173,7 +173,7 @@
   color: #ffffff;
 }
 
-.edit-btn, .clear-btn, .delete-btn {
+.clear-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -184,11 +184,7 @@
   color: #ff6b35;
 }
 
-.delete-btn:hover svg {
-  color: #dc3545;
-}
-
-.edit-btn svg, .clear-btn svg, .delete-btn svg {
+.clear-btn svg {
   color: #a1a5b7;
 }
 

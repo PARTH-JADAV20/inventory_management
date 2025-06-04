@@ -36,6 +36,7 @@ const StockManage = () => {
     category: 'Cement',
     price: '',
     addedDate: getCurrentISTDate(),
+    shop: shop,
   });
   const [editingItem, setEditingItem] = useState(null);
   const [filteredItems, setFilteredItems] = useState([]);
