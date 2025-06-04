@@ -1,7 +1,6 @@
 .credit-sales-dashboard-dax {
   max-width: 1400px;
-  margin-top: 150px;
-  /* margin: 30px auto; */
+  margin: 20px auto;
   padding: 25px;
   background: #1e1e2d;
   border-radius: 12px;
@@ -14,6 +13,30 @@
   margin-bottom: 25px;
   color: #ff6b35;
   font-weight: 600;
+}
+
+.stats-container-dax {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+  padding: 15px;
+  background: #2b2b40;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.stat-label-dax {
+  display: block;
+  font-size: 14px;
+  color: #a1a5b7;
+  margin-bottom: 5px;
+}
+
+.stat-value-dax {
+  font-size: 22px;
+  color: #ff6b35;
+  font-weight: bold;
 }
 
 .error-message-dax {
@@ -69,7 +92,7 @@
   border-radius: 6px;
   background: #2b2b40;
   color: #ffffff;
-  font-size: 15px;
+  font-size: 14px;
   transition: border-color 0.2s;
 }
 
@@ -79,10 +102,10 @@
   outline: none;
 }
 
-.filter-group-dax input[type="checkbox"] {
+.filter-group-dax input[type="checkbox-dax"] {
   width: 22px;
   height: 22px;
-  min-width: 22px;
+  min-width: 25px;
   cursor: pointer;
   accent-color: #ff6b35;
 }
@@ -126,7 +149,7 @@
 .pagination-btn-dax,
 .restore-btn-dax,
 .delete-btn-dax {
-  padding: 12px 24px;
+  padding: 10px 20px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -135,7 +158,7 @@
   transition: background 0.2s, transform 0.1s;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .add-btn-dax {
@@ -252,8 +275,8 @@
 }
 
 .no-data-dax {
-  text-align: center;
   color: #a1a5b7;
+  text-align: center;
   font-size: 18px;
   margin: 30px 0;
 }
@@ -300,7 +323,7 @@
   background: #3a3a5a;
 }
 
-.credit-sales-table-dax .sr-no-dax {
+.credit-sales-table-dax .sr-no-dax-dax {
   color: #ff6b35;
   font-weight: 600;
 }
@@ -320,6 +343,10 @@
 
 .credit-sales-table-dax .status-deleted-dax {
   color: #ff4444;
+}
+
+.credit-sales-table-dax .status-unknown-dax {
+  color: #a1a5b7;
 }
 
 .credit-sales-table-dax .high-credit-dax td {
@@ -361,6 +388,9 @@
     justify-content: center;
     flex-wrap: wrap;
   }
+  .stats-container-dax {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {
@@ -374,5 +404,3 @@
     gap: 8px;
   }
 }
-
-/* Remove shop-selector-dax since it's not used */

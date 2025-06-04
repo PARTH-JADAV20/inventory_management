@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useContext } from "react";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { Search, Plus, Download, AlertCircle, Undo, Delete, Trash2 } from "lucide-react";
 import AddCreditSale from "../Components/CreditSales/AddCreditSale";
-import AddOldCreditSale from "../Components/CreditSales/AddOldCreditSale"; // New component
+import AddOldCreditSale from "../Components/CreditSales/AddOldCreditSale";
 import CreditDetailsModal from "../Components/CreditSales/CreditDetailsModal";
-import ClearedTrashedBillsModal from "../Components/CreditSales/ClearedTrashedBillsModal"; // New component
+import ClearedTrashedBillsModal from "../Components/CreditSales/ClearedTrashedBillsModal";
 import { fetchCreditSales, closeCreditSale, fetchCurrentStock, restoreCreditSale, permanentDeleteCreditSale } from "../Components/api";
 import { ShopContext } from "../Components/ShopContext/ShopContext";
 import "./CreditSales.css";
@@ -22,20 +22,26 @@ const CreditSalesDashboard = () => {
   const { shop } = useContext(ShopContext);
   const [creditSales, setCreditSales] = useState([]);
   const [stock, setStock] = useState([]);
+  const [stats, setStats] = useState({
+    totalCustomers: 0,
+    totalOutstanding: 0,
+    totalPaid: 0,
+    totalOverdue: 0,
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [amountFilter, setAmountFilter] = useState("All");
   const [timeFilter, setTimeFilter] = useState("All");
   const [showDeleted, setShowDeleted] = useState(false);
-  const [showOld, setShowOld] = useState(false); // New state for old bills
+  const [showOld, setShowOld] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showAddOldForm, setShowAddOldForm] = useState(false); // New state for old bill form
-  const [showClearedTrashedModal, setShowClearedTrashedModal] = useState(false); // New state for cleared/trashed modal
+  const [showAddOldForm, setShowAddOldForm] = useState(false);
+  const [showClearedTrashedModal, setShowClearedTrashedModal] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
-  const [limit] = useState(25); // Updated limit to 25
+  const [limit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [sortBy, setSortBy] = useState("lastTransactionDate");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -48,6 +54,21 @@ const CreditSalesDashboard = () => {
     return date;
   };
 
+  const formatDate = (dateStr) => {
+    if (!dateStr || isNaN(new Date(dateStr).getTime())) return "N/A";
+    // Try parsing as DD-MM-YYYY first (since database stores this)
+    try {
+      const parsedDate = parse(dateStr, "dd-MM-yyyy", new Date());
+      if (!isNaN(parsedDate.getTime())) {
+        return format(parsedDate, "d MMMM yyyy");
+      }
+    } catch {
+      // Fallback to parsing as ISO or other formats
+      return format(new Date(dateStr), "d MMMM yyyy");
+    }
+    return "N/A";
+  };
+
   const fetchData = useCallback(
     async (search = "") => {
       setLoading(true);
@@ -56,25 +77,57 @@ const CreditSalesDashboard = () => {
           fetchCreditSales(shop, page, limit, sortBy, sortOrder, search.trim() || undefined, showDeleted, showOld),
           fetchCurrentStock(shop),
         ]);
-        const salesData = Array.isArray(salesResponse.data)
+
+        // Process sales data
+        let salesData = Array.isArray(salesResponse.data)
           ? salesResponse.data.map((sale) => ({
               ...sale,
               status: sale.status ?? "Unknown",
+              isOld: sale.isOld ?? false,
             }))
           : [];
+        
+        // Filter old bills if showOld is true
+        if (showOld) {
+          salesData = salesData.filter(sale => sale.isOld === true);
+        }
+
         setCreditSales(salesData);
         setTotalPages(salesResponse.totalPages || 1);
         setStock(Array.isArray(stockData) ? stockData : []);
+
+        // Fetch stats (full dataset for global stats, excluding deleted)
+        const allSalesResponse = await fetchCreditSales(shop, 1, 999999, "lastTransactionDate", "desc", undefined, false, true);
+        const allSales = Array.isArray(allSalesResponse.data) ? allSalesResponse.data : [];
+        
+        const uniqueCustomers = new Set(allSales.map(sale => sale.phoneNumber)).size;
+        const totalOutstanding = allSales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
+        const totalPaid = allSales.reduce((sum, sale) => sum + (sale.paidAmount || 0), 0);
+        const totalOverdue = allSales.reduce((sum, sale) => {
+          if (isOverdue(sale.lastTransactionDate, sale.totalAmount)) {
+            return sum + (sale.totalAmount || 0);
+          }
+          return sum;
+        }, 0);
+
+        setStats({
+          totalCustomers: uniqueCustomers,
+          totalOutstanding,
+          totalPaid,
+          totalOverdue,
+        });
+
         setError("");
       } catch (err) {
         console.error("fetchData error:", err);
         setError(err.message || "Failed to fetch data");
         setCreditSales([]);
+        setStats({ totalCustomers: 0, totalOutstanding: 0, totalPaid: 0, totalOverdue: 0 });
       } finally {
         setLoading(false);
       }
     },
-    [shop, page, limit, sortBy, sortOrder, showDeleted, showOld]
+    [shop, page, sortBy, sortOrder, showDeleted, showOld]
   );
 
   const debouncedFetchData = useCallback(
@@ -92,6 +145,7 @@ const CreditSalesDashboard = () => {
     const value = e.target.value;
     setSearchTerm(value);
     debouncedFetchData(value);
+    setPage(1);
   };
 
   const filteredSales = creditSales.filter((sale) => {
@@ -101,7 +155,7 @@ const CreditSalesDashboard = () => {
       (amountFilter === ">10000" && (sale.totalAmount || 0) > 10000) ||
       (amountFilter === ">50000" && (sale.totalAmount || 0) > 50000) ||
       (amountFilter === ">2months" &&
-        (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) > 60 &&
+        (new Date() - new Date(sale.lastTransactionDate)) / (1000 * 60 * 60 * 24) >= 60 &&
         (sale.totalAmount || 0) > 0);
     const matchesTime =
       timeFilter === "All" ||
@@ -120,6 +174,7 @@ const CreditSalesDashboard = () => {
     try {
       const updatedStock = await fetchCurrentStock(shop);
       setStock(Array.isArray(updatedStock) ? updatedStock : []);
+      await fetchData(searchTerm); // Refresh stats
     } catch (err) {
       setError(err.message || "Failed to update stock");
     }
@@ -128,11 +183,13 @@ const CreditSalesDashboard = () => {
 
   const handleAddOldCredit = async (newSale) => {
     setCreditSales([newSale, ...creditSales]);
+    await fetchData(searchTerm); // Refresh stats
     setShowAddOldForm(false);
   };
 
   const handleUpdateCredit = async (updatedSale) => {
     setCreditSales(creditSales.map((sale) => (sale._id === updatedSale._id ? updatedSale : sale)));
+    await fetchData(searchTerm); // Refresh stats
     setSelectedCredit(null);
   };
 
@@ -144,8 +201,9 @@ const CreditSalesDashboard = () => {
     ) {
       setLoading(true);
       try {
-        const updatedSale = await closeCreditSale(shop, sale._id, "Cleared");
-        handleUpdateCredit(updatedSale);
+        const updatedSale = await closeCreditSale(shop, sale._id);
+        await handleUpdateCredit(updatedSale);
+        await fetchData(searchTerm); // Refresh stats
       } catch (error) {
         setError(error.message || "Failed to close bill");
       } finally {
@@ -159,9 +217,10 @@ const CreditSalesDashboard = () => {
     setLoading(true);
     try {
       const updatedSale = await restoreCreditSale(shop, sale._id);
-      handleUpdateCredit(updatedSale);
+      await handleUpdateCredit(updatedSale);
+      await fetchData(searchTerm); // Refresh stats
     } catch (error) {
-      setError(error.message || "Failed to restore credit sale");
+      setError(error.message || "Failed to restore credit");
     } finally {
       setLoading(false);
     }
@@ -173,8 +232,9 @@ const CreditSalesDashboard = () => {
     try {
       await permanentDeleteCreditSale(shop, sale._id);
       setCreditSales(creditSales.filter((s) => s._id !== sale._id));
+      await fetchData(searchTerm); // Refresh stats
     } catch (error) {
-      setError(error.message || "Failed to permanently delete credit sale");
+      setError(error.message || "Failed to permanently delete credit");
     } finally {
       setLoading(false);
     }
@@ -189,6 +249,7 @@ const CreditSalesDashboard = () => {
           <style>
             body { font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333; }
             h2 { color: #ff6b35; }
+            .stats { margin-bottom: 20px; font-size: 16px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #ccc; padding: 12px; text-align: left; }
             th { background-color: #2b2b40; color: #ffffff; }
@@ -206,6 +267,12 @@ const CreditSalesDashboard = () => {
         </head>
         <body>
           <h2>Credit Sales Report - ${shop}</h2>
+          <div class="stats">
+            <p>Total Customers: ${stats.totalCustomers}</p>
+            <p>Total Outstanding: ₹${stats.totalOutstanding.toFixed(2)}</p>
+            <p>Total Paid: ₹${stats.totalPaid.toFixed(2)}</p>
+            <p>Total Overdue (>2 Months): ₹${stats.totalOverdue.toFixed(2)}</p>
+          </div>
           <table>
             <thead>
               <tr>
@@ -225,23 +292,21 @@ const CreditSalesDashboard = () => {
               ${filteredSales
                 .map(
                   (sale, index) => {
-                    const lastTransactionDate = sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
-                      : "N/A";
+                    const lastTransactionDate = formatDate(sale.lastTransactionDate);
                     return `
-                    <tr>
-                      <td class="sr-no-dax">${index + 1}</td>
-                      <td>${sale.billNumber}</td>
-                      <td>${sale.customerName}</td>
-                      <td>${sale.phoneNumber}</td>
-                      <td>₹${((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
-                      <td>₹${(sale.paidAmount || 0).toFixed(2)}</td>
-                      <td>₹${(sale.totalAmount || 0).toFixed(2)}</td>
-                      <td class="${isOverdue(sale.lastTransactionDate, sale.totalAmount) ? "overdue-dax" : ""}">${lastTransactionDate}</td>
-                      <td class="status-${(sale.status ?? "Unknown").toLowerCase()}-dax">${sale.status ?? "Unknown"}</td>
-                      <td class="${sale.isDeleted ? "status-deleted-dax" : ""}">${sale.isDeleted ? "Yes" : "No"}</td>
-                    </tr>
-                  `;
+                      <tr>
+                        <td class="sr-no-dax">${index + 1}</td>
+                        <td>${sale.billNumber}</td>
+                        <td>${sale.customerName}</td>
+                        <td>${sale.phoneNumber}</td>
+                        <td>₹${((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
+                        <td>₹${(sale.paidAmount || 0).toFixed(2)}</td>
+                        <td>₹${(sale.totalAmount || 0).toFixed(2)}</td>
+                        <td class="${isOverdue(sale.lastTransactionDate, sale.totalAmount) ? "overdue-dax" : ""}">${lastTransactionDate}</td>
+                        <td class="status-${(sale.status ?? "Unknown").toLowerCase()}-dax">${sale.status ?? "Unknown"}</td>
+                        <td class="${sale.isDeleted ? "status-deleted-dax" : ""}">${sale.isDeleted ? "Yes" : "No"}</td>
+                      </tr>
+                    `;
                   }
                 )
                 .join("")}
@@ -276,9 +341,7 @@ const CreditSalesDashboard = () => {
       ((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2),
       (sale.paidAmount || 0).toFixed(2),
       (sale.totalAmount || 0).toFixed(2),
-      sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-        ? format(new Date(sale.lastTransactionDate), "yyyy-MM-dd")
-        : "N/A",
+      formatDate(sale.lastTransactionDate),
       sale.status ?? "Unknown",
       sale.isDeleted ? "Yes" : "No",
     ]);
@@ -289,14 +352,14 @@ const CreditSalesDashboard = () => {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `credit_sales_${shop}_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.download = `credit_sales_${shop}_${format(new Date(), "d MMMM yyyy")}.csv`;
     link.click();
   };
 
   const isOverdue = (date, totalAmount) => {
     if (!date || isNaN(new Date(date).getTime()) || (totalAmount || 0) <= 0) return false;
     const daysDiff = (new Date() - new Date(date)) / (1000 * 60 * 60 * 24);
-    return daysDiff > 60;
+    return daysDiff >= 60;
   };
 
   const isHighCredit = (amount) => (amount || 0) > 50000;
@@ -314,6 +377,24 @@ const CreditSalesDashboard = () => {
   return (
     <div className="credit-sales-dashboard-dax">
       <h1>Credit Sales Dashboard</h1>
+      <div className="stats-container-dax">
+        <div className="stat-box-dax">
+          <span className="stat-label-dax">Total Customers</span>
+          <span className="stat-value-dax">{stats.totalCustomers}</span>
+        </div>
+        <div className="stat-box-dax">
+          <span className="stat-label-dax">Total Outstanding</span>
+          <span className="stat-value-dax">₹{stats.totalOutstanding.toFixed(2)}</span>
+        </div>
+        <div className="stat-box-dax">
+          <span className="stat-label-dax">Total Paid</span>
+          <span className="stat-value-dax">₹{stats.totalPaid.toFixed(2)}</span>
+        </div>
+        <div className="stat-box-dax">
+          <span className="stat-label-dax">Total Overdue (>2 Months)</span>
+          <span className="stat-value-dax">₹{stats.totalOverdue.toFixed(2)}</span>
+        </div>
+      </div>
       {error && (
         <div className="error-message-dax">
           <AlertCircle size={16} />
@@ -356,9 +437,9 @@ const CreditSalesDashboard = () => {
               disabled={loading}
             >
               <option value="All">All</option>
-              <option value=">10000">Credit &gt; ₹10,000</option>
-              <option value=">50000">Credit &gt; ₹50,000</option>
-              <option value=">2months">Overdue &gt; 2 Months</option>
+              <option value=">10000">Credit > ₹10,000</option>
+              <option value=">50000">Credit > ₹50,000</option>
+              <option value=">2months">Overdue > 2 Months</option>
             </select>
           </div>
           <div className="filter-group-dax">
@@ -388,7 +469,10 @@ const CreditSalesDashboard = () => {
             <input
               type="checkbox"
               checked={showOld}
-              onChange={(e) => setShowOld(e.target.checked)}
+              onChange={(e) => {
+                setShowOld(e.target.checked);
+                fetchData(searchTerm); // Refresh data when toggled
+              }}
               disabled={loading}
             />
           </div>
@@ -420,7 +504,7 @@ const CreditSalesDashboard = () => {
             onClick={handlePrint}
             disabled={filteredSales.length === 0 || loading}
           >
-            <Download size={16} /> Print Report
+            <Download size={16} /> Print
           </button>
           <button
             className="export-btn-dax"
@@ -439,9 +523,7 @@ const CreditSalesDashboard = () => {
         >
           Previous
         </button>
-        <span>
-          Page {page} of {totalPages}
-        </span>
+        <span>Page {page} of {totalPages}</span>
         <button
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page === totalPages || loading}
@@ -452,8 +534,8 @@ const CreditSalesDashboard = () => {
       </div>
       {loading ? (
         <div className="loading-dax">Loading...</div>
-      ) : filteredSales.length === 0 ? (
-        <div className="no-data-dax">No credit sales found</div>
+      ) : creditSales.length === 0 ? (
+        <div className="no-data-dax">No credit sales found.</div>
       ) : (
         <div className="table-container-dax">
           <table className="credit-sales-table-dax">
@@ -475,8 +557,7 @@ const CreditSalesDashboard = () => {
                 <th>Paid Amount (₹)</th>
                 <th>Remaining (₹)</th>
                 <th onClick={() => handleSort("lastTransactionDate")}>
-                  Last Transaction{" "}
-                  {sortBy === "lastTransactionDate" && (sortOrder === "asc" ? "↑" : "↓")}
+                  Last Transaction {sortBy === "lastTransactionDate" && (sortOrder === "asc" ? "↑" : "↓")}
                 </th>
                 <th onClick={() => handleSort("status")}>
                   Status {sortBy === "status" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -498,12 +579,8 @@ const CreditSalesDashboard = () => {
                   <td>₹{((sale.totalAmount || 0) + (sale.paidAmount || 0)).toFixed(2)}</td>
                   <td>₹{(sale.paidAmount || 0).toFixed(2)}</td>
                   <td>₹{(sale.totalAmount || 0).toFixed(2)}</td>
-                  <td
-                    className={isOverdue(sale.lastTransactionDate, sale.totalAmount) ? "overdue-dax" : ""}
-                  >
-                    {sale.lastTransactionDate && !isNaN(new Date(sale.lastTransactionDate).getTime())
-                      ? format(new Date(sale.lastTransactionDate), "dd MMMM yyyy")
-                      : "N/A"}
+                  <td className={isOverdue(sale.lastTransactionDate, sale.totalAmount) ? "overdue-dax" : ""}>
+                    {formatDate(sale.lastTransactionDate)}
                   </td>
                   <td className={`status-${(sale.status ?? "Unknown").toLowerCase()}-dax`}>
                     {sale.status ?? "Unknown"}

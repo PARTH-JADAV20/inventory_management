@@ -162,14 +162,14 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
   };
 
   const handleSoftDelete = async () => {
-    if (!window.confirm("Are you sure you want to soft delete this credit sale?")) return;
+    if (!window.confirm("Are you sure you want to move this credit sale to trash? No data will be lost; it will be moved to Cleared & Trashed Bills for viewing.")) return;
     setLoading(true);
     try {
       const updatedSale = await deleteCreditSale(shop, creditSale._id);
       onUpdate(updatedSale);
       setWarning("");
     } catch (error) {
-      setWarning(error.message || "Failed to soft delete credit sale");
+      setWarning(error.message || "Failed to move to trash");
     } finally {
       setLoading(false);
     }
@@ -211,7 +211,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
     if (!date || isNaN(new Date(date).getTime())) {
       return "N/A";
     }
-    return format(new Date(date), "dd-mm-yyyy");
+    return format(new Date(date), "dd-MM-yyyy");
   };
 
   return (
@@ -278,7 +278,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
                 <td>{item.unit}</td>
                 <td>₹{item.pricePerUnit.toFixed(2)}</td>
                 <td>₹{item.amount.toFixed(2)}</td>
-                <td>{item.date}</td> {/* Use safe date formatting */}
+                <td>{item.date}</td>
               </tr>
             ))}
           </tbody>
@@ -299,9 +299,7 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
             <tbody>
               {creditSale.paymentHistory.map((payment, index) => (
                 <tr key={index}>
-                  <td>
-                    {payment.date} {/* Use safe date formatting */}2
-                  </td>
+                  <td>{payment.date}</td>
                   <td>₹{payment.amount.toFixed(2)}</td>
                   <td>{payment.mode}</td>
                   <td>{payment.note || "-"}</td>
@@ -507,15 +505,29 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
 
         <div className="delete-section-dax">
           <h3>Manage Credit Sale</h3>
+          <p className="trash-note-dax">
+            Moving to trash does not delete data; it relocates cleared bills to "Cleared & Trashed Bills" to keep your main dashboard clean.
+          </p>
           <div className="form-buttons-dax">
             {!creditSale.isDeleted && (
-              <button
-                className="delete-btn-dax"
-                onClick={handleSoftDelete}
-                disabled={loading}
-              >
-                <Trash2 size={16} /> Soft Delete
-              </button>
+              <>
+                {creditSale.status === "Cleared" && (
+                  <button
+                    className="move-to-trash-btn-dax"
+                    onClick={handleSoftDelete}
+                    disabled={loading}
+                  >
+                    <Trash2 size={16} /> Move to Trash
+                  </button>
+                )}
+                <button
+                  className="delete-btn-dax"
+                  onClick={handleSoftDelete}
+                  disabled={loading}
+                >
+                  <Trash2 size={16} /> Soft Delete
+                </button>
+              </>
             )}
             {creditSale.isDeleted && (
               <>
