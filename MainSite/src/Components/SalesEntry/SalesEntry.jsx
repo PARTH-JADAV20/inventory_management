@@ -236,36 +236,69 @@ const SalesEntry = () => {
 
   const getGroupedStock = () => {
     const mergedStock = groupedStock.reduce((acc, item) => {
-      const key = `${item.name.toLowerCase()}|${item.category.toLowerCase()}|${item.unit.toLowerCase()}|${item.shop || shop}`;
+      const key = `${item.name.toLowerCase()}|${item.category.toLowerCase()}|${item.unit.toLowerCase()}|${item.shop}`;
       if (!acc[key]) {
         acc[key] = {
           id: item.id,
           name: item.name,
           category: item.category,
           unit: item.unit,
-          quantity: 0,
-          totalPrice: 0,
-          count: 0,
-          shop: item.shop || shop, // Store shop name
+          quantity: item.quantity,
+          price: item.price,
+          shop: item.shop,
+        };
+      } else {
+        // For Shop 1, avoid doubling quantities by keeping the latest item
+        acc[key] = {
+          ...acc[key],
+          quantity: item.quantity, // Use the latest quantity
+          price: item.price, // Use the latest price
         };
       }
-      acc[key].quantity += item.quantity;
-      acc[key].totalPrice += item.price * item.quantity;
-      acc[key].count += item.quantity;
       return acc;
     }, {});
 
+    // For Shop 1, combine quantities across shops for same item
+    if (shop === "Shop 1") {
+      const combinedStock = Object.values(mergedStock).reduce((acc, item) => {
+        const key = `${item.name.toLowerCase()}|${item.category.toLowerCase()}|${item.unit.toLowerCase()}`;
+        if (!acc[key]) {
+          acc[key] = {
+            ...item,
+            quantity: item.quantity,
+            shop: [item.shop], // Track shops
+          };
+        } else {
+          acc[key].quantity += item.quantity;
+          if (!acc[key].shop.includes(item.shop)) {
+            acc[key].shop.push(item.shop);
+          }
+        }
+        return acc;
+      }, {});
+
+      return Object.values(combinedStock).map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        unit: item.unit,
+        quantity: item.quantity,
+        price: item.price,
+        shop: item.shop.join(", "), 
+      }));
+    }
+
+    // For Shop 2, return only Shop 2 items
     return Object.values(mergedStock).map((item) => ({
       id: item.id,
       name: item.name,
       category: item.category,
       unit: item.unit,
       quantity: item.quantity,
-      price: item.count > 0 ? item.totalPrice / item.count : 0,
-      shop: item.shop, // Include shop name
+      price: item.price,
+      shop: item.shop,
     }));
   };
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === "date") {
@@ -714,8 +747,10 @@ const SalesEntry = () => {
 
       let stockData = [];
       let groupedStockData = [];
+      let customerData = [];
+      let salesData = [];
       if (shop === "Shop 1") {
-        const [shop1Stock, shop2Stock, shop1Grouped, shop2Grouped, customerData, salesData] = await Promise.all([
+        const [shop1Stock, shop2Stock, shop1Grouped, shop2Grouped, customers, sales] = await Promise.all([
           fetchStock("Shop 1").catch((err) => {
             console.error("fetchStock Shop 1 error:", err);
             return [];
@@ -734,7 +769,7 @@ const SalesEntry = () => {
           }),
           fetchCustomers(shopApiName).catch((err) => {
             console.error("fetchCustomers error:", err);
-            return [];
+            return { customers: [] };
           }),
           fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
             console.error("fetchSales error:", err);
@@ -746,8 +781,10 @@ const SalesEntry = () => {
           ...shop2Stock.map(item => ({ ...item, deductions: item.deductions?.map(d => ({ ...d, shop: "Shop 2" })) || [] })),
         ];
         groupedStockData = [...shop1Grouped, ...shop2Grouped];
+        customerData = customers;
+        salesData = sales;
       } else {
-        const [shop2Stock, shop2Grouped, customerData, salesData] = await Promise.all([
+        const [shop2Stock, shop2Grouped, customers, sales] = await Promise.all([
           fetchStock("Shop 2").catch((err) => {
             console.error("fetchStock Shop 2 error:", err);
             return [];
@@ -758,7 +795,7 @@ const SalesEntry = () => {
           }),
           fetchCustomers(shopApiName).catch((err) => {
             console.error("fetchCustomers error:", err);
-            return [];
+            return { customers: [] };
           }),
           fetchSales(shopApiName, filterDate, searchTerm).catch((err) => {
             console.error("fetchSales error:", err);
@@ -767,6 +804,8 @@ const SalesEntry = () => {
         ]);
         stockData = shop2Stock.map(item => ({ ...item, deductions: item.deductions?.map(d => ({ ...d, shop: "Shop 2" })) || [] }));
         groupedStockData = shop2Grouped;
+        customerData = customers;
+        salesData = sales;
       }
 
       setStock(Array.isArray(stockData) ? stockData : []);

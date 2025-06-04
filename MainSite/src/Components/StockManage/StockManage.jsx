@@ -49,7 +49,9 @@ const StockManage = () => {
     (itemsToProcess) => {
       // Filter items for current stock table (no grouping)
       let filtered = [...itemsToProcess];
-
+      console.log('Processing items for shop:', filtered);
+      console.log('Processing items for shop:', shop);
+      filtered = filtered.filter(item => item.shop === shop);
       if (filterCategory !== 'All') {
         filtered = filtered.filter(
           (item) => (item.category || 'Uncategorized').toLowerCase() === filterCategory.toLowerCase()
@@ -69,7 +71,7 @@ const StockManage = () => {
 
       return { filtered };
     },
-    [filterCategory, searchTerm]
+    [filterCategory, searchTerm, shop] // Added shop to dependencies
   );
 
   useEffect(() => {
@@ -153,8 +155,9 @@ const StockManage = () => {
       const fetchGroupedStock = async () => {
         try {
           setError(null);
-          const data = await fetchStock(shop); // Fetch raw stock data
-          const grouped = groupItemsCaseInsensitive(data); // Group case-insensitively
+          const data = await fetchCurrentStock(shop); // Fetch raw stock data
+          const filteredData = data.filter(item => item.shop === shop);
+          const grouped = groupItemsCaseInsensitive(filteredData); // Group case-insensitively
           const processedItems = processGroupedItems(grouped); // Apply filters
           setGroupedItems(processedItems);
         } catch (err) {
@@ -189,7 +192,8 @@ const StockManage = () => {
       !newItem.price ||
       !newItem.category ||
       !newItem.unit ||
-      !newItem.addedDate
+      !newItem.addedDate ||
+      !newItem.shop
     ) {
       alert('Please fill all fields');
       return;
@@ -222,6 +226,7 @@ const StockManage = () => {
         category: 'Cement',
         price: '',
         addedDate: new Date().toISOString().split('T')[0],
+        shop: shop,
       });
       setIsCustomCategory(false);
       setIsCustomUnit(false);
@@ -241,6 +246,7 @@ const StockManage = () => {
       category: item.category,
       price: item.price,
       addedDate: new Date(item.addedDate).toISOString().split('T')[0],
+      shop: item.shop,
     });
     setIsCustomCategory(!categories.includes(item.category));
     setIsCustomUnit(!['KG', 'Bag', 'Pieces', 'Liter'].includes(item.unit));
@@ -273,6 +279,7 @@ const StockManage = () => {
       category: 'Cement',
       price: '',
       addedDate: getCurrentISTDate(),
+      shop: shop,
     });
     setIsCustomCategory(false);
     setIsCustomUnit(false);
