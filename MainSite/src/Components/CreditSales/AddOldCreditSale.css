@@ -1,0 +1,154 @@
+.add-old-credit-sale-dax {
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background: #1e1e2d;
+  border-radius: 12px;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.form-title-dax {
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: #ff6b35;
+}
+
+.error-message-dax {
+  color: #ff4444;
+  text-align: center;
+  margin-bottom: 10px;
+  background: #4a2b2b;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.success-message-dax {
+  color: #4caf50;
+  text-align: center;
+  margin-bottom: 10px;
+  background: #2b4a2b;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.form-group-dax {
+  margin-bottom: 15px;
+}
+
+.form-group-dax label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #a1a5b7;
+}
+
+.form-group-dax input,
+.form-group-dax select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  font-size: 14px;
+  background: #2b2b40;
+  color: #ffffff;
+}
+
+.form-group-dax input:focus,
+.form-group-dax select:focus {
+  border-color: #ff6b35;
+  outline: none;
+}
+
+.calendar-input-dax {
+  margin-top: 5px;
+}
+
+.item-row-dax {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 10px;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+}
+
+.form-group-dax {
+  flex: 1;
+  min-width: 120px;
+}
+
+.add-item-btn-dax,
+.remove-item-btn-dax,
+.submit-btn-dax,
+.cancel-btn-dax {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.add-item-btn-dax {
+  background-color: #28a745;
+  color: white;
+  margin-bottom: 15px;
+}
+
+.add-item-btn-dax:hover {
+  background-color: #218838;
+  transform: translateY(-2px);
+}
+
+.remove-item-btn-dax {
+  background-color: #dc3545;
+  color: white;
+}
+
+.remove-item-btn-dax:hover {
+  background-color: #c82333;
+}
+
+.submit-btn-dax {
+  background-color: #007bff;
+  color: white;
+  margin-right: 10px;
+}
+
+.submit-btn-dax:hover {
+  background-color: #0069d9;
+  transform: translateY(-2px);
+}
+
+.cancel-btn-dax {
+  background-color: #333;
+  color: white;
+}
+
+.cancel-btn-dax:hover {
+  background-color: #444;
+  transform: translateY(-2px);
+}
+
+.submit-btn-dax:disabled,
+.cancel-btn-dax:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.form-actions-dax {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+h2 {
+  font-size: 18px;
+  margin: 20px 0 10px;
+  color: #ff6b35;
+}

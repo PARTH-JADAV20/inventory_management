@@ -1,106 +1,120 @@
 .credit-sales-dashboard-dax {
   max-width: 1400px;
   margin: 20px auto;
-  padding: 20px;
+  padding: 25px;
   background: #1e1e2d;
-  border-radius: 8px;
+  border-radius: 12px;
   color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .credit-sales-dashboard-dax h1 {
-  font-size: 24px;
-  margin-bottom: 20px;
+  font-size: 28px;
+  margin-bottom: 25px;
   color: #ff6b35;
+  font-weight: 600;
 }
 
-.summary-cards-dax {
+.stats-container-dax {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 15px;
-  margin-bottom: 20px;
-}
-
-.summary-card-dax {
-  background: #2b2b40;
+  margin-bottom: 25px;
   padding: 15px;
-  border-radius: 8px;
+  background: #2b2b40;
+  border-radius: 6px;
   text-align: center;
 }
 
-.summary-card-dax h3 {
-  font-size: 16px;
+.stat-label-dax {
+  display: block;
+  font-size: 14px;
   color: #a1a5b7;
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 
-.summary-card-dax p {
-  font-size: 18px;
-  color: #ffffff;
+.stat-value-dax {
+  font-size: 22px;
+  color: #ff6b35;
+  font-weight: bold;
 }
 
 .error-message-dax {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: #ff4444;
-  font-size: 14px;
-  margin-bottom: 15px;
+  font-size: 15px;
+  margin-bottom: 20px;
+  background: #4a2b2b;
+  padding: 10px;
+  border-radius: 6px;
 }
 
 .filters-and-actions-dax {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 25px;
+  margin-bottom: 25px;
 }
 
 .filters-dax {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 20px;
 }
 
 .filter-group-dax {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  min-width: 160px;
 }
 
 .checkbox-group-dax {
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .filter-group-dax label {
-  font-size: 14px;
+  font-size: 15px;
   color: #a1a5b7;
+  font-weight: 500;
 }
 
 .filter-group-dax select,
 .filter-group-dax input[type="text"],
 .filter-group-dax input[type="checkbox"] {
-  padding: 10px;
+  padding: 12px;
   border: 1px solid #3a3a5a;
-  border-radius: 4px;
+  border-radius: 6px;
   background: #2b2b40;
   color: #ffffff;
   font-size: 14px;
-  min-width: 150px;
+  transition: border-color 0.2s;
 }
 
-.filter-group-dax input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
+.filter-group-dax select:focus,
+.filter-group-dax input[type="text"]:focus {
+  border-color: #ff6b35;
+  outline: none;
+}
+
+.filter-group-dax input[type="checkbox-dax"] {
+  width: 22px;
+  height: 22px;
+  min-width: 25px;
   cursor: pointer;
+  accent-color: #ff6b35;
 }
 
 .filter-group-dax input:disabled,
 .filter-group-dax select:disabled {
   background: #3a3a5a;
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .search-input-wrapper-dax {
@@ -111,20 +125,23 @@
 
 .search-input-wrapper-dax svg {
   position: absolute;
-  left: 10px;
+  left: 12px;
   color: #a1a5b7;
 }
 
 .search-input-wrapper-dax input {
-  padding-left: 30px;
+  padding-left: 36px;
 }
 
 .actions-dax {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .add-btn-dax,
+.add-old-btn-dax,
+.view-cleared-trashed-btn-dax,
 .print-btn-dax,
 .export-btn-dax,
 .view-btn-dax,
@@ -134,10 +151,11 @@
 .delete-btn-dax {
   padding: 10px 20px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
+  font-size: 15px;
+  font-weight: 500;
+  transition: background 0.2s, transform 0.1s;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -150,6 +168,27 @@
 
 .add-btn-dax:hover:not(:disabled) {
   background: #45a049;
+  transform: translateY(-2px);
+}
+
+.add-old-btn-dax {
+  background: #ff6b35;
+  color: #ffffff;
+}
+
+.add-old-btn-dax:hover:not(:disabled) {
+  background: #e55a2e;
+  transform: translateY(-2px);
+}
+
+.view-cleared-trashed-btn-dax {
+  background: #0288d1;
+  color: #ffffff;
+}
+
+.view-cleared-trashed-btn-dax:hover:not(:disabled) {
+  background: #0277bd;
+  transform: translateY(-2px);
 }
 
 .print-btn-dax {
@@ -159,15 +198,17 @@
 
 .print-btn-dax:hover:not(:disabled) {
   background: #e55a2e;
+  transform: translateY(-2px);
 }
 
 .export-btn-dax {
-  background: #0288d1;
+  background: #2196f3;
   color: #ffffff;
 }
 
 .export-btn-dax:hover:not(:disabled) {
-  background: #0277bd;
+  background: #1e88e5;
+  transform: translateY(-2px);
 }
 
 .view-btn-dax {
@@ -177,6 +218,7 @@
 
 .view-btn-dax:hover:not(:disabled) {
   background: #1e88e5;
+  transform: translateY(-2px);
 }
 
 .quick-close-btn-dax {
@@ -186,6 +228,7 @@
 
 .quick-close-btn-dax:hover:not(:disabled) {
   background: #e53935;
+  transform: translateY(-2px);
 }
 
 .restore-btn-dax {
@@ -195,6 +238,7 @@
 
 .restore-btn-dax:hover:not(:disabled) {
   background: #45a049;
+  transform: translateY(-2px);
 }
 
 .delete-btn-dax {
@@ -204,6 +248,7 @@
 
 .delete-btn-dax:hover:not(:disabled) {
   background: #b71c1c;
+  transform: translateY(-2px);
 }
 
 .pagination-btn-dax {
@@ -213,29 +258,33 @@
 
 .pagination-btn-dax:hover:not(:disabled) {
   background: #4a4a6a;
+  transform: translateY(-2px);
 }
 
 .pagination-btn-dax:disabled {
   background: #2b2b40;
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .loading-dax {
   text-align: center;
   color: #a1a5b7;
-  font-size: 16px;
-  margin: 20px 0;
+  font-size: 18px;
+  margin: 30px 0;
 }
 
 .no-data-dax {
-  text-align: center;
   color: #a1a5b7;
-  font-size: 16px;
-  margin: 20px 0;
+  text-align: center;
+  font-size: 18px;
+  margin: 30px 0;
 }
 
 .table-container-dax {
   overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #3a3a5a;
 }
 
 .credit-sales-table-dax {
@@ -245,7 +294,7 @@
 
 .credit-sales-table-dax th,
 .credit-sales-table-dax td {
-  padding: 12px;
+  padding: 14px;
   border: 1px solid #3a3a5a;
   text-align: left;
 }
@@ -253,7 +302,7 @@
 .credit-sales-table-dax th {
   background: #2b2b40;
   color: #a1a5b7;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -274,6 +323,11 @@
   background: #3a3a5a;
 }
 
+.credit-sales-table-dax .sr-no-dax-dax {
+  color: #ff6b35;
+  font-weight: 600;
+}
+
 .credit-sales-table-dax .overdue-dax {
   color: #ff4444;
   font-weight: bold;
@@ -291,13 +345,17 @@
   color: #ff4444;
 }
 
+.credit-sales-table-dax .status-unknown-dax {
+  color: #a1a5b7;
+}
+
 .credit-sales-table-dax .high-credit-dax td {
   background: #4a2b2b;
 }
 
 .action-buttons-dax {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -305,9 +363,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
-  margin: 20px 0;
+  gap: 20px;
+  margin: 25px 0;
   color: #a1a5b7;
+  font-size: 16px;
 }
 
 @media (max-width: 768px) {
@@ -329,7 +388,7 @@
     justify-content: center;
     flex-wrap: wrap;
   }
-  .summary-cards-dax {
+  .stats-container-dax {
     grid-template-columns: 1fr;
   }
 }
@@ -337,38 +396,11 @@
 @media (max-width: 480px) {
   .credit-sales-table-dax th,
   .credit-sales-table-dax td {
-    padding: 8px;
-    font-size: 12px;
+    padding: 10px;
+    font-size: 13px;
   }
   .action-buttons-dax {
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
   }
-}
-
-
-.shop-selector-dax {
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.shop-selector-dax label {
-  font-weight: bold;
-  color: #333;
-}
-
-.shop-selector-dax select {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 16px;
-  background-color: #fff;
-  cursor: pointer;
-}
-
-.shop-selector-dax select:disabled {
-  background-color: #f0f0f0;
-  cursor: not-allowed;
 }

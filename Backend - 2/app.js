@@ -1378,13 +1378,22 @@ app.delete('/api/:shop/advance/:phoneNumber/profiles/:profileId', async (req, re
 app.get('/api/:shop/credits', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search, showDeleted = 'false', showOld = 'false' } = req.query;
+    const { page = 1, limit = 25, sortBy = 'lastTransactionDate', sortOrder = 'desc', search, showDeleted = 'false', showOld = 'false' } = req.query;
     const CreditSale = getCreditSaleModel(shop);
 
-    const query = { isDeleted: showDeleted === 'true', isTrash: false }; // Exclude trashed bills by default
+    const query = {
+      $and: [
+        { isDeleted: showDeleted === 'true' },
+        { $or: [{ isTrash: false }, { isTrash: { $exists: false } }] }, // Handle missing isTrash
+      ],
+    };
+
     if (showOld === 'true') {
-      query.isOld = true; // Filter for old bills if requested
+      query.$and.push({ $or: [{ isOld: true }, { isOld: { $exists: false } }] }); // Handle missing isOld
+    } else {
+      query.$and.push({ $or: [{ isOld: false }, { isOld: { $exists: false } }] }); // Default to non-old if not requested
     }
+
     if (search) {
       query.$or = [
         { billNumber: { $regex: search, $options: 'i' } },
@@ -1405,6 +1414,8 @@ app.get('/api/:shop/credits', async (req, res) => {
 
     const formattedCreditSales = creditSales.map(sale => ({
       ...sale,
+      isOld: sale.isOld ?? false, // Ensure isOld is set
+      isTrash: sale.isTrash ?? false, // Ensure isTrash is set
       profit: sale.profit || 0,
       items: sale.items.map(item => ({
         ...item,
@@ -1508,6 +1519,23 @@ app.post('/api/:shop/credits', async (req, res) => {
         });
       }
     } else {
+
+
+ //Parth Conflict     
+      // // For old bills, no stock deduction
+      // billItems = items.map(item => ({
+      //   product: item.product,
+      //   qty: item.qty,
+      //   unit: item.unit,
+      //   pricePerUnit: item.pricePerUnit,
+      //   amount: item.amount,
+      //   date: item.date,
+      //   category: item.category,
+      //   deductions: [],
+      // }));
+
+
+      
       // No stock deduction for old bills
       for (const item of items) {
         billItems.push({
@@ -1936,7 +1964,10 @@ app.delete('/api/:shop/credits/:id', async (req, res) => {
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is already deleted' });
 
-    // Restore stock for non-old bills
+    // Set default isOld if missing
+    creditSale.isOld = creditSale.isOld ?? false;
+
+    // Restore stock only for non-old bills
     if (!creditSale.isOld) {
       for (const item of creditSale.items) {
         const category = item.category || 'Unknown';
@@ -2046,7 +2077,11 @@ app.put('/api/:shop/credits/:id/restore', async (req, res) => {
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
     if (!creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale is not deleted' });
 
-    // Validate and deduct stock for non-old bills
+    // Set default isOld if missing
+    creditSale.isOld = creditSale.isOld ?? false;
+
+    // Only check and deduct stock for non-old bills
+
     if (!creditSale.isOld) {
       for (const item of creditSale.items) {
         const category = item.category || 'Unknown';
@@ -2208,6 +2243,8 @@ app.get('/api/:shop/credits/deleted', async (req, res) => {
 
     const formattedDeletedCreditSales = deletedCreditSales.map(sale => ({
       ...sale,
+      isOld: sale.isOld ?? false, // Ensure isOld is set
+      isTrash: sale.isTrash ?? false, // Ensure isTrash is set
       items: sale.items.map(item => ({
         ...item,
         date: convertToDDMMYYYY(item.date),
@@ -2413,6 +2450,8 @@ app.put('/api/:shop/credits/:id/trash', async (req, res) => {
 
     creditSale.isTrash = true;
     creditSale.trashedAt = convertToDDMMYYYY(new Date().toISOString().split('T')[0]);
+    creditSale.isOld = creditSale.isOld ?? false; // Ensure isOld is set
+
     await creditSale.save();
 
     res.json({ message: 'Credit sale moved to trash successfully', creditSale });
@@ -2445,16 +2484,25 @@ app.put('/api/:shop/credits/:id/restore-trash', async (req, res) => {
 app.get('/api/:shop/credits/trash', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { page = 1, limit = 10, sortBy = 'trashedAt', sortOrder = 'desc', search } = req.query;
+    const { page = 1, limit = 25, sortBy = 'trashedAt', sortOrder = 'desc', search } = req.query;
     const CreditSale = getCreditSaleModel(shop);
 
-    const query = { isTrash: true, isDeleted: false };
+    const query = {
+      $and: [
+        { isTrash: true },
+        { isDeleted: false },
+        { $or: [{ isOld: false }, { isOld: true }, { isOld: { $exists: false } }] }, // Handle missing isOld
+      ],
+    };
+
     if (search) {
-      query.$or = [
-        { billNumber: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { phoneNumber: { $regex: search, $options: 'i' } },
-      ];
+      query.$and.push({
+        $or: [
+          { billNumber: { $regex: search, $options: 'i' } },
+          { customerName: { $regex: search, $options: 'i' } },
+          { phoneNumber: { $regex: search, $options: 'i' } },
+        ],
+      });
     }
 
     const sortOptions = {};
@@ -2469,6 +2517,8 @@ app.get('/api/:shop/credits/trash', async (req, res) => {
 
     const formattedTrashedCreditSales = trashedCreditSales.map(sale => ({
       ...sale,
+      isOld: sale.isOld ?? false, // Ensure isOld is set
+      isTrash: sale.isTrash ?? true, // Ensure isTrash is set
       profit: sale.profit || 0,
       items: sale.items.map(item => ({
         ...item,
