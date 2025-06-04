@@ -122,6 +122,15 @@
     margin-bottom: 10px;
 }
 
+.trash-note-dax {
+    font-size: 14px;
+    color: #a1a5b7;
+    margin-bottom: 15px;
+    background: #2b2b40;
+    padding: 10px;
+    border-radius: 4px;
+}
+
 .payment-form-dax {
     display: grid;
     grid-template-columns: 1fr 1fr 2fr;
@@ -173,7 +182,8 @@
 .cancel-btn-dax,
 .edit-btn-dax,
 .delete-btn-dax,
-.restore-btn-dax {
+.restore-btn-dax,
+.move-to-trash-btn-dax {
     padding: 10px 20px;
     border: none;
     border-radius: 4px;
@@ -192,7 +202,7 @@
 
 .submit-btn-dax {
     background: #4caf50;
-    color: #ffffff;
+    color: white;
 }
 
 .submit-btn-dax:hover:not(:disabled) {
@@ -201,7 +211,7 @@
 
 .manual-close-btn-dax {
     background: #ff6b35;
-    color: #ffffff;
+    color: #fff;
 }
 
 .manual-close-btn-dax:hover:not(:disabled) {
@@ -210,25 +220,21 @@
 
 .cancel-btn-dax {
     background: #ff4444;
-    color: #ffffff;
+    color: white;
 }
 
 .cancel-btn-dax:hover:not(:disabled) {
-    background: #e53935;
+    background: #e44;
 }
 
 .edit-btn-dax {
     background: #0288d1;
-    color: #ffffff;
-}
-
-.edit-btn-dax:hover:not(:disabled) {
-    background: #0277bd;
+    color: white;
 }
 
 .delete-btn-dax {
     background: #d32f2f;
-    color: #ffffff;
+    color: white;
 }
 
 .delete-btn-dax:hover:not(:disabled) {
@@ -237,11 +243,25 @@
 
 .restore-btn-dax {
     background: #4caf50;
-    color: #ffffff;
+    color: white;
 }
 
 .restore-btn-dax:hover:not(:disabled) {
     background: #45a049;
+}
+
+.move-to-trash-btn-dax {
+    background: #6b35ff;
+    color: white;
+}
+
+.move-to-trash-btn-dax:hover:not(:disabled) {
+    background: #5a2ee5;
+}
+
+.move-to-trash-btn-dax:disabled {
+    background: #3a3a5a;
+    cursor: not-allowed;
 }
 
 .warning-message-dax {
