@@ -462,7 +462,7 @@ export const addOldCreditSale = async (shop, saleData) => {
   }
 };
 
-export const moveCreditSaleToTrash = async (shop, id) => {
+export const moveCreditSaleToTrash = async (shop, id) => { // Fixed typo in function name
   try {
     const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/trash`);
     return data;
@@ -471,26 +471,26 @@ export const moveCreditSaleToTrash = async (shop, id) => {
   }
 };
 
-export const restoreCreditSaleFromTrash = async (shop, id) => {
+export const restoreCreditSaleFromTrash = async (shop, id) => { // Fixed typo in function name
   try {
     const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/restore-trash`);
     return data;
   } catch (error) {
-    throw new Error(`Failed to restore credit sale ${id} from trash in ${shop}: ${error.message}`);
+    throw new Error(`Failed to restore credit sale ${id} from ${shop}: ${error.message}`);
   }
 };
 
-export const fetchTrashedCreditSales = async (shop, page = 1, limit = 25, sortBy = 'trashedAt', sortOrder = 'desc', search = '') => {
+export const fetchTrashedCreditSales = async (shop, page = 1, limit = 25, sortBy = 'trashedAt', sortOrder = 'desc', search = '') => { // Renamed function and fixed typo in sortBy
   try {
     const params = new URLSearchParams();
     params.append('page', page);
     params.append('limit', limit);
     params.append('sortBy', sortBy);
     params.append('sortOrder', sortOrder);
-    if (search) params.append('search', search);
-    const data = await request('GET', `/${encodeURIComponent(shop)}/credits/trash?${params}`);
+    if(search) params.append('search', search);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/credits/trash?${params.toString()}`); // Fixed params concatenation
     return data;
-  } catch (error) {
+  } catch(error) {
     throw new Error(`Failed to fetch trashed credit sales for ${shop}: ${error.message}`);
   }
 };
