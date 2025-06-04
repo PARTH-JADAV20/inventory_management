@@ -160,6 +160,8 @@ export const deleteAdvanceProfile = async (shop, phoneNumber, profileId) => {
 };
 
 
+
+
 // Dashboard APIs
 export const fetchLowStock = async (shop, period = '') => {
   try {
@@ -338,7 +340,7 @@ export const fetchTopCreditUsers = async (shop) => {
 
 
 // Credit Sales APIs
-export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false) => {
+export const fetchCreditSales = async (shop, page = 1, limit = 25, sortBy = 'lastTransactionDate', sortOrder = 'desc', search = '', showDeleted = false, showOld = false) => {
   try {
     const params = new URLSearchParams();
     params.append('page', page);
@@ -347,6 +349,7 @@ export const fetchCreditSales = async (shop, page = 1, limit = 10, sortBy = 'las
     params.append('sortOrder', sortOrder);
     if (search) params.append('search', search);
     params.append('showDeleted', showDeleted);
+    params.append('showOld', showOld);
     const data = await request('GET', `/${encodeURIComponent(shop)}/credits?${params}`);
     return data;
   } catch (error) {
@@ -448,6 +451,52 @@ export const fetchDeletedCreditSales = async (shop) => {
   }
 };
 
+
+//New Routes Of Credit Sales
+export const addOldCreditSale = async (shop, saleData) => {
+  try {
+    const data = await request('POST', `/${encodeURIComponent(shop)}/credits/old`, saleData);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to add old credit sale for ${shop}: ${error.message}`);
+  }
+};
+
+export const moveCreditSaleToTrash = async (shop, id) => {
+  try {
+    const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/trash`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to move credit sale ${id} to trash in ${shop}: ${error.message}`);
+  }
+};
+
+export const restoreCreditSaleFromTrash = async (shop, id) => {
+  try {
+    const data = await request('PUT', `/${encodeURIComponent(shop)}/credits/${encodeURIComponent(id)}/restore-trash`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to restore credit sale ${id} from trash in ${shop}: ${error.message}`);
+  }
+};
+
+export const fetchTrashedCreditSales = async (shop, page = 1, limit = 25, sortBy = 'trashedAt', sortOrder = 'desc', search = '') => {
+  try {
+    const params = new URLSearchParams();
+    params.append('page', page);
+    params.append('limit', limit);
+    params.append('sortBy', sortBy);
+    params.append('sortOrder', sortOrder);
+    if (search) params.append('search', search);
+    const data = await request('GET', `/${encodeURIComponent(shop)}/credits/trash?${params}`);
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to fetch trashed credit sales for ${shop}: ${error.message}`);
+  }
+};
+
+
+
 export const processReturn = async (shop, returnData) => {
   try {
     const data = await request('POST', `/${encodeURIComponent(shop)}/returns`, returnData);
@@ -456,6 +505,11 @@ export const processReturn = async (shop, returnData) => {
     throw new Error(`Failed to process return for ${shop}: ${error.message}`);
   }
 };
+
+
+
+
+
 
 // Outgoing Payments APIs
 export const fetchOutgoingPayments = async (paidTo = '') => {
