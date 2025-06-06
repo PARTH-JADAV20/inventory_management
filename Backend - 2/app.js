@@ -18,8 +18,8 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // MongoDB Connection
-mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-  // mongoose.connect('mongodb://localhost:27017/', {
+// mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+  mongoose.connect('mongodb://localhost:27017/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -2214,7 +2214,6 @@ app.delete('/api/:shop/credits/:id/permanent', async (req, res) => {
 
     const creditSale = await CreditSale.findById(id);
     if (!creditSale) return res.status(404).json({ error: 'Credit sale not found' });
-    if (!creditSale.isDeleted) return res.status(400).json({ error: 'Credit sale must be soft deleted first' });
 
     await CreditSale.deleteOne({ _id: id });
 
