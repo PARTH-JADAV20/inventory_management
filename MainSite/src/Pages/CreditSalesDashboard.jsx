@@ -437,9 +437,9 @@ const CreditSalesDashboard = () => {
               disabled={loading}
             >
               <option value="All">All</option>
-              <option value=">10000">Credit > ₹10,000</option>
-              <option value=">50000">Credit > ₹50,000</option>
-              <option value=">2months">Overdue > 2 Months</option>
+              <option value=">10000">Credit &gt; ₹10,000</option>
+              <option value=">50000">Credit &gt; ₹50,000</option>
+              <option value=">2months">Overdue &gt; 2 Months</option>
             </select>
           </div>
           <div className="filter-group-dax">

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { format } from "date-fns";
-import { AlertCircle, X, Edit2, Trash2, Undo, Delete } from "lucide-react";
+import { AlertCircle, X, Edit2, Trash2, Undo, Delete, ArrowLeft } from "lucide-react";
 import { addCreditPayment, closeCreditSale, addCreditRefund, updateCreditPayment, deleteCreditPayment, deleteCreditSale, restoreCreditSale, permanentDeleteCreditSale } from "../api.js";
 import "./CreditDetailsModal.css";
 
@@ -526,6 +526,13 @@ const CreditDetailsModal = ({ creditSale, onUpdate, onClose, shop = "Shop 1" }) 
                   disabled={loading}
                 >
                   <Trash2 size={16} /> Soft Delete
+                </button>
+                <button
+                  className="permanent-delete-btn-dax"
+                  onClick={handlePermanentDelete}
+                  disabled={loading}
+                >
+                  <ArrowLeft size={16} /> <Delete size={16} /> Permanent Delete
                 </button>
               </>
             )}
