@@ -18,9 +18,9 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // MongoDB Connection
-// mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
-  mongoose.connect('mongodb://localhost:27017/', {
-  useNewUrlParser: true,
+mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
+// mongoose.connect('mongodb://localhost:27017/', {
+  // useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
@@ -105,6 +105,7 @@ const profileSchema = new mongoose.Schema({
     paymentMethod: String,
     otherExpenses: { type: Number, default: 0 },
     profit: { type: Number, default: 0 },
+    note: { type: String, default: '' },
   }],
   returns: [{
     returnId: { type: String, default: uuidv4 },
@@ -486,7 +487,7 @@ app.delete('/api/:shop/stock', async (req, res) => {
 app.post('/api/:shop/sales', async (req, res) => {
   try {
     const { shop } = req.params;
-    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0 } = req.body;
+    const { profileName, phoneNumber, paymentMethod, items, date, otherExpenses = 0, note = '' } = req.body; // Add note to destructuring
     const Customer = getCustomerModel(shop);
 
     // Validate stock availability and calculate profit
@@ -496,7 +497,7 @@ app.post('/api/:shop/sales', async (req, res) => {
       if (!item.product || !item.qty || !item.unit || !item.pricePerQty || !item.amount || !item.category || !item.shop) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}` });
       }
-      const Stock = getStockModel(item.shop); // Use item.shop
+      const Stock = getStockModel(item.shop);
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
         .sort({ addedDate: 1 });
       const totalQty = stockItems.reduce((sum, s) => sum + s.quantity, 0);
@@ -549,6 +550,7 @@ app.post('/api/:shop/sales', async (req, res) => {
       shop,
       otherExpenses: parseFloat(otherExpenses),
       profit: totalProfit,
+      note, // Add note to bill
     };
 
     // Save bill to customer
@@ -635,7 +637,7 @@ app.post('/api/:shop/sales', async (req, res) => {
 
     // Deduct stock
     for (const item of items) {
-      const Stock = getStockModel(item.shop); // Use item.shop
+      const Stock = getStockModel(item.shop);
       let qtyToDeduct = item.qty;
       const stockItems = await Stock.find({ name: item.product, category: item.category, unit: item.unit })
         .sort({ addedDate: 1 });
@@ -720,7 +722,7 @@ app.post('/api/:shop/returns', async (req, res) => {
     }
 
     for (const item of items) {
-      if (!item.product || !item.qty || item.qty <= 0 || !item.unit || !item.pricePerQty || !item.category || !item.purchasePrice || !item.profitAdjustment || !item.shop) {
+      if (!item.product || !item.qty || item.qty <= 0 || !item.unit || !item.pricePerQty || !item.category || !item.purchasePrice || !item.shop) {
         return res.status(400).json({ error: `Invalid item data for ${item.product || 'item'}: missing required fields` });
       }
       if (item.purchasePrice < 0 || item.profitAdjustment < 0) {
@@ -1521,7 +1523,7 @@ app.post('/api/:shop/credits', async (req, res) => {
     } else {
 
 
- //Parth Conflict     
+      //Parth Conflict     
       // // For old bills, no stock deduction
       // billItems = items.map(item => ({
       //   product: item.product,
@@ -1535,7 +1537,7 @@ app.post('/api/:shop/credits', async (req, res) => {
       // }));
 
 
-      
+
       // No stock deduction for old bills
       for (const item of items) {
         billItems.push({
