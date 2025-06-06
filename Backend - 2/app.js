@@ -20,7 +20,7 @@ app.use(bodyParser.json());
 // MongoDB Connection
 mongoose.connect('mongodb+srv://mastermen1875:cluster0@cluster0.qqbsdae.mongodb.net/', {
 // mongoose.connect('mongodb://localhost:27017/', {
-  // useNewUrlParser: true,
+  useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
@@ -1602,7 +1602,10 @@ app.post('/api/:shop/credits', async (req, res) => {
           bills: [{
             billNo: billNumber,
             date: billItems[0].date,
-            items: billItems,
+            items: billItems.map(item => ({
+              ...item,
+              pricePerQty: item.pricePerUnit
+            })),
             totalAmount,
             creditAmount: totalAmount,
             paymentMethod: 'Credit',

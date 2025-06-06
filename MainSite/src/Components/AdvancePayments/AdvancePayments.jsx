@@ -6,7 +6,7 @@ import "./AdvancePayments.css";
 
 const AdvancePayments = () => {
 
-   const formatDateToDDMMYYYY = (dateStr) => {
+  const formatDateToDDMMYYYY = (dateStr) => {
     if (!dateStr) return "N/A";
     try {
       const date = new Date(dateStr);
@@ -47,7 +47,7 @@ const AdvancePayments = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
- 
+
   const getCommonName = (profiles) => {
     const names = (profiles || []).map((p) => (p.name || "Unknown").replace(/ \[.*\]$/, ""));
     return names[0] || "Unknown";
@@ -57,7 +57,7 @@ const AdvancePayments = () => {
     setLoading(true);
     try {
       // Fetch all customers without pagination
-      const data = await apiService.fetchCustomers(shop, searchTerm, false, 1 , 100000);
+      const data = await apiService.fetchCustomers(shop, searchTerm, false, 1, 100000);
       // Filter customers with advance profiles
       const advanceCustomers = (data.customers || []).filter(c =>
         (c.profiles || []).some(p => p.advance?.value === true && p.advance?.showinadvance === true)
@@ -74,7 +74,7 @@ const AdvancePayments = () => {
 
   useEffect(() => {
     loadCustomers();
-  }, [shop, searchTerm ]);
+  }, [shop, searchTerm]);
 
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
@@ -217,7 +217,7 @@ const AdvancePayments = () => {
             {
               transactionType: "Deposit",
               amount: advanceAmount,
-              date:formatDateToDDMMYYYY(newPayment.date),
+              date: formatDateToDDMMYYYY(newPayment.date),
             },
           ],
           bills: [],
@@ -367,74 +367,122 @@ const AdvancePayments = () => {
   };
 
   const handlePrintBill = (bill, profileName, phoneNumber) => {
+    const customer = customers.find((c) => c.phoneNumber === phoneNumber);
+    const profile = customer && Array.isArray(customer.profiles)
+      ? customer.profiles.find((p) => p.name === profileName)
+      : null;
+    const returns = profile?.returns?.filter((r) => r.billNo === bill.billNo) || [];
+    console.log(bill)
+
     const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Bill ${bill.billNo || "N/A"}</title>
-          <style>
-            body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
-            h2 { color: #ff6b35; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
-            th { background-color: #2b2b40; color: #a1a5b7; }
-            td { background-color: #1e1e2d; color: #ffffff; }
-            .total { font-weight: bold; }
-            .payment-type { margin-top: 10px; font-style: italic; }
-          </style>
-        </head>
-        <body>
-          <h2>Bill No: ${bill.billNo || "N/A"}</h2>
-          <p>Profile Name: ${profileName || "N/A"}</p>
-          <p>Phone Number: ${phoneNumber || "N/A"}</p>
-          <p>Date: ${bill.date}</p>
-          <p class="payment-type">Payment Method: ${bill.paymentMethod || "N/A"}</p>
-          <table>
-            <thead>
+    let billContent = `
+    <html>
+      <head>
+        <title>Bill ${bill.billNo}</title>
+        <style>
+          body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+          h2 { color: #ff6b35; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #3a3a5a; padding: 10px; text-align: left; }
+          th { background-color: #2b2b40; color: #a1a5b7; }
+          td { background-color: #1e1e2d; color: #ffffff; }
+          .total { font-weight: bold; }
+          .payment-type, .note { margin-top: 10px; font-style: italic; }
+        </style>
+      </head>
+      <body>
+        <h2>Bill No: ${bill.billNo}</h2>
+        <p>Profile Name: ${profileName}</p>
+        <p>Phone Number: ${phoneNumber}</p>
+        <p>Date: ${bill.date || "N/A"}</p>
+        <p class="payment-type">Payment Method: ${bill.paymentMethod ?? "N/A"}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Price/Qty</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Array.isArray(bill.items) ? bill.items.map(item => `
               <tr>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Price/Qty</th>
-                <th>Amount</th>
+                <td>${item.product || 'N/A'}</td>
+                <td>${item.qty || 0}</td>
+                <td>₹${parseFloat(item.pricePerQty || 0).toFixed(2)}</td>
+                <td>₹${parseFloat(item.amount || 0).toFixed(2)}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${(bill.items || []).map((item) => `
-                <tr>
-                  <td>${item.product || "N/A"}</td>
-                  <td>${item.qty || 0}</td>
-                  <td>${item.unit || "N/A"}</td>
-                  <td>₹${item.pricePerQty || 0}</td>
-                  <td>₹${item.amount || 0}</td>
-                </tr>
-              `).join("")}
-              <tr className="total">
-                <td colspan="4">Other Expenses</td>
-                <td>₹${parseInt(bill.otherExpenses || 0)}</td>
-              </tr>
+            `).join("") : ""}
+            <tr class="total">
+              <td colspan="3">Other Expenses</td>
+              <td>₹${parseFloat(bill.otherExpenses || 0).toFixed(2)}</td>
+            </tr>
+            <tr class="total">
+              <td colspan="3">Total Amount</td>
+              <td>₹${parseFloat(bill.totalAmount || 0).toFixed(2)}</td>
+            </tr>
+            <tr class="total">
+              <td colspan="3">Profit</td>
+              <td>₹${parseFloat(bill.profit || 0).toFixed(2)}</td>
+            </tr>
+            ${profile?.advance?.value && bill.advanceRemaining !== undefined ? `
               <tr class="total">
-                <td colspan="4">Total Amount</td>
-                <td>₹${bill.totalAmount || 0}</td>
+                <td colspan="3">Advance Remaining</td>
+                <td>₹${parseFloat(bill.advanceRemaining).toFixed(2)}</td>
               </tr>
+            ` : ""}
+            ${bill.note ? `
               <tr class="total">
-                <td colspan="4">Profit</td>
-                <td>₹${bill.profit || 0}</td>
+                <td colspan="1">Note</td>
+                <td colspan="3" style="font-size: 14px;">${bill.note}</td>
+              </tr>` : ""}
+          </tbody>
+        </table>
+  `;
+
+    if (returns.length > 0) {
+      billContent += `
+      <h3>Returned Items</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Return Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${returns.flatMap((r) =>
+        r.items.map((item) => `
+              <tr>
+                <td>${item.product}</td>
+                <td>${item.qty}</td>
+                <td>${item.unit}</td>
+                <td>₹${r.returnAmount.toFixed(2)}</td>
               </tr>
-              ${bill.advanceRemaining !== undefined ? `
-                <tr class="total">
-                  <td colspan="4">Advance Remaining</td>
-                  <td>₹${bill.advanceRemaining}</td>
-                </tr>
-              ` : ""}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `);
+            `)
+      ).join("")}
+          <tr class="total">
+            <td colspan="3">Total Return</td>
+            <td>₹${returns.reduce((sum, r) => sum + r.returnAmount, 0).toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+    }
+
+    billContent += `
+      </body>
+    </html>
+  `;
+
+    printWindow.document.write(billContent);
     printWindow.document.close();
     printWindow.print();
   };
+
 
   const toggleDropdown = (profileId) => {
     setDropdownOpen(dropdownOpen === profileId ? null : profileId);
@@ -577,11 +625,11 @@ const AdvancePayments = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map((c,index) => (
+            {filteredCustomers.map((c, index) => (
               <React.Fragment key={c.phoneNumber || Math.random()}>
                 <tr>
-                  <td style={{fontWeight:"bolder", color : "#ff6b2c"}}>{index+1}</td>
-                  <td colSpan={7}>
+                  <td style={{ fontWeight: "bolder", color: "#ff6b2c" }}>{index + 1}</td>
+                  <td colspan={7}>
                     <h3 className="contractor-heading">
                       {getCommonName(c.profiles)} (
                       {(c.profiles || []).filter((p) => p.advance?.value && p.advance?.showinadvance).length} profiles)
@@ -722,21 +770,28 @@ const AdvancePayments = () => {
                           </tr>
                         ))}
                         <tr className="total">
-                          <td colSpan={4}>Other Expenses</td>
+                          <td colspan={4}>Other Expenses</td>
                           <td>₹{bill.otherExpenses}</td>
                         </tr>
                         <tr className="total">
-                          <td colSpan={4}>Total Amount</td>
+                          <td colspan={4}>Total Amount</td>
                           <td>₹{bill.totalAmount || 0}</td>
                         </tr>
                         <tr className="total">
-                          <td colSpan={4}>Profit</td>
+                          <td colspan={4}>Profit</td>
                           <td>₹{bill.profit || 0}</td>
                         </tr>
                         {bill.advanceRemaining !== undefined && (
                           <tr className="total">
-                            <td colSpan={4}>Advance Remaining</td>
+                            <td colspan={4}>Advance Remaining</td>
                             <td>₹{bill.advanceRemaining}</td>
+                          </tr>
+                        )}
+                        {bill.note && (
+                          <tr className="note">
+                            <td colspan={5} style={{ fontSize: "14px" }}>
+                              Note: {bill.note}
+                            </td>
                           </tr>
                         )}
                       </tbody>

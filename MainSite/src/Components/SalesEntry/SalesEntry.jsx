@@ -34,6 +34,7 @@ const SalesEntry = () => {
     paymentType: "Cash",
     items: [],
     otherExpenses: "0",
+    note: "",
   });
   const [currentItem, setCurrentItem] = useState({
     product: "",
@@ -215,6 +216,7 @@ const SalesEntry = () => {
       paymentType: 'Cash',
       items: [],
       otherExpenses: '0',
+      note: '',
     });
     setCurrentItem({ product: '', qty: '', unit: '', pricePerQty: '', category: '' });
     setAdvanceSearchTerm('');
@@ -284,7 +286,7 @@ const SalesEntry = () => {
         unit: item.unit,
         quantity: item.quantity,
         price: item.price,
-        shop: item.shop.join(", "), 
+        shop: item.shop.join(", "),
       }));
     }
 
@@ -879,6 +881,7 @@ const SalesEntry = () => {
         })),
         date: newSale.date,
         otherExpenses: parseFloat(newSale.otherExpenses || 0),
+        note: newSale.note,
       };
 
       if (newSale.paymentType === 'Credit') {
@@ -893,10 +896,11 @@ const SalesEntry = () => {
             amount: item.amount,
             date: newSale.date.split('-').reverse().join('-'),
             category: item.category,
-            shop: item.shop || shopApiName, // Include shop name
+            shop: item.shop || shopApiName,
           })),
           totalAmount,
           otherExpenses: parseFloat(newSale.otherExpenses || 0),
+          note: newSale.note,
         };
 
         const response = await addCreditSale(shopApiName, creditSaleData);
@@ -911,6 +915,7 @@ const SalesEntry = () => {
           paymentMethod: 'Credit',
           shop: shopApiName,
           otherExpenses: parseFloat(newSale.otherExpenses || 0),
+          note: newSale.note,
         };
 
         let stockData = [];
@@ -1063,6 +1068,7 @@ const SalesEntry = () => {
         paymentType: "Cash",
         items: [],
         otherExpenses: "",
+        note: "",
       });
       setAdvanceSearchTerm("");
       setWarning("Sale created successfully");
@@ -1113,6 +1119,7 @@ const SalesEntry = () => {
         td { background-color: #1e1e2d; color: #ffffff; }
         .total { font-weight: bold; }
         .payment-method { margin-top: 10px; font-style: italic; }
+        .note { margin-top: 10px; font-style: italic;}
       </style>
     </head>
     <body>
@@ -1153,6 +1160,16 @@ const SalesEntry = () => {
             <td colspan="3">Other Expenses</td>
             <td>₹${parseFloat(bill.otherExpenses || 0).toFixed(2)}</td>
           </tr>
+          <tr class="total">
+            <td colspan="3">Total Amount</td>
+            <td>₹${bill.totalAmount.toFixed(2)}</td>
+          </tr>
+          ${bill.note
+        ? `<tr class="total">
+            <td colspan="1">Note</td>
+            <td colspan="3" style="font-size: 14px;">${bill.note}</td>
+          </tr>`
+        : ""}
         </tbody>
       </table>
   `;
@@ -1515,7 +1532,7 @@ const SalesEntry = () => {
                   </tr>
                 ))}
                 <tr>
-                  <td colSpan="5">Other Expenses</td>
+                  <td colspan="5">Other Expenses</td>
                   <td>
                     <input
                       type="number"
@@ -1529,19 +1546,32 @@ const SalesEntry = () => {
                     />
                   </td>
                   <td></td>
+                </tr>
+                <tr>
+                  <td colspan="5">Note</td>
+                  <td>
+                    <input
+                      type="text"
+                      name="note"
+                      value={newSale.note}
+                      onChange={handleInputChange}
+                      placeholder="Enter note"
+                      style={{ width: '100%', padding: '5px' }}
+                    />
+                  </td>
                   <td></td>
                 </tr>
                 <tr className="total-row-p">
-                  <td colSpan="5">Items Total</td>
-                  <td colSpan="3">₹{newSale.items.reduce((sum, item) => sum + item.amount, 0)}</td>
+                  <td colspan="5">Items Total</td>
+                  <td colspan="3">₹{newSale.items.reduce((sum, item) => sum + item.amount, 0)}</td>
                 </tr>
                 <tr className="total-row-p">
-                  <td colSpan="5">Other Expenses</td>
-                  <td colSpan="3">₹{parseFloat(newSale.otherExpenses || 0).toFixed(2)}</td>
+                  <td colspan="5">Other Expenses</td>
+                  <td colspan="3">₹{parseFloat(newSale.otherExpenses || 0).toFixed(2)}</td>
                 </tr>
                 <tr className="total-row-p">
-                  <td colSpan="5">Grand Total</td>
-                  <td colSpan="3">₹{(newSale.items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(newSale.otherExpenses || 0)).toFixed(2)}</td>
+                  <td colspan="5">Grand Total</td>
+                  <td colspan="3">₹{(newSale.items.reduce((sum, item) => sum + item.amount, 0) + parseFloat(newSale.otherExpenses || 0)).toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1810,7 +1840,7 @@ const SalesEntry = () => {
                   );
                 })}
                 <tr className="total-row-p">
-                  <td colSpan="6">Total Return</td>
+                  <td colspan="5">Total Return</td>
                   <td>₹{returnForm.items.reduce((sum, item) => sum + item.qty * item.pricePerQty, 0).toFixed(2)}</td>
                   <td></td>
                   <td></td>
@@ -1930,6 +1960,7 @@ const SalesEntry = () => {
                                     creditAmount: sale.creditAmount,
                                     paymentMethod: sale.paymentMethod,
                                     otherExpenses: sale.otherExpenses,
+                                    note: sale.note,
                                     profit: sale.profit,
                                   },
                                   sale.profileName,
